@@ -159,6 +159,7 @@
 #@BUILD_PLUGIN_VMEM_TRUE@LoadPlugin vmem
 #@BUILD_PLUGIN_VSERVER_TRUE@LoadPlugin vserver
 #@BUILD_PLUGIN_WIRELESS_TRUE@LoadPlugin wireless
+#@BUILD_PLUGIN_WRITE_GCM_TRUE@LoadPlugin write_gcm
 #@BUILD_PLUGIN_WRITE_GRAPHITE_TRUE@LoadPlugin write_graphite
 #@BUILD_PLUGIN_WRITE_HTTP_TRUE@LoadPlugin write_http
 #@BUILD_PLUGIN_WRITE_MONGODB_TRUE@LoadPlugin write_mongodb
@@ -1053,6 +1054,16 @@
 
 #<Plugin vmem>
 #	Verbose false
+#</Plugin>
+
+#<Plugin write_gcm>
+#  Project "123456789012"
+#  Url "https://www-googleapis.com/cloudmonitoring/v2beta2"
+#  TokenUrl "http://metadata/computeMetadata/v1/instance/service-accounts/default/token"
+#  ResourceId "234567890123"
+#  Email "123456789012@developer.gserviceaccount.com"
+#  PrivateKeyFile "/etc/ssl/private/privatekey.p12"
+#  PrivateKeyPass "secretSslPassphrase"
 #</Plugin>
 
 #<Plugin write_graphite>

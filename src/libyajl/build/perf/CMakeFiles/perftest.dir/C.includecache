@@ -1,0 +1,44 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/usr/local/google/home/zhihuawen/git/collectd-gcm-sd/src/libyajl/perf/documents.c
+documents.h
+/usr/local/google/home/zhihuawen/git/collectd-gcm-sd/src/libyajl/perf/documents.h
+stdlib.h
+-
+string.h
+-
+
+/usr/local/google/home/zhihuawen/git/collectd-gcm-sd/src/libyajl/perf/documents.h
+
+/usr/local/google/home/zhihuawen/git/collectd-gcm-sd/src/libyajl/perf/perftest.c
+yajl/yajl_parse.h
+-
+stdio.h
+-
+stdlib.h
+-
+string.h
+-
+documents.h
+/usr/local/google/home/zhihuawen/git/collectd-gcm-sd/src/libyajl/perf/documents.h
+sys/time.h
+-
+windows.h
+-
+
+perf/../yajl-2.1.1/include/yajl/yajl_common.h
+stddef.h
+-
+
+perf/../yajl-2.1.1/include/yajl/yajl_parse.h
+yajl/yajl_common.h
+-
+stddef.h
+-
+

@@ -1,0 +1,24 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/usr/local/google/home/zhihuawen/git/collectd-gcm-sd/src/libyajl/example/parse_config.c
+stdio.h
+-
+string.h
+-
+yajl/yajl_tree.h
+/usr/local/google/home/zhihuawen/git/collectd-gcm-sd/src/libyajl/example/yajl/yajl_tree.h
+
+example/../yajl-2.1.1/include/yajl/yajl_common.h
+stddef.h
+-
+
+example/../yajl-2.1.1/include/yajl/yajl_tree.h
+yajl/yajl_common.h
+-
+
