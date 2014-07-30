@@ -51,6 +51,9 @@ collectd_LDFLAGS = -export-dynamic
 collectd_LDADD = -lm
 collectd_DEPENDENCIES =
 
+collectd_hardened_CFLAGS = -O2 -D_FORTIFY_SOURCE=2 -fstack-protector -fPIC -Wformat -Wformat-security
+collectd_hardened_LDADD = -Wl,-z,relro,-z,now
+
 # Link to these libraries..
 if BUILD_WITH_LIBRT
 collectd_LDADD += -lrt
@@ -1359,6 +1362,22 @@ write_http_la_CFLAGS += $(BUILD_WITH_LIBCURL_CFLAGS)
 write_http_la_LIBADD += $(BUILD_WITH_LIBCURL_LIBS)
 endif
 collectd_DEPENDENCIES += write_http.la
+endif
+
+if BUILD_PLUGIN_WRITE_GCM
+pkglib_LTLIBRARIES += write_gcm.la
+write_gcm_la_SOURCES = write_gcm.c
+write_gcm_la_LDFLAGS = -module -avoid-version $(collectd_hardened_LDADD)
+write_gcm_la_CFLAGS = $(AM_CFLAGS) $(BUILD_WITH_LIBCURL_CFLAGS) $(collectd_hardened_CFLAGS)
+write_gcm_la_LIBADD = $(BUILD_WITH_LIBCURL_LIBS)
+write_gcm_la_SOURCES += libyajl/src/yajl_alloc.c libyajl/src/yajl_encode.c libyajl/src/yajl_parser.c libyajl/src/yajl_buf.c libyajl/src/yajl_gen.c libyajl/src/yajl_tree.c libyajl/src/yajl.c libyajl/src/yajl_lex.c libyajl/src/yajl_version.c
+write_gcm_la_CFLAGS += -I libyajl/build/yajl-2.1.1/include
+collectd_LDADD += "-dlopen" write_gcm.la
+if BUILD_WITH_LIBSSL
+write_gcm_la_CFLAGS += $(BUILD_WITH_LIBSSL_CFLAGS)
+write_gcm_la_LIBADD += $(BUILD_WITH_LIBSSL_LIBS)
+endif
+collectd_DEPENDENCIES += write_gcm.la
 endif
 
 if BUILD_PLUGIN_WRITE_MONGODB

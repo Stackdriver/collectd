@@ -5631,6 +5631,66 @@ traffic (e.E<nbsp>g. due to headers and retransmission). If you want to
 collect on-wire traffic you could, for example, use the logging facilities of
 iptables to feed data for the guest IPs into the iptables plugin.
 
+=head2 Plugin C<write_gcm>
+
+The C<write_gcm> plugin writes metrics to the I<Google Cloud Monitoring> (GCM)
+service.
+
+This plugin supports two authentication methods: When running on
+I<Google Compute Engine> (GCE), an I<OAuth> token is retrieved from the
+I<metadata server> and used to authenticate to GCM.
+Alternatively, you can specify the B<Email>, B<PrivateKeyFile> and
+B<PrivateKeyPass> options which are then used to sign an authentication token.
+
+Synopsis:
+
+ <Plugin write_gcm>
+   Project "123456789012"
+   ResourceId "234567890123"
+   Url "https://www.googleapis.com/cloudmonitoring/v2beta2"
+   TokenUrl "http://metadata/computeMetadata/v1/instance/service-accounts/default/token"
+   Email "123456789012@developer.gserviceaccount.com"
+   PrivateKeyFile "/etc/ssl/private/privatekey.p12"
+   PrivateKeyPass "secretSslPassphrase"
+ </Plugin>
+
+=over 4
+
+=item B<Project> I<Project>
+
+The I<Project Number> of the GCE project. This should be a 12-digit decimal
+number.
+When running on GCE, this information is automatically determined.
+
+=item B<ResourceId> I<ResourceId>
+
+A unique I<resource ID> used when sending metrics to GCM.
+When running on GCE, the I<instance ID> is automatically determined and used as
+resource ID.
+
+=item B<TokenUrl> I<TokenUrl>
+
+URL of the REST interface which will provide an OAuth token for authentication.
+Defaults to
+C<http://metadata/computeMetadata/v1/instance/service-accounts/default/token>.
+
+=item B<Email> I<Email>
+
+=item B<PrivateKeyFile> I<PrivateKeyFile>
+
+=item B<PrivateKeyPass> I<PrivateKeyPass>
+
+Email address and PKCS#12 file to use for creating an authentication token.
+This can be used when I<not> running on GCE, i.e. when the metadata server is
+not available.
+
+=item B<Url> I<Url>
+
+URL of the GCM API. Defaults to
+C<https://www.googleapis.com/cloudmonitoring/v2beta2>.
+
+=back
+
 =head2 Plugin C<write_graphite>
 
 The C<write_graphite> plugin writes data to I<Graphite>, an open-source metrics

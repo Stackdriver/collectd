@@ -1,0 +1,11 @@
+/usr/local/google/home/zhihuawen/git/collectd-gcm-sd/src/libyajl/build/CMakeFiles/doc.dir
+/usr/local/google/home/zhihuawen/git/collectd-gcm-sd/src/libyajl/build/test/api/CMakeFiles/gen-extra-close.dir
+/usr/local/google/home/zhihuawen/git/collectd-gcm-sd/src/libyajl/build/reformatter/CMakeFiles/json_reformat.dir
+/usr/local/google/home/zhihuawen/git/collectd-gcm-sd/src/libyajl/build/verify/CMakeFiles/json_verify.dir
+/usr/local/google/home/zhihuawen/git/collectd-gcm-sd/src/libyajl/build/example/CMakeFiles/parse_config.dir
+/usr/local/google/home/zhihuawen/git/collectd-gcm-sd/src/libyajl/build/perf/CMakeFiles/perftest.dir
+/usr/local/google/home/zhihuawen/git/collectd-gcm-sd/src/libyajl/build/CMakeFiles/test.dir
+/usr/local/google/home/zhihuawen/git/collectd-gcm-sd/src/libyajl/build/CMakeFiles/test-api.dir
+/usr/local/google/home/zhihuawen/git/collectd-gcm-sd/src/libyajl/build/src/CMakeFiles/yajl.dir
+/usr/local/google/home/zhihuawen/git/collectd-gcm-sd/src/libyajl/build/src/CMakeFiles/yajl_s.dir
+/usr/local/google/home/zhihuawen/git/collectd-gcm-sd/src/libyajl/build/test/parsing/CMakeFiles/yajl_test.dir
