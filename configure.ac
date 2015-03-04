@@ -5244,6 +5244,7 @@ AC_PLUGIN([pf],          [$have_net_pfvar_h],  [BSD packet filter (PF) statistic
 # FIXME: Check for libevent, too.
 AC_PLUGIN([pinba],       [$have_protoc_c],     [Pinba statistics])
 AC_PLUGIN([ping],        [$with_liboping],     [Network latency statistics])
+AC_PLUGIN([plugin_mem],  [yes],                [Memory usage monitoring for collectd plugins])
 AC_PLUGIN([postgresql],  [$with_libpq],        [PostgreSQL database statistics])
 AC_PLUGIN([powerdns],    [yes],                [PowerDNS statistics])
 AC_PLUGIN([processes],   [$plugin_processes],  [Process statistics])
@@ -5589,6 +5590,7 @@ Configuration:
     pf  . . . . . . . . . $enable_pf
     pinba . . . . . . . . $enable_pinba
     ping  . . . . . . . . $enable_ping
+    plugin_mem  . . . . . $enable_plugin_mem
     postgresql  . . . . . $enable_postgresql
     powerdns  . . . . . . $enable_powerdns
     processes . . . . . . $enable_processes
