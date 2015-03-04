@@ -146,7 +146,7 @@ B<E<lt>PluginE<nbsp>...E<gt>> block acts as if it was immediately preceded by a
 B<LoadPlugin> statement. B<LoadPlugin> statements are still required for
 plugins that don't provide any configuration, e.g. the I<Load plugin>.
 
-=item B<Include> I<Path> [I<pattern>]
+=item B<Include> I<Path>
 
 If I<Path> points to a file, includes that file. If I<Path> points to a
 directory, recursively includes all files within that directory and its
@@ -2789,6 +2789,11 @@ only has any effect, if B<Host> is set to B<localhost> (the default).
 Otherwise, use the B<Port> option above. See the documentation for the
 C<mysql_real_connect> function for details.
 
+=item B<InnodbStats> I<true|false>
+
+If enabled, metrics about the InnoDB storage engine are collected.
+Disabled by default.
+
 =item B<MasterStats> I<true|false>
 
 =item B<SlaveStats> I<true|false>
@@ -4911,6 +4916,10 @@ which configures the connection parameters for this node.
         Host "localhost"
         Port "6379"
         Timeout 2000
+        <Query "example">
+        	Command "LLEN queue"
+        	Type "gauge"
+        </Query>
     </Node>
   </Plugin>
 
@@ -4947,6 +4956,22 @@ The B<Timeout> option set the socket timeout for node response. Since the Redis
 read function is blocking, you should keep this value as low as possible. Keep
 in mind that the sum of all B<Timeout> values for all B<Nodes> should be lower
 than B<Interval> defined globally.
+
+=item B<Query> I<QueryName>
+
+The B<Query> option allows you to define custom queries to the redis node.
+The result must be a single numeric field (like LLEN does, for example). The
+QueryName is used as plugin_instance prefix to identify this query.
+
+=item B<Command> I<RedisCommandLine>
+
+The B<Command> option is the command to be issued to the redis node to
+produce a result to be collectd.
+
+=item B<Type> I<TypeToUse>
+
+The B<Type> option is used by collectd to link the value collectd in the
+command with the final data to be saved.
 
 =back
 
@@ -6113,6 +6138,71 @@ traffic (e.E<nbsp>g. due to headers and retransmission). If you want to
 collect on-wire traffic you could, for example, use the logging facilities of
 iptables to feed data for the guest IPs into the iptables plugin.
 
+=head2 Plugin C<write_gcm>
+ 
+ The C<write_gcm> plugin writes metrics to the I<Google Cloud Monitoring> (GCM)
+ service.
+ 
+ This plugin supports two authentication methods: When running on
+ I<Google Compute Engine> (GCE), an I<OAuth> token is retrieved from the
+ I<metadata server> and used to authenticate to GCM.
+ Alternatively, you can specify the B<Email>, B<PrivateKeyFile> and
+ B<PrivateKeyPass> options which are then used to sign an authentication token.
+ 
+ Synopsis:
+ 
+  <Plugin write_gcm>
+    Project "123456789012"
+  </Plugin>
+ 
+ =over 4
+ 
+ =item B<Project> I<Project>
+ 
+ The I<Project ID> or the I<Project Number> of the GCE project. The I<Project
+ ID> is a string identifying the project, which you can chose freely when
+ creating a new project. The I<Project Number> is a 12-digit decimal number. You
+ can look up both on the I<Developer Console>.
+ When running on GCE, this information is automatically determined.
+ 
+ =item B<ResourceId> I<ResourceId>
+ 
+ A unique I<resource ID> used when sending metrics to GCM.
+ When running on GCE, the I<instance ID> is automatically determined and used as
+ resource ID.
+ 
+ =item B<TokenUrl> I<TokenUrl>
+ 
+ URL of the REST interface which will provide an OAuth token for authentication.
+ Defaults to
+ C<http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/token>.
+ 
+ =item B<Email> I<Email>
+ 
+ =item B<PrivateKeyFile> I<PrivateKeyFile>
+ 
+ =item B<PrivateKeyPass> I<PrivateKeyPass>
+ 
+ Email address of the I<Service Account>, path to a PKCS#12 file and a
+ passphrase for the file. This information can be used when the metadata server
+ is not available and therefore B<TokenUrl> cannot be used to obtain an
+ authentication token.
+ 
+ To create an appropriate PKCS#12 file, go to the I<Developer Console> and
+ follow the process on the I<Credentials> tab.
+ 
+ =item B<Url> I<Url>
+ 
+ URL of the I<Google Cloud Monitoring> API. Defaults to
+ C<https://www.googleapis.com/cloudmonitoring/v2beta2>.
+ 
+ =item B<Service> I<Service>
+ 
+ String identifying the monitoring service to call.
+ Defaults to C<compute.googleapis.com>.
+ 
+ =back
+
 =head2 Plugin C<write_graphite>
 
 The C<write_graphite> plugin writes data to I<Graphite>, an open-source metrics
@@ -6307,8 +6397,23 @@ Defaults to B<Command>.
 =item B<StoreRates> B<true|false>
 
 If set to B<true>, convert counter values to rates. If set to B<false> (the
-default) counter values are stored as is, i.E<nbsp>e. as an increasing integer
-number.
+default) counter values are stored as is, i.e. as an increasing integer number.
+
+=item B<LowSpeedLimit> B<true|false>
+
+If set to B<true>, average transfer speed in bytes per second will be checked. 
+In case it is below B<LowLimitBytesPerSec> connection will be considered slow 
+and aborted.
+
+=item B<LowLimitBytesPerSec> I<Bytes>
+
+Sets bytes per second value for B<LowSpeedLimit> to make a decission if 
+connection is too slow. Default value is C<100>.
+
+=item B<PostTimeoutSec> I<Seconds>
+
+If defined, provided positive integer value will be used to set maximum time
+in seconds that you allow for transfer(http post) operation to take.
 
 =back
 
@@ -6444,6 +6549,31 @@ default value.
 
 Add the given string as an additional tag to the metric being sent to
 I<Riemann>.
+
+=back
+
+=head2 Plugin C<zookeeper>
+
+The I<zookeeper plugin> will collect statistics from a I<Zookeeper> server
+using the mntr command.  It requires Zookeeper 3.4.0+ and access to the
+client port.
+
+B<Synopsis:>
+
+ <Plugin "zookeeper">
+   Host "127.0.0.1"
+   Port "2181"
+ </Plugin>
+
+=over 4
+
+=item B<Host> I<Address>
+
+Hostname or address to connect to. Defaults to C<localhost>.
+
+=item B<Port> I<Service>
+
+Service name or port number to connect to. Defaults to C<2181>.
 
 =back
 
