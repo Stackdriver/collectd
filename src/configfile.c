@@ -109,7 +109,10 @@ static cf_global_option_t cf_global_options[] =
 	{"Interval",    NULL, NULL},
 	{"ReadThreads", NULL, "5"},
 	{"WriteThreads", NULL, "5"},
+	{"WriteQueueLimitHigh", NULL, NULL},
+	{"WriteQueueLimitLow", NULL, NULL},
 	{"Timeout",     NULL, "2"},
+	{"AutoLoadPlugin", NULL, "false"},
 	{"PreCacheChain",  NULL, "PreCache"},
 	{"PostCacheChain", NULL, "PostCache"}
 };
@@ -277,21 +280,6 @@ static int dispatch_loadplugin (const oconfig_item_t *ci)
 	memset (&ctx, 0, sizeof (ctx));
 	ctx.interval = cf_get_default_interval ();
 
-	/*
-	 * XXX: Magic at work:
-	 *
-	 * Some of the language bindings, for example the Python and Perl
-	 * plugins, need to be able to export symbols to the scripts they run.
-	 * For this to happen, the "Globals" flag needs to be set.
-	 * Unfortunately, this technical detail is hard to explain to the
-	 * average user and she shouldn't have to worry about this, ideally.
-	 * So in order to save everyone's sanity use a different default for a
-	 * handful of special plugins. --octo
-	 */
-	if ((strcasecmp ("Perl", name) == 0)
-			|| (strcasecmp ("Python", name) == 0))
-		flags |= PLUGIN_FLAGS_GLOBAL;
-
 	for (i = 0; i < ci->children_num; ++i) {
 		if (strcasecmp("Globals", ci->children[i].key) == 0)
 			cf_util_get_flag (ci->children + i, &flags, PLUGIN_FLAGS_GLOBAL);
@@ -394,6 +382,19 @@ static int dispatch_block_plugin (oconfig_item_t *ci)
 
 	name = ci->values[0].value.string;
 
+	if (IS_TRUE (global_option_get ("AutoLoadPlugin")))
+	{
+		int status;
+
+		status = plugin_load (name, /* flags = */ 0);
+		if (status != 0)
+		{
+			ERROR ("Automatically loading plugin \"%s\" failed "
+					"with status %i.", name, status);
+			return (status);
+		}
+	}
+
 	/* Check for a complex callback first */
 	for (cb = complex_callback_head; cb != NULL; cb = cb->next)
 	{
@@ -476,6 +477,12 @@ static int cf_ci_replace_child (oconfig_item_t *dst, oconfig_item_t *src,
 
 	/* Resize the memory containing the children to be big enough to hold
 	 * all children. */
+	if (dst->children_num + src->children_num - 1 == 0)
+	{
+		dst->children_num = 0;
+		return (0);
+	}
+
 	temp = (oconfig_item_t *) realloc (dst->children,
 			sizeof (oconfig_item_t)
 			* (dst->children_num + src->children_num - 1));
@@ -590,7 +597,8 @@ static int cf_include_all (oconfig_item_t *root, int depth)
 			return (-1);
 
 		/* Now replace the i'th child in `root' with `new'. */
-		cf_ci_replace_child (root, new, i);
+		if (cf_ci_replace_child (root, new, i) < 0)
+			return (-1);
 
 		/* ... and go back to the new i'th child. */
 		--i;
@@ -915,6 +923,23 @@ const char *global_option_get (const char *option)
 			? cf_global_options[i].value
 			: cf_global_options[i].def);
 } /* char *global_option_get */
+
+long global_option_get_long (const char *option, long default_value)
+{
+		const char *str;
+		long value;
+
+		str = global_option_get (option);
+		if (NULL == str)
+			return (default_value);
+
+		errno = 0;
+		value = strtol (str, /* endptr = */ NULL, /* base = */ 0);
+		if (errno != 0)
+			return (default_value);
+
+		return (value);
+} /* char *global_option_get_long */
 
 cdtime_t cf_get_default_interval (void)
 {

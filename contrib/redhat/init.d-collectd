@@ -18,10 +18,18 @@ prog="collectdmon"
 service="collectd"
 CONFIG=/etc/collectd.conf
 COLLECTD=/usr/sbin/collectd
-COLLECTDMONPID=/var/run/collectdmon.pid
+COLLECTDMONPIDDIR="/var/run"
+COLLECTDMONPID="$COLLECTDMONPIDDIR/collectdmon.pid"
+
+MAXWAIT=30
 
 if [ -r /etc/sysconfig/$service ]; then
 	. /etc/sysconfig/$service
+fi
+
+if [[ ! -d $COLLECTDMONPIDDIR ]]; then
+	mkdir -p $COLLECTDMONPIDDIR
+	[ -n "${RUNAS}" ] && chown "${RUNAS}:" "$COLLECTDMONPIDDIR"
 fi
 
 check_config() {
@@ -34,7 +42,6 @@ check_config() {
         return 0
 }
 
-
 start () {
 	echo -n $"Starting collectd: "
 	check_config
@@ -44,31 +51,22 @@ start () {
 		echo $"not starting due to configuration error"
 		failure $"not starting $service due to configuration error"
 	else
-		daemon $prog -P $COLLECTDMONPID -c $COLLECTD -- -C "$CONFIG" $ARGS
+		daemon --user "${RUNAS:-root}" $prog -P $COLLECTDMONPID -c $COLLECTD -- -C "$CONFIG" $ARGS
 		RETVAL=$?
 		echo
 		[ $RETVAL -eq 0 ] && touch /var/lock/subsys/$service
 	fi
 }
+
 stop () {
 	echo -n $"Stopping collectd: "
-	killproc $prog
+	killproc -p $COLLECTDMONPID -d $MAXWAIT $prog
 	RETVAL=$?
 	echo
 	[ $RETVAL -eq 0 ] && rm -f /var/lock/subsys/$service
 }
-# See how we were called.
-case "$1" in
-  start)
-	start
-	;;
-  stop)
-	stop
-	;;
-  status)
-	status $prog
-	;;
-  restart|reload)
+
+restart () {
 	check_config
 	rc="$?"
 	if test "$rc" -ne 0; then
@@ -79,9 +77,24 @@ case "$1" in
 		stop
 		start
 	fi
+}
+
+# See how we were called.
+case "$1" in
+  start)
+	start
+	;;
+  stop)
+	stop
+	;;
+  status)
+	status -p $COLLECTDMONPID $prog
+	;;
+  restart|reload)
+	restart
 	;;
   condrestart)
-	[ -f /var/lock/subsys/$prog ] && restart || :
+	[ -f /var/lock/subsys/$service ] && restart || :
 	;;
   *)
 	echo $"Usage: $0 {start|stop|status|restart|reload|condrestart}"

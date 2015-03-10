@@ -1,6 +1,67 @@
-%global _hardened_build 1
+#
+# q: What is this ?
+# a: A specfile for building RPM packages of current collectd releases, for
+#    RHEL/CentOS versions 5, 6 and 7. By default all the plugins which are
+#    buildable based on the libraries available in the distribution + the
+#    EPEL repository, will be built. Plugins depending on external libs will
+#    be packaged in separate RPMs.
+#
+# q: And how can I do that ?
+# a: By following these instructions, using mock:
+#
+# - install and configure mock (https://fedoraproject.org/wiki/Projects/Mock)
+#
+# - enable the EPEL repository (http://dl.fedoraproject.org/pub/epel/) in the
+#   configuration files for your target systems (/etc/mock/*.cfg).
+#
+# - fetch the desired collectd release file from https://collectd.org/files/
+#   and save it in your ~/rpmbuild/SOURCES/ directory (or build your own out of
+#   the git repository: ./build.sh && ./configure && make-dist-bz2)
+#
+# - copy this file in your ~/rpmbuild/SPECS/ directory. Make sure the
+#   "Version:" tag matches the version from the tarball.
+#
+# - build the SRPM first:
+#   mock -r centos-6-x86_64 --buildsrpm --spec ~/rpmbuild/SPECS/collectd.spec \
+#     --sources ~/rpmbuild/SOURCES/
+#
+# - then build the RPMs:
+#   mock -r centos-6-x86_64 --no-clean --rebuild \
+#     /var/lib/mock/centos-6-x86_64/result/collectd-X.Y.Z-NN.src.rpm
+#
+# - you can also optionally enable/disable plugins which are disabled/enabled
+#   by default:
+#   mock -r centos-6-x86_64 --no-clean --without=java --with=oracle --rebuild \
+#     /var/lib/mock/centos-6-x86_64/result/collectd-X.Y.Z-NN.src.rpm
+#
 
-# enabled plugins
+%global _hardened_build 1
+%{?perl_default_filter}
+
+# plugins only buildable on RHEL6
+# (NB: %{elN} macro is not available on RHEL < 6)
+%{?el6:%global _has_libyajl 1}
+%{?el6:%global _has_recent_libpcap 1}
+%{?el6:%global _has_recent_sockios_h 1}
+%{?el6:%global _has_recent_libganglia 1}
+%{?el6:%global _has_working_libiptc 1}
+%{?el6:%global _has_ip_vs_h 1}
+%{?el6:%global _has_lvm2app_h 1}
+%{?el6:%global _has_libmodbus 1}
+%{?el6:%global _has_iproute 1}
+
+%{?el7:%global _has_libyajl 1}
+%{?el7:%global _has_recent_libpcap 1}
+%{?el7:%global _has_recent_sockios_h 1}
+%{?el7:%global _has_working_libiptc 1}
+%{?el7:%global _has_ip_vs_h 1}
+%{?el7:%global _has_lvm2app_h 1}
+%{?el7:%global _has_recent_librrd 1}
+%{?el7:%global _has_varnish4 1}
+%{?el7:%global _has_broken_libmemcached 1}
+%{?el7:%global _has_iproute 1}
+
+# plugins enabled by default
 %define with_aggregation 0%{!?_without_aggregation:1}
 %define with_amqp 0%{!?_without_amqp:1}
 %define with_apache 0%{!?_without_apache:1}
@@ -8,43 +69,47 @@
 %define with_ascent 0%{!?_without_ascent:1}
 %define with_battery 0%{!?_without_battery:1}
 %define with_bind 0%{!?_without_bind:1}
+%define with_cgroups 0%{!?_without_cgroups:1}
 %define with_conntrack 0%{!?_without_conntrack:1}
 %define with_contextswitch 0%{!?_without_contextswitch:1}
 %define with_cpu 0%{!?_without_cpu:1}
 %define with_cpufreq 0%{!?_without_cpufreq:1}
 %define with_csv 0%{!?_without_csv:1}
 %define with_curl 0%{!?_without_curl:1}
-%define with_curl_json 0%{!?_without_curl_json:1}
+%define with_curl_json 0%{!?_without_curl_json:0%{?_has_libyajl}}
 %define with_curl_xml 0%{!?_without_curl_xml:1}
 %define with_dbi 0%{!?_without_dbi:1}
 %define with_df 0%{!?_without_df:1}
 %define with_disk 0%{!?_without_disk:1}
-%define with_dns 0%{!?_without_dns:1}
+%define with_dns 0%{!?_without_dns:0%{?_has_recent_libpcap}}
 %define with_email 0%{!?_without_email:1}
 %define with_entropy 0%{!?_without_entropy:1}
-%define with_ethstat 0%{!?_without_ethstat:1}
+%define with_ethstat 0%{!?_without_ethstat:0%{?_has_recent_sockios_h}}
 %define with_exec 0%{!?_without_exec:1}
 %define with_filecount 0%{!?_without_filecount:1}
 %define with_fscache 0%{!?_without_fscache:1}
-%define with_gmond 0%{!?_without_gmond:1}
+%define with_gmond 0%{!?_without_gmond:0%{?_has_recent_libganglia}}
 %define with_hddtemp 0%{!?_without_hddtemp:1}
 %define with_interface 0%{!?_without_interface:1}
 %define with_ipmi 0%{!?_without_ipmi:1}
-%define with_iptables 0%{!?_without_iptables:1}
-%define with_ipvs 0%{!?_without_ipvs:1}
+%define with_iptables 0%{!?_without_iptables:0%{?_has_working_libiptc}}
+%define with_ipvs 0%{!?_without_ipvs:0%{?_has_ip_vs_h}}
 %define with_irq 0%{!?_without_irq:1}
 %define with_java 0%{!?_without_java:1}
 %define with_libvirt 0%{!?_without_libvirt:1}
 %define with_load 0%{!?_without_load:1}
 %define with_logfile 0%{!?_without_logfile:1}
+%define with_lvm 0%{!?_without_lvm:0%{?_has_lvm2app_h}}
 %define with_madwifi 0%{!?_without_madwifi:1}
 %define with_mbmon 0%{!?_without_mbmon:1}
 %define with_md 0%{!?_without_md:1}
-%define with_memcachec 0%{!?_without_memcachec:1}
+%define with_memcachec 0%{!?_without_memcachec:0%{!?_has_broken_libmemcached:1}}
 %define with_memcached 0%{!?_without_memcached:1}
 %define with_memory 0%{!?_without_memory:1}
 %define with_multimeter 0%{!?_without_multimeter:1}
+%define with_modbus 0%{!?_without_modbus:0%{?_has_libmodbus}}
 %define with_mysql 0%{!?_without_mysql:1}
+%define with_netlink 0%{!?_without_netlink:0%{?_has_iproute}}
 %define with_network 0%{!?_without_network:1}
 %define with_nfs 0%{!?_without_nfs:1}
 %define with_nginx 0%{!?_without_nginx:1}
@@ -63,10 +128,12 @@
 %define with_processes 0%{!?_without_processes:1}
 %define with_protocols 0%{!?_without_protocols:1}
 %define with_python 0%{!?_without_python:1}
+%define with_rrdcached 0%{!?_without_rrdcached:0%{?_has_recent_librrd}}
 %define with_rrdtool 0%{!?_without_rrdtool:1}
 %define with_sensors 0%{!?_without_sensors:1}
 %define with_serial 0%{!?_without_serial:1}
 %define with_snmp 0%{!?_without_snmp:1}
+%define with_statsd 0%{!?_without_statsd:1}
 %define with_swap 0%{!?_without_swap:1}
 %define with_syslog 0%{!?_without_syslog:1}
 %define with_table 0%{!?_without_table:1}
@@ -81,7 +148,7 @@
 %define with_uptime 0%{!?_without_uptime:1}
 %define with_users 0%{!?_without_users:1}
 %define with_uuid 0%{!?_without_uuid:1}
-%define with_varnish 0%{!?_without_varnish:1}
+%define with_varnish 0%{!?_without_varnish:0%{!?_has_varnish4:1}}
 %define with_vmem 0%{!?_without_vmem:1}
 %define with_vserver 0%{!?_without_vserver:1}
 %define with_wireless 0%{!?_without_wireless:1}
@@ -89,35 +156,54 @@
 %define with_write_http 0%{!?_without_write_http:1}
 %define with_write_riemann 0%{!?_without_write_riemann:1}
 
-# disabled plugins
+# Plugins not built by default because of dependencies on libraries not
+# available in RHEL or EPEL:
+
+# plugin apple_sensors disabled, requires a Mac
 %define with_apple_sensors 0%{!?_without_apple_sensors:0}
+# plugin aquaero disabled, requires a libaquaero5
+%define with_aquaero 0%{!?_without_aquaero:0}
+# plugin lpar disabled, requires AIX
 %define with_lpar 0%{!?_without_lpar:0}
-%define with_modbus 0%{!?_without_modbus:0}
+# plugin mic disabled, requires Mic
+%define with_mic 0%{!?_without_mic:0}
+# plugin netapp disabled, requires libnetapp
 %define with_netapp 0%{!?_without_netapp:0}
-%define with_netlink 0%{!?_without_netlink:0}
+# plugin onewire disabled, requires libowfs
 %define with_onewire 0%{!?_without_onewire:0}
+# plugin oracle disabled, requires Oracle
 %define with_oracle 0%{!?_without_oracle:0}
+# plugin oracle disabled, requires BSD
 %define with_pf 0%{!?_without_pf:0}
+# plugin redis disabled, requires credis
 %define with_redis 0%{!?_without_redis:0}
+# plugin routeros disabled, requires librouteros
 %define with_routeros 0%{!?_without_routeros:0}
-%define with_rrdcached 0%{!?_without_rrdcached:0}
+# plugin sigrok disabled, requires libsigrok
+%define with_sigrok 0%{!?_without_sigrok:0}
+# plugin tape disabled, requires libkstat
 %define with_tape 0%{!?_without_tape:0}
+# plugin tokyotyrant disabled, requires tcrdb.h
 %define with_tokyotyrant 0%{!?_without_tokyotyrant:0}
+# plugin write_mongodb disabled, requires libmongoc
 %define with_write_mongodb 0%{!?_without_write_mongodb:0}
+# plugin write_redis disabled, requires credis
 %define with_write_redis 0%{!?_without_write_redis:0}
+# plugin xmms disabled, requires xmms
 %define with_xmms 0%{!?_without_xmms:0}
+# plugin zfs_arc disabled, requires FreeBSD/Solaris
 %define with_zfs_arc 0%{!?_without_zfs_arc:0}
 
 Summary:	Statistics collection daemon for filling RRD files
 Name:		collectd
-Version:	5.3.0
+Version:	5.4.0
 Release:	1%{?dist}
 URL:		http://collectd.org
 Source:		http://collectd.org/files/%{name}-%{version}.tar.bz2
 License:	GPLv2
 Group:		System Environment/Daemons
 BuildRoot:	%{_tmppath}/%{name}-%{version}-root
-BuildRequires:	libgcrypt-devel
+BuildRequires:	libgcrypt-devel, kernel-headers, libtool-ltdl-devel
 Vendor:		collectd development team <collectd@verplant.org>
 
 Requires(post):		chkconfig
@@ -151,6 +237,15 @@ Requires:	%{name}%{?_isa} = %{version}-%{release}
 BuildRequires:	curl-devel
 %description apache
 This plugin collects data provided by Apache's `mod_status'.
+%endif
+
+%if %{with_aquaero}
+%package aquaero
+Summary:	aquaero plugin for collectd
+Group:		System Environment/Daemons
+Requires:	%{name}%{?_isa} = %{version}-%{release}
+%description aquaero
+Various sensors in the Aquaero 5 watercooling board made by Aquacomputer.
 %endif
 
 %if %{with_ascent}
@@ -192,7 +287,7 @@ the configuration.
 Summary:	Curl_json plugin for collectd
 Group:		System Environment/Daemons
 Requires:	%{name}%{?_isa} = %{version}-%{release}
-Buildrequires:	curl-devel, yajl-devel
+BuildRequires:	curl-devel, yajl-devel
 %description curl_json
 The cURL-JSON plugin queries JavaScript Object Notation (JSON) data using the
 cURL library and parses it according to the user's configuration.
@@ -214,7 +309,7 @@ Markup Language (XML).
 Summary:	DBI plugin for collectd
 Group:		System Environment/Daemons
 Requires:	%{name}%{?_isa} = %{version}-%{release}
-Buildrequires:	libdbi-devel
+BuildRequires:	libdbi-devel
 %description dbi
 The DBI plugin uses libdbi, a database abstraction library, to execute SQL
 statements on a database and read back the result.
@@ -224,8 +319,8 @@ statements on a database and read back the result.
 %package dns
 Summary:	DNS plugin for collectd
 Group:		System Environment/Daemons
-Requires:	%{name}%{?_isa} = %{version}-%{release}
-Buildrequires:	libpcap-devel
+Requires:	%{name}%{?_isa} = %{version}-%{release}, libpcap >= 1.0
+BuildRequires:	libpcap-devel >= 1.0
 %description dns
 The DNS plugin has a similar functionality to dnstop: It uses libpcap to get a
 copy of all traffic from/to port UDP/53 (that's the DNS port), interprets the
@@ -307,6 +402,17 @@ BuildRequires:	libvirt-devel
 This plugin collects information from virtualized guests.
 %endif
 
+%if %{with_lvm}
+%package lvm
+Summary:	LVM plugin for collectd
+Group:		System Environment/Daemons
+Requires:	%{name}%{?_isa} = %{version}-%{release}
+BuildRequires:	lvm2-devel
+%description lvm
+This plugin collects size of “Logical Volumes” (LV) and “Volume Groups” (VG)
+of Linux' “Logical Volume Manager” (LVM).
+%endif
+
 %if %{with_memcachec}
 %package memcachec
 Summary:	Memcachec plugin for collectd
@@ -319,6 +425,26 @@ instance. Note that another plugin, named `memcached', exists and does a
 similar job, without requiring the installation of libmemcached.
 %endif
 
+%if %{with_mic}
+%package mic
+Summary:	mic plugin for collectd
+Group:		System Environment/Daemons
+Requires:	%{name}%{?_isa} = %{version}-%{release}
+%description mic
+The mic plugin collects CPU usage, memory usage, temperatures and power
+consumption from Intel Many Integrated Core (MIC) CPUs.
+%endif
+
+%if %{with_modbus}
+%package modbus
+Summary:       modbus plugin for collectd
+Group:         System Environment/Daemons
+Requires:      %{name}%{?_isa} = %{version}-%{release}
+BuildRequires:	libmodbus-devel
+%description modbus
+The modbus plugin collects values from Modbus/TCP enabled devices
+%endif
+
 %if %{with_mysql}
 %package mysql
 Summary:	MySQL plugin for collectd
@@ -328,6 +454,16 @@ BuildRequires:	mysql-devel
 %description mysql
 MySQL querying plugin. This plugin provides data of issued commands, called
 handlers and database traffic.
+%endif
+
+%if %{with_netlink}
+%package netlink
+Summary:	netlink plugin for collectd
+Group:		System Environment/Daemons
+Requires:	%{name}%{?_isa} = %{version}-%{release}
+BuildRequires:	libmnl-devel, iproute-devel
+%description netlink
+The netlink plugin collects detailed network interface and routing statistics.
 %endif
 
 %if %{with_nginx}
@@ -345,7 +481,7 @@ This plugin gets data provided by nginx.
 Summary:	Notify_desktop plugin for collectd
 Group:		System Environment/Daemons
 Requires:	%{name}%{?_isa} = %{version}-%{release}
-BuildRequires:	libnotify-devel
+BuildRequires:	libnotify-devel, gtk2-devel
 %description notify_desktop
 The Notify Desktop plugin uses libnotify to display notifications to the user
 via the desktop notification specification, i. e. on an X display.
@@ -378,7 +514,11 @@ Summary:	Perl plugin for collectd
 Group:		System Environment/Daemons
 Requires:	%{name}%{?_isa} = %{version}-%{release}
 Requires:	perl(:MODULE_COMPAT_%(eval "`%{__perl} -V:version`"; echo $version))
+%if 0%{?rhel} >= 6
 BuildRequires:	perl-ExtUtils-Embed
+%else
+BuildRequires:	perl
+%endif
 %description perl
 The Perl plugin embeds a Perl interpreter into collectd and exposes the
 application programming interface (API) to Perl-scripts.
@@ -422,7 +562,11 @@ database.
 Summary:	Python plugin for collectd
 Group:		System Environment/Daemons
 Requires:	%{name}%{?_isa} = %{version}-%{release}
-BuildRequires:	python-devel
+%if 0%{?rhel} >= 6
+BuildRequires: python-devel
+%else
+BuildRequires: python26-devel
+%endif
 %description python
 The Python plugin embeds a Python interpreter into collectd and exposes the
 application programming interface (API) to Python-scripts.
@@ -468,6 +612,17 @@ Requires:	%{name}%{?_isa} = %{version}-%{release}
 BuildRequires:	lm_sensors-devel
 %description sensors
 This plugin for collectd provides querying of sensors supported by lm_sensors.
+%endif
+
+%if %{with_sigrok}
+%package sigrok
+Summary:	sigrok plugin for collectd
+Group:		System Environment/Daemons
+Requires:	%{name}%{?_isa} = %{version}-%{release}
+%description sigrok
+Uses libsigrok as a backend, allowing any sigrok-supported device to have its
+measurements fed to collectd. This includes multimeters, sound level meters,
+thermometers, and much more.
 %endif
 
 %if %{with_snmp}
@@ -551,11 +706,13 @@ package.
 
 %package -n libcollectdclient
 Summary:	Collectd client library
+Group:		System Environment/Daemons
 %description -n libcollectdclient
 Collectd client library
 
 %package -n libcollectdclient-devel
 Summary:	Development files for libcollectdclient
+Group:		System Environment/Daemons
 Requires:	pkgconfig
 Requires:	libcollectdclient%{?_isa} = %{version}-%{release}
 %description -n libcollectdclient-devel
@@ -596,6 +753,12 @@ Development files for libcollectdclient
 %define _with_apple_sensors --disable-apple_sensors
 %endif
 
+%if %{with_aquaero}
+%define _with_aquaero --enable-aquaero
+%else
+%define _with_aquaero --disable-aquaero
+%endif
+
 %if %{with_ascent}
 %define _with_ascent --enable-ascent
 %else
@@ -612,6 +775,12 @@ Development files for libcollectdclient
 %define _with_bind --enable-bind
 %else
 %define _with_bind --disable-bind
+%endif
+
+%if %{with_cgroups}
+%define _with_cgroups --enable-cgroups
+%else
+%define _with_cgroups --disable-cgroups
 %endif
 
 %if %{with_conntrack}
@@ -794,6 +963,12 @@ Development files for libcollectdclient
 %define _with_lpar --disable-lpar
 %endif
 
+%if %{with_lvm}
+%define _with_lvm --enable-lvm
+%else
+%define _with_lvm --disable-lvm
+%endif
+
 %if %{with_madwifi}
 %define _with_madwifi --enable-madwifi
 %else
@@ -828,6 +1003,12 @@ Development files for libcollectdclient
 %define _with_memory --enable-memory
 %else
 %define _with_memory --disable-memory
+%endif
+
+%if %{with_mic}
+%define _with_mic --enable-mic
+%else
+%define _with_mic --disable-mic
 %endif
 
 %if %{with_modbus}
@@ -981,7 +1162,11 @@ Development files for libcollectdclient
 %endif
 
 %if %{with_python}
+%if 0%{?rhel} >= 6
 %define _with_python --enable-python
+%else
+%define _with_python --enable-python --with-python=%{_bindir}/python2.6
+%endif
 %else
 %define _with_python --disable-python
 %endif
@@ -1022,10 +1207,22 @@ Development files for libcollectdclient
 %define _with_serial --disable-serial
 %endif
 
+%if %{with_sigrok}
+%define _with_sigrok --enable-sigrok
+%else
+%define _with_sigrok --disable-sigrok
+%endif
+
 %if %{with_snmp}
 %define _with_snmp --enable-snmp
 %else
 %define _with_snmp --disable-snmp
+%endif
+
+%if %{with_statsd}
+%define _with_statsd --enable-statsd
+%else
+%define _with_statsd --disable-statsd
 %endif
 
 %if %{with_swap}
@@ -1194,7 +1391,6 @@ Development files for libcollectdclient
 	--disable-static \
 	--without-included-ltdl \
 	--enable-all-plugins=yes \
-	--enable-aggregation \
 	--enable-match_empty_counter \
 	--enable-match_hashed \
 	--enable-match_regex \
@@ -1210,9 +1406,11 @@ Development files for libcollectdclient
 	%{?_with_apache} \
 	%{?_with_apcups} \
 	%{?_with_apple_sensors} \
+	%{?_with_aquaero} \
 	%{?_with_ascent} \
 	%{?_with_battery} \
 	%{?_with_bind} \
+	%{?_with_cgroups} \
 	%{?_with_conntrack} \
 	%{?_with_contextswitch} \
 	%{?_with_cpu} \
@@ -1240,7 +1438,9 @@ Development files for libcollectdclient
 	%{?_with_java} \
 	%{?_with_libvirt} \
 	%{?_with_lpar} \
+	%{?_with_lvm} \
 	%{?_with_memcachec} \
+	%{?_with_mic} \
 	%{?_with_modbus} \
 	%{?_with_multimeter} \
 	%{?_with_mysql} \
@@ -1263,6 +1463,7 @@ Development files for libcollectdclient
 	%{?_with_rrdcached} \
 	%{?_with_rrdtool} \
 	%{?_with_sensors} \
+	%{?_with_sigrok} \
 	%{?_with_snmp} \
 	%{?_with_tape} \
 	%{?_with_tokyotyrant} \
@@ -1290,6 +1491,7 @@ Development files for libcollectdclient
 	%{?_with_processes} \
 	%{?_with_protocols} \
 	%{?_with_serial} \
+	%{?_with_statsd} \
 	%{?_with_swap} \
 	%{?_with_syslog} \
 	%{?_with_table} \
@@ -1326,20 +1528,16 @@ rm -rf %{buildroot}
 %{__mkdir} -p %{buildroot}%{_localstatedir}/www
 %{__mkdir} -p %{buildroot}/%{_sysconfdir}/httpd/conf.d
 
-%{__cp} -a contrib/collection3 %{buildroot}%{_localstatedir}/www
-%{__cp} -a contrib/redhat/collection3.conf %{buildroot}/%{_sysconfdir}/httpd/conf.d/
+%{__mv} contrib/collection3 %{buildroot}%{_localstatedir}/www
+%{__mv} contrib/redhat/collection3.conf %{buildroot}/%{_sysconfdir}/httpd/conf.d/
 
-%{__cp} -a contrib/php-collection %{buildroot}%{_localstatedir}/www
-%{__cp} -a contrib/redhat/php-collection.conf %{buildroot}/%{_sysconfdir}/httpd/conf.d/
+%{__mv} contrib/php-collection %{buildroot}%{_localstatedir}/www
+%{__mv} contrib/redhat/php-collection.conf %{buildroot}/%{_sysconfdir}/httpd/conf.d/
 
 ### Clean up docs
 find contrib/ -type f -exec %{__chmod} a-x {} \;
 # *.la files shouldn't be distributed.
 rm -f %{buildroot}/%{_libdir}/{collectd/,}*.la
-
-# Move the Perl examples to a separate directory.
-mkdir perl-examples
-find contrib -name '*.p[lm]' -exec mv {} perl-examples/ \;
 
 # Remove Perl hidden .packlist files.
 find %{buildroot} -type f -name .packlist -delete
@@ -1347,12 +1545,19 @@ find %{buildroot} -type f -name .packlist -delete
 find %{buildroot} -type f -name perllocal.pod -delete
 
 %if ! %{with_java}
+rm -f %{buildroot}%{_datadir}/collectd/java/collectd-api.jar
+rm -f %{buildroot}%{_datadir}/collectd/java/generic-jmx.jar
 rm -f %{buildroot}%{_mandir}/man5/collectd-java.5*
 %endif
 
 %if ! %{with_perl}
 rm -f %{buildroot}%{_mandir}/man5/collectd-perl.5*
 rm -f %{buildroot}%{_mandir}/man3/Collectd::Unixsock.3pm*
+rm -fr %{buildroot}/usr/lib/perl5/
+%endif
+
+%if ! %{with_postgresql}
+rm -f %{buildroot}%{_datadir}/collectd/postgresql_default.conf
 %endif
 
 %if ! %{with_python}
@@ -1394,7 +1599,7 @@ fi
 %{_bindir}/collectd-tg
 %{_bindir}/collectdctl
 %{_sbindir}/collectdmon
-%{_datadir}/collectd/
+%{_datadir}/collectd/types.db
 %{_sharedstatedir}/collectd
 %{_mandir}/man1/collectd-nagios.1*
 %{_mandir}/man1/collectd.1*
@@ -1428,6 +1633,9 @@ fi
 %endif
 %if %{with_battery}
 %{_libdir}/%{name}/battery.so
+%endif
+%if %{with_cgroups}
+%{_libdir}/%{name}/cgroups.so
 %endif
 %if %{with_conntrack}
 %{_libdir}/%{name}/conntrack.so
@@ -1528,6 +1736,9 @@ fi
 %if %{with_serial}
 %{_libdir}/%{name}/serial.so
 %endif
+%if %{with_statsd}
+%{_libdir}/%{name}/statsd.so
+%endif
 %if %{with_swap}
 %{_libdir}/%{name}/swap.so
 %endif
@@ -1583,21 +1794,6 @@ fi
 %{_libdir}/%{name}/write_graphite.so
 %endif
 
-# All plugins not built by default because of dependencies on libraries not
-# available in RHEL or EPEL:
-# plugin modbus disabled, requires libmodbus
-# plugin netlink disabled, requires libnetlink.h
-# plugin numa disabled, requires libnetapp
-# plugin onewire disabled, requires libowfs
-# plugin oracle disabled, requires Oracle
-# plugin redis disabled, requires credis
-# plugin routeros disabled, requires librouteros
-# plugin rrdcached disabled, requires rrdtool >= 1.4
-# plugin tokyotyrant disabled, requires tcrdb.h
-# plugin write_mongodb disabled, requires libmongoc
-# plugin write_redis disabled, requires credis
-# plugin xmms disabled, requires xmms
-
 
 %files -n libcollectdclient-devel
 %{_includedir}/collectd/client.h
@@ -1618,6 +1814,11 @@ fi
 %if %{with_apache}
 %files apache
 %{_libdir}/%{name}/apache.so
+%endif
+
+%if %{with_aquaero}
+%files aquaero
+%{_libdir}/%{name}/aquaero.so
 %endif
 
 %if %{with_ascent}
@@ -1682,8 +1883,8 @@ fi
 
 %if %{with_java}
 %files java
-%{_datarootdir}/collectd/java/collectd-api.jar
-%{_datarootdir}/collectd/java/generic-jmx.jar
+%{_datadir}/collectd/java/collectd-api.jar
+%{_datadir}/collectd/java/generic-jmx.jar
 %{_libdir}/%{name}/java.so
 %{_mandir}/man5/collectd-java.5*
 %endif
@@ -1693,14 +1894,34 @@ fi
 %{_libdir}/%{name}/libvirt.so
 %endif
 
+%if %{with_lvm}
+%files lvm
+%{_libdir}/%{name}/lvm.so
+%endif
+
 %if %{with_memcachec}
 %files memcachec
 %{_libdir}/%{name}/memcachec.so
 %endif
 
+%if %{with_mic}
+%files mic
+%{_libdir}/%{name}/mic.so
+%endif
+
+%if %{with_modbus}
+%files modbus
+%{_libdir}/%{name}/modbus.so
+%endif
+
 %if %{with_mysql}
 %files mysql
 %{_libdir}/%{name}/mysql.so
+%endif
+
+%if %{with_netlink}
+%files netlink
+%{_libdir}/%{name}/netlink.so
 %endif
 
 %if %{with_nginx}
@@ -1725,7 +1946,6 @@ fi
 
 %if %{with_perl}
 %files perl
-%doc perl-examples/*
 %{perl_vendorlib}/Collectd.pm
 %{perl_vendorlib}/Collectd/
 %{_mandir}/man3/Collectd::Unixsock.3pm*
@@ -1745,7 +1965,7 @@ fi
 
 %if %{with_postgresql}
 %files postgresql
-%{_datarootdir}/collectd/postgresql_default.conf
+%{_datadir}/collectd/postgresql_default.conf
 %{_libdir}/%{name}/postgresql.so
 %endif
 
@@ -1773,6 +1993,11 @@ fi
 %if %{with_sensors}
 %files sensors
 %{_libdir}/%{name}/sensors.so
+%endif
+
+%if %{with_sigrok}
+%files sigrok
+%{_libdir}/%{name}/sigrok.so
 %endif
 
 %if %{with_snmp}
@@ -1813,13 +2038,37 @@ fi
 %doc contrib/
 
 %changelog
+* Mon Aug 19 2013 Marc Fournier <marc.fournier@camptocamp.com> 5.4.0-1
+- New upstream version
+- Build netlink plugin by default
+- Enable cgroups, lvm and statsd plugins
+- Enable (but don't build by default) mic, aquaero and sigrok plugins
+
+* Tue Aug 06 2013 Marc Fournier <marc.fournier@camptocamp.com> 5.3.1-1
+- New upstream version
+- Added RHEL5 support:
+  * conditionally disable plugins not building on this platform
+  * add/specify some build dependencies and options
+  * replace some RPM macros not available on this platform
+- Removed duplicate --enable-aggregation
+- Added some comments & usage examples
+- Replaced a couple of "Buildrequires" by "BuildRequires"
+- Enabled modbus plugin on RHEL6
+- Enabled netlink plugin on RHEL6 and RHEL7
+- Allow perl plugin to build on RHEL5
+- Add support for RHEL7
+- Misc perl-related improvements:
+  * prevent rpmbuild from extracting dependencies from files in /usr/share/doc
+  * don't package collection3 and php-collection twice
+  * keep perl scripts from contrib/ in collectd-contrib
+
 * Wed Apr 10 2013 Marc Fournier <marc.fournier@camptocamp.com> 5.3.0-1
 - New upstream version
 - Enabled write_riemann plugin
 - Enabled tail_csv plugin
 - Installed collectd-tc manpage
 
-* Thu Jan 11 2013 Marc Fournier <marc.fournier@camptocamp.com> 5.2.0-3
+* Fri Jan 11 2013 Marc Fournier <marc.fournier@camptocamp.com> 5.2.0-3
 - remove dependency on libstatgrab, which isn't required on linux
 
 * Thu Jan 03 2013 Marc Fournier <marc.fournier@camptocamp.com> 5.2.0-2
@@ -1867,11 +2116,11 @@ fi
   non-essential stuff.
 - Replaced BuildPrereq by BuildRequires
 
-* Tue Jan 03 2011 Monetate <jason.stelzer@monetate.com> 5.0.1
+* Mon Jan 03 2011 Monetate <jason.stelzer@monetate.com> 5.0.1
 - New upstream version
 - Changes to support 5.0.1
 
-* Tue Jan 04 2010 Rackspace <stu.hood@rackspace.com> 4.9.0
+* Mon Jan 04 2010 Rackspace <stu.hood@rackspace.com> 4.9.0
 - New upstream version
 - Changes to support 4.9.0
 - Added support for Java/GenericJMX plugin
@@ -1889,7 +2138,7 @@ fi
 - New major releas
 - Changes to support 4.0.5
 
-* Wed Jan 11 2007 Iain Lea <iain@bricbrac.de> 3.11.0-0
+* Thu Jan 11 2007 Iain Lea <iain@bricbrac.de> 3.11.0-0
 - fixed spec file to build correctly on fedora core
 - added improved init.d script to work with chkconfig
 - added %%post and %%postun to call chkconfig automatically
@@ -1897,10 +2146,10 @@ fi
 * Sun Jul 09 2006 Florian octo Forster <octo@verplant.org> 3.10.0-1
 - New upstream version
 
-* Tue Jun 25 2006 Florian octo Forster <octo@verplant.org> 3.9.4-1
+* Sun Jun 25 2006 Florian octo Forster <octo@verplant.org> 3.9.4-1
 - New upstream version
 
-* Tue Jun 01 2006 Florian octo Forster <octo@verplant.org> 3.9.3-1
+* Thu Jun 01 2006 Florian octo Forster <octo@verplant.org> 3.9.3-1
 - New upstream version
 
 * Tue May 09 2006 Florian octo Forster <octo@verplant.org> 3.9.2-1
@@ -1916,10 +2165,10 @@ fi
 - New upstream version
 - Added the `apache' package.
 
-* Thu Mar 14 2006 Florian octo Forster <octo@verplant.org> 3.8.2-1
+* Tue Mar 14 2006 Florian octo Forster <octo@verplant.org> 3.8.2-1
 - New upstream version
 
-* Thu Mar 13 2006 Florian octo Forster <octo@verplant.org> 3.8.1-1
+* Mon Mar 13 2006 Florian octo Forster <octo@verplant.org> 3.8.1-1
 - New upstream version
 
 * Thu Mar 09 2006 Florian octo Forster <octo@verplant.org> 3.8.0-1
@@ -1956,7 +2205,7 @@ fi
 * Sat Nov 05 2005 Florian octo Forster <octo@verplant.org> 3.3.0-1
 - New upstream version
 
-* Tue Oct 26 2005 Florian octo Forster <octo@verplant.org> 3.2.0-1
+* Wed Oct 26 2005 Florian octo Forster <octo@verplant.org> 3.2.0-1
 - New upstream version
 - Added statement to remove the `*.la' files. This fixes a problem when
   `Unpackaged files terminate build' is in effect.
@@ -1973,13 +2222,13 @@ fi
 * Fri Sep 16 2005 Florian octo Forster <octo@verplant.org> 2.1.0-1
 - New upstream version
 
-* Mon Sep 10 2005 Florian octo Forster <octo@verplant.org> 2.0.0-1
+* Sat Sep 10 2005 Florian octo Forster <octo@verplant.org> 2.0.0-1
 - New upstream version
 
 * Mon Aug 29 2005 Florian octo Forster <octo@verplant.org> 1.8.0-1
 - New upstream version
 
-* Sun Aug 25 2005 Florian octo Forster <octo@verplant.org> 1.7.0-1
+* Thu Aug 25 2005 Florian octo Forster <octo@verplant.org> 1.7.0-1
 - New upstream version
 
 * Sun Aug 21 2005 Florian octo Forster <octo@verplant.org> 1.6.0-1

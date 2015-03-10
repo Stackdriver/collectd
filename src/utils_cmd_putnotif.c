@@ -26,12 +26,15 @@
 #include "utils_parse_option.h"
 
 #define print_to_socket(fh, ...) \
-  if (fprintf (fh, __VA_ARGS__) < 0) { \
-    char errbuf[1024]; \
-    WARNING ("handle_putnotif: failed to write to socket #%i: %s", \
-	fileno (fh), sstrerror (errno, errbuf, sizeof (errbuf))); \
-    return -1; \
-  }
+  do { \
+    if (fprintf (fh, __VA_ARGS__) < 0) { \
+      char errbuf[1024]; \
+      WARNING ("handle_putnotif: failed to write to socket #%i: %s", \
+          fileno (fh), sstrerror (errno, errbuf, sizeof (errbuf))); \
+      return -1; \
+    } \
+    fflush(fh); \
+  } while (0)
 
 static int set_option_severity (notification_t *n, const char *value)
 {
@@ -49,13 +52,18 @@ static int set_option_severity (notification_t *n, const char *value)
 
 static int set_option_time (notification_t *n, const char *value)
 {
-  time_t tmp;
-  
-  tmp = (time_t) atoi (value);
-  if (tmp <= 0)
+  char *endptr = NULL;
+  double tmp;
+
+  errno = 0;
+  tmp = strtod (value, &endptr);
+  if ((errno != 0)         /* Overflow */
+      || (endptr == value) /* Invalid string */
+      || (endptr == NULL)  /* This should not happen */
+      || (*endptr != 0))   /* Trailing chars */
     return (-1);
 
-  n->time = tmp;
+  n->time = DOUBLE_TO_CDTIME_T (tmp);
 
   return (0);
 } /* int set_option_time */

@@ -385,7 +385,7 @@ static int cx_handle_instance_xpath (xmlXPathContextPtr xpath_ctx, /* {{{ */
   /* If the base xpath returns more than one block, the result is assumed to be
    * a table. The `Instance' option is not optional in this case. Check for the
    * condition and inform the user. */
-  if (is_table && (vl->type_instance == NULL))
+  if (is_table)
   {
     WARNING ("curl_xml plugin: "
         "Base-XPath %s is a table (more than one result was returned), "
@@ -608,6 +608,7 @@ static int cx_curl_perform (cx_t *db, CURL *curl) /* {{{ */
   long rc;
   char *ptr;
   char *url;
+  url = db->url;
 
   db->buffer_fill = 0; 
   status = curl_easy_perform (curl);
@@ -965,7 +966,7 @@ static int cx_config_add_url (oconfig_item_t *ci) /* {{{ */
   if (status == 0)
   {
     user_data_t ud;
-    char cb_name[DATA_MAX_NAME_LEN];
+    char *cb_name;
 
     if (db->instance == NULL)
       db->instance = strdup("default");
@@ -977,11 +978,10 @@ static int cx_config_add_url (oconfig_item_t *ci) /* {{{ */
     ud.data = (void *) db;
     ud.free_func = cx_free;
 
-    ssnprintf (cb_name, sizeof (cb_name), "curl_xml-%s-%s",
-               db->instance, db->url);
-
-    plugin_register_complex_read (/* group = */ NULL, cb_name, cx_read,
+    cb_name = ssnprintf_alloc ("curl_xml-%s-%s", db->instance, db->url);
+    plugin_register_complex_read (/* group = */ "curl_xml", cb_name, cx_read,
                                   /* interval = */ NULL, &ud);
+    sfree (cb_name);
   }
   else
   {
