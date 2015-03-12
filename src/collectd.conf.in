@@ -1202,7 +1202,8 @@
 #</Plugin>
 
 #<Plugin write_http>
-#	<URL "http://example.com/collectd-post">
+#	<Node "example">
+#		URL "http://example.com/collectd-post"
 #		User "collectd"
 #		Password "weCh3ik0"
 #		VerifyPeer true
@@ -1210,7 +1211,7 @@
 #		CACert "/etc/ssl/ca.crt"
 #		Format "Command"
 #		StoreRates false
-#	</URL>
+#	</Node>
 #</Plugin>
 
 #<Plugin write_mongodb>
