@@ -36,20 +36,26 @@
 
 #include <curl/curl.h>
 
+#define WH_DEFAULT_LOW_LIMIT_BYTES_PER_SEC 100
 /*
  * Private variables
  */
 struct wh_callback_s
 {
-        char *location;
+        char *name;
 
+        char *location;
         char *user;
         char *pass;
         char *credentials;
         int   verify_peer;
         int   verify_host;
         char *cacert;
-        int   store_rates;
+        _Bool store_rates;
+	_Bool abort_on_slow;
+	int   low_limit_bytes;
+        time_t interval;
+        int post_timeout;
 
 #define WH_FORMAT_COMMAND 0
 #define WH_FORMAT_JSON    1
@@ -58,12 +64,14 @@ struct wh_callback_s
         CURL *curl;
         char curl_errbuf[CURL_ERROR_SIZE];
 
-        char   send_buffer[4096];
+        char   send_buffer[1024 * 1024]; //1024 * 1024];
         size_t send_buffer_free;
         size_t send_buffer_fill;
         cdtime_t send_buffer_init_time;
+        cdtime_t buffer_flush_last;
 
         pthread_mutex_t send_lock;
+        pthread_mutex_t flush_lock;
 };
 typedef struct wh_callback_s wh_callback_t;
 
@@ -111,8 +119,18 @@ static int wh_callback_init (wh_callback_t *cb) /* {{{ */
                 return (-1);
         }
 
+        if(cb->abort_on_slow && cb->interval > 0)
+        {
+            curl_easy_setopt(cb->curl, CURLOPT_LOW_SPEED_LIMIT, (cb->low_limit_bytes?cb->low_limit_bytes:WH_DEFAULT_LOW_LIMIT_BYTES_PER_SEC));
+            curl_easy_setopt(cb->curl, CURLOPT_LOW_SPEED_TIME, cb->interval);
+        }
+        if(cb->post_timeout >0)
+        {
+           curl_easy_setopt(cb->curl, CURLOPT_TIMEOUT, cb->post_timeout);
+        }
+
         curl_easy_setopt (cb->curl, CURLOPT_NOSIGNAL, 1L);
-        curl_easy_setopt (cb->curl, CURLOPT_USERAGENT, PACKAGE_NAME"/"PACKAGE_VERSION);
+        curl_easy_setopt (cb->curl, CURLOPT_USERAGENT, USERAGENT);
 
         headers = NULL;
         headers = curl_slist_append (headers, "Accept:  */*");
@@ -264,6 +282,7 @@ static void wh_callback_free (void *data) /* {{{ */
         wh_flush_nolock (/* timeout = */ 0, cb);
 
         curl_easy_cleanup (cb->curl);
+        sfree (cb->name);
         sfree (cb->location);
         sfree (cb->user);
         sfree (cb->pass);
@@ -321,6 +340,7 @@ static int wh_write_command (const data_set_t *ds, const value_list_t *vl, /* {{
 
         if (cb->curl == NULL)
         {
+                cb->interval = CDTIME_T_TO_TIME_T(vl->interval);
                 status = wh_callback_init (cb);
                 if (status != 0)
                 {
@@ -364,11 +384,13 @@ static int wh_write_json (const data_set_t *ds, const value_list_t *vl, /* {{{ *
                 wh_callback_t *cb)
 {
         int status;
-
+		
         pthread_mutex_lock (&cb->send_lock);
 
         if (cb->curl == NULL)
         {
+                cb->interval = CDTIME_T_TO_TIME_T(vl->interval);
+
                 status = wh_callback_init (cb);
                 if (status != 0)
                 {
@@ -419,11 +441,24 @@ static int wh_write (const data_set_t *ds, const value_list_t *vl, /* {{{ */
 {
         wh_callback_t *cb;
         int status;
+        cdtime_t now;
 
         if (user_data == NULL)
                 return (-EINVAL);
 
         cb = user_data->data;
+
+        /* we want a large buffer so we get all the measurements for a time at once
+        but we also want to force flushing it every minute. this will do. longer term,
+        this could be a configurable part of a stackdriver specific write plugin */
+        pthread_mutex_lock (&cb->flush_lock);
+        now = cdtime ();
+        if (now > cb->send_buffer_init_time + MS_TO_CDTIME_T(15000)) {
+//        if (now > cb->buffer_flush_last + MS_TO_CDTIME_T(4 * 1000)) {
+            wh_flush(0, NULL, user_data);
+            cb->buffer_flush_last = now;
+        }
+        pthread_mutex_unlock (&cb->flush_lock);
 
         if (cb->format == WH_FORMAT_JSON)
                 status = wh_write_json (ds, vl, cb);
@@ -502,7 +537,7 @@ static int config_set_format (wh_callback_t *cb, /* {{{ */
         return (0);
 } /* }}} int config_set_string */
 
-static int wh_config_url (oconfig_item_t *ci) /* {{{ */
+static int wh_config_node (oconfig_item_t *ci) /* {{{ */
 {
         wh_callback_t *cb;
         user_data_t user_data;
@@ -525,18 +560,24 @@ static int wh_config_url (oconfig_item_t *ci) /* {{{ */
         cb->cacert = NULL;
         cb->format = WH_FORMAT_COMMAND;
         cb->curl = NULL;
+        cb->low_limit_bytes = WH_DEFAULT_LOW_LIMIT_BYTES_PER_SEC;
+        cb->post_timeout = 0;
 
         pthread_mutex_init (&cb->send_lock, /* attr = */ NULL);
 
-        config_set_string (&cb->location, ci);
-        if (cb->location == NULL)
-                return (-1);
+        cf_util_get_string (ci, &cb->name);
+
+        /* FIXME: Remove this legacy mode in version 6. */
+        if (strcasecmp ("URL", ci->key) == 0)
+                cf_util_get_string (ci, &cb->location);
 
         for (i = 0; i < ci->children_num; i++)
         {
                 oconfig_item_t *child = ci->children + i;
 
-                if (strcasecmp ("User", child->key) == 0)
+                if (strcasecmp ("URL", child->key) == 0)
+                        cf_util_get_string (child, &cb->location);
+                else if (strcasecmp ("User", child->key) == 0)
                         config_set_string (&cb->user, child);
                 else if (strcasecmp ("Password", child->key) == 0)
                         config_set_string (&cb->pass, child);
@@ -549,7 +590,13 @@ static int wh_config_url (oconfig_item_t *ci) /* {{{ */
                 else if (strcasecmp ("Format", child->key) == 0)
                         config_set_format (cb, child);
                 else if (strcasecmp ("StoreRates", child->key) == 0)
-                        config_set_boolean (&cb->store_rates, child);
+                        cf_util_get_boolean (child, &cb->store_rates);
+                else if (strcasecmp ("LowSpeedLimit", child->key) == 0)
+                        cf_util_get_boolean (child,&cb->abort_on_slow);
+                else if (strcasecmp ("LowLimitBytesPerSec", child->key) == 0)
+                        cf_util_get_int (child, &cb->low_limit_bytes);
+                else if (strcasecmp ("PostTimeoutSec", child->key) == 0)
+                        cf_util_get_int (child, &cb->post_timeout);
                 else
                 {
                         ERROR ("write_http plugin: Invalid configuration "
@@ -557,8 +604,20 @@ static int wh_config_url (oconfig_item_t *ci) /* {{{ */
                 }
         }
 
+        if (cb->location == NULL)
+        {
+                ERROR ("write_http plugin: no URL defined for instance '%s'",
+                        cb->name);
+                wh_callback_free (cb);
+                return (-1);
+        }
+
+        if(cb->abort_on_slow)
+        {
+        	cb->interval = CDTIME_T_TO_TIME_T(cf_get_default_interval ());
+        }
         ssnprintf (callback_name, sizeof (callback_name), "write_http/%s",
-                        cb->location);
+                        cb->name);
         DEBUG ("write_http: Registering write callback '%s' with URL '%s'",
                         callback_name, cb->location);
 
@@ -571,7 +630,7 @@ static int wh_config_url (oconfig_item_t *ci) /* {{{ */
         plugin_register_write (callback_name, wh_write, &user_data);
 
         return (0);
-} /* }}} int wh_config_url */
+} /* }}} int wh_config_node */
 
 static int wh_config (oconfig_item_t *ci) /* {{{ */
 {
@@ -581,8 +640,14 @@ static int wh_config (oconfig_item_t *ci) /* {{{ */
         {
                 oconfig_item_t *child = ci->children + i;
 
-                if (strcasecmp ("URL", child->key) == 0)
-                        wh_config_url (child);
+                if (strcasecmp ("Node", child->key) == 0)
+                        wh_config_node (child);
+                /* FIXME: Remove this legacy mode in version 6. */
+                else if (strcasecmp ("URL", child->key) == 0) {
+                        WARNING ("write_http plugin: Legacy <URL> block found. "
+                                "Please use <Node> instead.");
+                        wh_config_node (child);
+                }
                 else
                 {
                         ERROR ("write_http plugin: Invalid configuration "

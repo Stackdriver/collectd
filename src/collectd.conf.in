@@ -184,6 +184,7 @@
 #@BUILD_PLUGIN_WRITE_RIEMANN_TRUE@LoadPlugin write_riemann
 #@BUILD_PLUGIN_XMMS_TRUE@LoadPlugin xmms
 #@BUILD_PLUGIN_ZFS_ARC_TRUE@LoadPlugin zfs_arc
+#@BUILD_PLUGIN_ZOOKEEPER_TRUE@LoadPlugin zookeeper
 
 ##############################################################################
 # Plugin configuration                                                       #
@@ -597,6 +598,7 @@
 #		Password "secret"
 #		Database "db_name"
 #		MasterStats true
+#		InnodbStats true
 #	</Database>
 #
 #	<Database db_name2>
@@ -896,7 +898,11 @@
 #   <Node example>
 #      Host "redis.example.com"
 #      Port "6379"
-#      Timeout 2000
+#      Timeout 2
+#      <Query example_query>
+#      	 Command "LLEN queue"
+#      	 Type "gauge"
+#      </Query>
 #   </Node>
 #</Plugin>
 
@@ -1170,6 +1176,17 @@
 #	Verbose false
 #</Plugin>
 
+#<Plugin write_gcm>
+#  Service "MyApp"
+#  Project "123456789012"
+#  Url "https://www-googleapis-test.sandbox.google.com/cloudmonitoring/v2beta2"
+#  TokenUrl "http://metadata/computeMetadata/v1/instance/service-accounts/default/token"
+#  ResourceId "234567890123"
+#  Email "123456789012@developer.gserviceaccount.com"
+#  PrivateKeyFile "/etc/ssl/private/my.pem"
+#  PrivateKeyPass "secretSslPassphrase"
+#</Plugin>
+
 #<Plugin write_graphite>
 #  <Node "example">
 #    Host "localhost"
@@ -1185,7 +1202,8 @@
 #</Plugin>
 
 #<Plugin write_http>
-#	<URL "http://example.com/collectd-post">
+#	<Node "example">
+#		URL "http://example.com/collectd-post"
 #		User "collectd"
 #		Password "weCh3ik0"
 #		VerifyPeer true
@@ -1193,7 +1211,7 @@
 #		CACert "/etc/ssl/ca.crt"
 #		Format "Command"
 #		StoreRates false
-#	</URL>
+#	</Node>
 #</Plugin>
 
 #<Plugin write_mongodb>
@@ -1226,6 +1244,11 @@
 #		TTLFactor 2.0
 #	</Node>
 #	Tag "foobar"
+#</Plugin>
+
+#<Plugin zookeeper>
+#    Host "localhost"
+#    Port "2181"
 #</Plugin>
 
 ##############################################################################
