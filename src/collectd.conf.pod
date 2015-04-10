@@ -146,7 +146,7 @@ B<E<lt>PluginE<nbsp>...E<gt>> block acts as if it was immediately preceded by a
 B<LoadPlugin> statement. B<LoadPlugin> statements are still required for
 plugins that don't provide any configuration, e.g. the I<Load plugin>.
 
-=item B<Include> I<Path> [I<pattern>]
+=item B<Include> I<Path>
 
 If I<Path> points to a file, includes that file. If I<Path> points to a
 directory, recursively includes all files within that directory and its
