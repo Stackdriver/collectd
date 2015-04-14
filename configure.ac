@@ -1557,62 +1557,63 @@ fi
 AM_CONDITIONAL(BUILD_WITH_LIBAQUAERO5, test "x$with_libaquaero5" = "xyes")
 # }}}
 
-# --with-libcredis {{{
-AC_ARG_WITH(libcredis, [AS_HELP_STRING([--with-libcredis@<:@=PREFIX@:>@], [Path to libcredis.])],
+# --with-libhiredis {{{
+AC_ARG_WITH(libhiredis, [AS_HELP_STRING([--with-libhiredis@<:@=PREFIX@:>@],
+			[Path to libhiredis.])],
 [
  if test "x$withval" = "xyes"
  then
-	 with_libcredis="yes"
+	 with_libhiredis="yes"
  else if test "x$withval" = "xno"
  then
-	 with_libcredis="no"
+	 with_libhiredis="no"
  else
-	 with_libcredis="yes"
-	 LIBCREDIS_CPPFLAGS="$LIBCREDIS_CPPFLAGS -I$withval/include"
-	 LIBCREDIS_LDFLAGS="$LIBCREDIS_LDFLAGS -L$withval/lib"
+	 with_libhiredis="yes"
+	 LIBHIREDIS_CPPFLAGS="$LIBHIREDIS_CPPFLAGS -I$withval/include"
+	 LIBHIREDIS_LDFLAGS="$LIBHIREDIS_LDFLAGS -L$withval/lib"
  fi; fi
 ],
-[with_libcredis="yes"])
+[with_libhiredis="yes"])
 
 SAVE_CPPFLAGS="$CPPFLAGS"
 SAVE_LDFLAGS="$LDFLAGS"
 
-CPPFLAGS="$CPPFLAGS $LIBCREDIS_CPPFLAGS"
-LDFLAGS="$LDFLAGS $LIBCREDIS_LDFLAGS"
+CPPFLAGS="$CPPFLAGS $LIBHIREDIS_CPPFLAGS"
+LDFLAGS="$LDFLAGS $LIBHIREDIS_LDFLAGS"
 
-if test "x$with_libcredis" = "xyes"
+if test "x$with_libhiredis" = "xyes"
 then
-	if test "x$LIBCREDIS_CPPFLAGS" != "x"
+	if test "x$LIBHIREDIS_CPPFLAGS" != "x"
 	then
-		AC_MSG_NOTICE([libcredis CPPFLAGS: $LIBCREDIS_CPPFLAGS])
+		AC_MSG_NOTICE([libhiredis CPPFLAGS: $LIBHIREDIS_CPPFLAGS])
 	fi
-	AC_CHECK_HEADERS(credis.h,
-	[with_libcredis="yes"],
-	[with_libcredis="no (credis.h not found)"])
+	AC_CHECK_HEADERS(hiredis/hiredis.h,
+	[with_libhiredis="yes"],
+	[with_libhiredis="no (hiredis/hiredis.h not found)"])
 fi
-if test "x$with_libcredis" = "xyes"
+if test "x$with_libhiredis" = "xyes"
 then
-	if test "x$LIBCREDIS_LDFLAGS" != "x"
+	if test "x$LIBHIREDIS_LDFLAGS" != "x"
 	then
-		AC_MSG_NOTICE([libcredis LDFLAGS: $LIBCREDIS_LDFLAGS])
+		AC_MSG_NOTICE([libhiredis LDFLAGS: $LIBHIREDIS_LDFLAGS])
 	fi
-	AC_CHECK_LIB(credis, credis_info,
-	[with_libcredis="yes"],
-	[with_libcredis="no (symbol 'credis_info' not found)"])
+	AC_CHECK_LIB(hiredis, redisCommand,
+	[with_libhiredis="yes"],
+	[with_libhiredis="no (symbol 'redisCommand' not found)"])
 
 fi
 
 CPPFLAGS="$SAVE_CPPFLAGS"
 LDFLAGS="$SAVE_LDFLAGS"
 
-if test "x$with_libcredis" = "xyes"
+if test "x$with_libhiredis" = "xyes"
 then
-	BUILD_WITH_LIBCREDIS_CPPFLAGS="$LIBCREDIS_CPPFLAGS"
-	BUILD_WITH_LIBCREDIS_LDFLAGS="$LIBCREDIS_LDFLAGS"
-	AC_SUBST(BUILD_WITH_LIBCREDIS_CPPFLAGS)
-	AC_SUBST(BUILD_WITH_LIBCREDIS_LDFLAGS)
+	BUILD_WITH_LIBHIREDIS_CPPFLAGS="$LIBHIREDIS_CPPFLAGS"
+	BUILD_WITH_LIBHIREDIS_LDFLAGS="$LIBHIREDIS_LDFLAGS"
+	AC_SUBST(BUILD_WITH_LIBHIREDIS_CPPFLAGS)
+	AC_SUBST(BUILD_WITH_LIBHIREDIS_LDFLAGS)
 fi
-AM_CONDITIONAL(BUILD_WITH_LIBCREDIS, test "x$with_libcredis" = "xyes")
+AM_CONDITIONAL(BUILD_WITH_LIBHIREDIS, test "x$with_libhiredis" = "xyes")
 # }}}
 
 # --with-libcurl {{{
@@ -1683,6 +1684,20 @@ then
 	AC_SUBST(BUILD_WITH_LIBCURL_LIBS)
 fi
 AM_CONDITIONAL(BUILD_WITH_LIBCURL, test "x$with_libcurl" = "xyes")
+# }}}
+
+# --with-useragent {{{
+AC_ARG_WITH(useragent, [AS_HELP_STRING([--with-useragent@<:@=OPTIONS@:>@], [User agent to use on http requests])],
+[
+    if test "x$withval" != "xno" && test "x$withval" != "xyes"
+    then
+        USERAGENT_OPTION="$withval"
+        with_custom_useragent="yes"
+    fi
+])
+AC_SUBST(USERAGENT_OPTION)
+AM_CONDITIONAL(USE_CUSTOM_USERAGENT, test "x$with_custom_useragent" = "xyes")
+
 # }}}
 
 # --with-libdbi {{{
@@ -2431,6 +2446,7 @@ fi
 # }}}
 
 # --with-libmongoc {{{
+AM_CONDITIONAL(BUILD_WITH_OWN_LIBMONGOC, test "x$with_libmongoc" = "xown")
 AC_ARG_WITH(libmongoc, [AS_HELP_STRING([--with-libmongoc@<:@=PREFIX@:>@], [Path to libmongoc.])],
 [
  if test "x$withval" = "xyes"
@@ -2440,9 +2456,15 @@ AC_ARG_WITH(libmongoc, [AS_HELP_STRING([--with-libmongoc@<:@=PREFIX@:>@], [Path 
  then
 	 with_libmongoc="no"
  else
-	 with_libmongoc="yes"
-	 LIBMONGOC_CPPFLAGS="$LIBMONGOC_CPPFLAGS -I$withval/include"
-	 LIBMONGOC_LDFLAGS="$LIBMONGOC_LDFLAGS -L$withval/lib"
+     if test "x$withval" = "xown"
+     then
+	     with_libmongoc="yes"
+	     with_own_libmongoc="yes"
+	     AC_DEFINE(OWN_LIBMONGOC, 1, [Define to 1 if we use the shipped mongoc lib.])
+	 else
+	     LIBMONGOC_CPPFLAGS="$LIBMONGOC_CPPFLAGS -I$withval/include"
+	     LIBMONGOC_LDFLAGS="$LIBMONGOC_LDFLAGS -L$withval/lib"
+	 fi
  fi; fi
 ],
 [with_libmongoc="yes"])
@@ -2459,17 +2481,20 @@ then
 	then
 		AC_MSG_NOTICE([libmongoc CPPFLAGS: $LIBMONGOC_CPPFLAGS])
 	fi
-	AC_CHECK_HEADERS(mongo.h,
-	[with_libmongoc="yes"],
-	[with_libmongoc="no ('mongo.h' not found)"],
+	if test "x$with_own_libmongoc" != "xyes"
+	then
+	    AC_CHECK_HEADERS(mongo.h,
+	    [with_libmongoc="yes"],
+	    [with_libmongoc="no ('mongo.h' not found)"],
 [#if HAVE_STDINT_H
 # define MONGO_HAVE_STDINT 1
 #else
 # define MONGO_USE_LONG_LONG_INT 1
 #endif
 ])
+    fi
 fi
-if test "x$with_libmongoc" = "xyes"
+if test "x$with_libmongoc" = "xyes" -a "x$with_own_libmongoc" != "xyes"
 then
 	if test "x$LIBMONGOC_LDFLAGS" != "x"
 	then
@@ -3829,6 +3854,7 @@ fi
 AM_CONDITIONAL(BUILD_WITH_LM_SENSORS, test "x$with_libsensors" = "xyes")
 # }}}
 
+
 # --with-libsigrok {{{
 with_libsigrok_cflags=""
 with_libsigrok_ldflags=""
@@ -3897,6 +3923,59 @@ then
 	AC_SUBST(BUILD_WITH_LIBSIGROK_LDFLAGS)
 fi
 AM_CONDITIONAL(BUILD_WITH_LIBSIGROK, test "x$with_libsigrok" = "xyes")
+# }}}
+
+# --with-libssl {{{
+with_libssl_cflags=""
+with_libssl_ldflags=""
+AC_ARG_WITH(libssl, [AS_HELP_STRING([--with-libssl@<:@=PREFIX@:>@], [Path to libssl.])],
+[
+	if test "x$withval" != "xno" && test "x$withval" != "xyes"
+	then
+		with_libssl_cppflags="-I$withval/include"
+		with_libssl_ldflags="-L$withval/lib"
+		with_libssl="yes"
+	else
+		with_libssl="$withval"
+	fi
+],
+[
+	with_libssl="yes"
+])
+if test "x$with_libssl" = "xyes"
+then
+	SAVE_CPPFLAGS="$CPPFLAGS"
+	CPPFLAGS="$CPPFLAGS $with_libssl_cppflags"
+
+  AC_CHECK_HEADERS(openssl/sha.h openssl/blowfish.h openssl/rand.h,
+    [with_libssl="yes"],
+    [with_libssl="no (ssl header not found)"])
+
+	CPPFLAGS="$SAVE_CPPFLAGS"
+fi
+if test "x$with_libssl" = "xyes"
+then
+	SAVE_CPPFLAGS="$CPPFLAGS"
+	SAVE_LDFLAGS="$LDFLAGS"
+	CPPFLAGS="$CPPFLAGS $with_libssl_cppflags"
+	LDFLAGS="$LDFLAGS $with_libssl_ldflags"
+
+	AC_CHECK_LIB(ssl, SSL_library_init, [with_libssl="yes"], [with_libssl="no (Symbol 'SSL_library_init' not found)"])
+
+	CPPFLAGS="$SAVE_CPPFLAGS"
+	LDFLAGS="$SAVE_LDFLAGS"
+fi
+if test "x$with_libssl" = "xyes"
+then
+	BUILD_WITH_LIBSSL_CFLAGS="$with_libssl_cflags"
+	BUILD_WITH_LIBSSL_LDFLAGS="$with_libssl_ldflags"
+	BUILD_WITH_LIBSSL_LIBS="-lssl -lcrypto"
+	AC_SUBST(BUILD_WITH_LIBSSL_CFLAGS)
+	AC_SUBST(BUILD_WITH_LIBSSL_LDFLAGS)
+	AC_SUBST(BUILD_WITH_LIBSSL_LIBS)
+	AC_DEFINE(HAVE_LIBSSL, 1, [Define if libssl is present and usable.])
+fi
+AM_CONDITIONAL(BUILD_WITH_LIBSSL, test "x$with_libssl" = "xyes")
 # }}}
 
 # --with-libstatgrab {{{
@@ -4862,6 +4941,7 @@ plugin_vmem="no"
 plugin_vserver="no"
 plugin_wireless="no"
 plugin_zfs_arc="no"
+plugin_zookeeper="no"
 
 # Linux
 if test "x$ac_system" = "xLinux"
@@ -5115,6 +5195,11 @@ then
 	plugin_tcpconns="yes"
 fi
 
+if test "x$with_libcurl" = "xyes" && test "x$with_libyajl" = "xyes"
+then
+	plugin_write_gcm="yes"
+fi
+
 if test "x$have_getutent" = "xyes"
 then
 	plugin_users="yes"
@@ -5198,6 +5283,7 @@ AC_PLUGIN([memcached],   [yes],                [memcached statistics])
 AC_PLUGIN([memory],      [$plugin_memory],     [Memory usage])
 AC_PLUGIN([mic],         [$with_mic],          [Intel Many Integrated Core stats])
 AC_PLUGIN([modbus],      [$with_libmodbus],    [Modbus plugin])
+AC_PLUGIN([mongodb],     [$with_libmongoc],    [MongoDB statistics])
 AC_PLUGIN([multimeter],  [$plugin_multimeter], [Read multimeter values])
 AC_PLUGIN([mysql],       [$with_libmysql],     [MySQL statistics])
 AC_PLUGIN([netapp],      [$with_libnetapp],    [NetApp plugin])
@@ -5219,12 +5305,13 @@ AC_PLUGIN([pf],          [$have_net_pfvar_h],  [BSD packet filter (PF) statistic
 # FIXME: Check for libevent, too.
 AC_PLUGIN([pinba],       [$have_protoc_c],     [Pinba statistics])
 AC_PLUGIN([ping],        [$with_liboping],     [Network latency statistics])
+AC_PLUGIN([plugin_mem],  [yes],                [Memory usage monitoring for collectd plugins])
 AC_PLUGIN([postgresql],  [$with_libpq],        [PostgreSQL database statistics])
 AC_PLUGIN([powerdns],    [yes],                [PowerDNS statistics])
 AC_PLUGIN([processes],   [$plugin_processes],  [Process statistics])
 AC_PLUGIN([protocols],   [$plugin_protocols],  [Protocol (IP, TCP, ...) statistics])
 AC_PLUGIN([python],      [$with_python],       [Embed a Python interpreter])
-AC_PLUGIN([redis],       [$with_libcredis],    [Redis plugin])
+AC_PLUGIN([redis],       [$with_libhiredis],    [Redis plugin])
 AC_PLUGIN([routeros],    [$with_librouteros],  [RouterOS plugin])
 AC_PLUGIN([rrdcached],   [$librrd_rrdc_update], [RRDTool output plugin])
 AC_PLUGIN([rrdtool],     [$with_librrd],       [RRDTool output plugin])
@@ -5260,11 +5347,13 @@ AC_PLUGIN([vserver],     [$plugin_vserver],    [Linux VServer statistics])
 AC_PLUGIN([wireless],    [$plugin_wireless],   [Wireless statistics])
 AC_PLUGIN([write_graphite], [yes],             [Graphite / Carbon output plugin])
 AC_PLUGIN([write_http],  [$with_libcurl],      [HTTP output plugin])
+AC_PLUGIN([write_gcm],   [$plugin_write_gcm],  [Google cloud monitoring output plugin])
 AC_PLUGIN([write_mongodb], [$with_libmongoc],  [MongoDB output plugin])
 AC_PLUGIN([write_redis], [$with_libcredis],    [Redis output plugin])
 AC_PLUGIN([write_riemann], [$have_protoc_c],   [Riemann output plugin])
 AC_PLUGIN([xmms],        [$with_libxmms],      [XMMS statistics])
 AC_PLUGIN([zfs_arc],     [$plugin_zfs_arc],    [ZFS ARC statistics])
+AC_PLUGIN([zookeeper],   [yes],  	       [Zookeeper statistics])
 
 dnl Default configuration file
 # Load either syslog or logfile
@@ -5439,7 +5528,7 @@ Configuration:
     libaquaero5 . . . . . $with_libaquaero5
     libcurl . . . . . . . $with_libcurl
     libdbi  . . . . . . . $with_libdbi
-    libcredis . . . . . . $with_libcredis
+    libhiredis  . . . . . $with_libhiredis
     libesmtp  . . . . . . $with_libesmtp
     libganglia  . . . . . $with_libganglia
     libgcrypt . . . . . . $with_libgcrypt
@@ -5468,6 +5557,7 @@ Configuration:
     librrd  . . . . . . . $with_librrd
     libsensors  . . . . . $with_libsensors
     libsigrok   . . . . . $with_libsigrok
+    libssl  . . . . .   . $with_libssl
     libstatgrab . . . . . $with_libstatgrab
     libtokyotyrant  . . . $with_libtokyotyrant
     libupsclient  . . . . $with_libupsclient
@@ -5543,6 +5633,7 @@ Configuration:
     memory  . . . . . . . $enable_memory
     mic . . . . . . . . . $enable_mic
     modbus  . . . . . . . $enable_modbus
+    mongodb  . . . . .  . $enable_mongodb
     multimeter  . . . . . $enable_multimeter
     mysql . . . . . . . . $enable_mysql
     netapp  . . . . . . . $enable_netapp
@@ -5563,6 +5654,7 @@ Configuration:
     pf  . . . . . . . . . $enable_pf
     pinba . . . . . . . . $enable_pinba
     ping  . . . . . . . . $enable_ping
+    plugin_mem  . . . . . $enable_plugin_mem
     postgresql  . . . . . $enable_postgresql
     powerdns  . . . . . . $enable_powerdns
     processes . . . . . . $enable_processes
@@ -5604,11 +5696,13 @@ Configuration:
     wireless  . . . . . . $enable_wireless
     write_graphite  . . . $enable_write_graphite
     write_http  . . . . . $enable_write_http
+    write_gcm   . . . . . $enable_write_gcm
     write_mongodb . . . . $enable_write_mongodb
     write_redis . . . . . $enable_write_redis
     write_riemann . . . . $enable_write_riemann
     xmms  . . . . . . . . $enable_xmms
     zfs_arc . . . . . . . $enable_zfs_arc
+    zookeeper . . . . . . $enable_zookeeper
 
 EOF
 

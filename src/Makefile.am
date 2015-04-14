@@ -2,7 +2,6 @@ SUBDIRS = libcollectdclient
 if BUILD_WITH_OWN_LIBOCONFIG
 SUBDIRS += liboconfig
 endif
-
 if COMPILER_IS_GCC
 AM_CFLAGS = -Wall -Werror
 endif
@@ -16,6 +15,11 @@ AM_CPPFLAGS += -DPIDFILE='"${localstatedir}/run/${PACKAGE_NAME}.pid"'
 endif
 AM_CPPFLAGS += -DPLUGINDIR='"${pkglibdir}"'
 AM_CPPFLAGS += -DPKGDATADIR='"${pkgdatadir}"'
+if USE_CUSTOM_USERAGENT
+AM_CPPFLAGS += -DUSERAGENT='"${USERAGENT_OPTION}"'
+else
+AM_CPPFLAGS += -DUSERAGENT='"${PACKAGE_NAME}/${PACKAGE_VERSION}"'
+endif
 
 sbin_PROGRAMS = collectd collectdmon
 bin_PROGRAMS = collectd-nagios collectdctl collectd-tg
@@ -718,6 +722,24 @@ collectd_LDADD += "-dlopen" modbus.la
 collectd_DEPENDENCIES += modbus.la
 endif
 
+if BUILD_PLUGIN_MONGODB
+pkglib_LTLIBRARIES += mongodb.la
+mongodb_la_SOURCES = mongodb.c
+mongodb_la_CPPFLAGS = $(AM_CPPFLAGS) $(BUILD_WITH_LIBMONGOC_CPPFLAGS)
+mongodb_la_LDFLAGS = -module -avoid-version $(BUILD_WITH_LIBMONGOC_LDFLAGS)
+if BUILD_WITH_OWN_LIBMONGOC
+# If upgrading libmongoc, we must check that the correct defines are set
+mongodb_la_SOURCES += libmongoc/src/encoding.c libmongoc/src/bson.c libmongoc/src/bcon.c libmongoc/src/env.c libmongoc/src/gridfs.c libmongoc/src/md5.c libmongoc/src/mongo.c libmongoc/src/numbers.c
+# unused-result being treated as an error since libmongoc calls functions that some libc implementations warn on if results aren't checked
+# turn off errors on warnings using -Wno-error since the -Wunused-result flag does not exist until gcc 4.5
+mongodb_la_CPPFLAGS += -I libmongoc/src -DMONGO_HAVE_STDINT
+else
+mongodb_la_LIBADD = -lmongoc
+endif
+collectd_LDADD += "-dlopen" mongodb.la
+collectd_DEPENDENCIES += mongodb.la
+endif
+
 if BUILD_PLUGIN_MULTIMETER
 pkglib_LTLIBRARIES += multimeter.la
 multimeter_la_SOURCES = multimeter.c
@@ -951,6 +973,15 @@ collectd_LDADD += "-dlopen" ping.la
 collectd_DEPENDENCIES += ping.la
 endif
 
+if BUILD_PLUGIN_PLUGIN_MEM
+pkglib_LTLIBRARIES += plugin_mem.la
+plugin_mem_la_SOURCES = plugin_mem.c
+plugin_mem_la_CPPFLAGS = $(AM_CPPFLAGS)
+plugin_mem_la_LDFLAGS = -module -avoid-version
+collectd_LDADD += "-dlopen" plugin_mem.la
+collectd_DEPENDENCIES += plugin_mem.la
+endif
+
 if BUILD_PLUGIN_POSTGRESQL
 pkglib_LTLIBRARIES += postgresql.la
 postgresql_la_SOURCES = postgresql.c \
@@ -1008,9 +1039,9 @@ endif
 if BUILD_PLUGIN_REDIS
 pkglib_LTLIBRARIES += redis.la
 redis_la_SOURCES = redis.c
-redis_la_LDFLAGS = -module -avoid-version $(BUILD_WITH_LIBCREDIS_LDFLAGS)
-redis_la_CFLAGS = $(AM_CFLAGS) $(BUILD_WITH_LIBCREDIS_CPPFLAGS)
-redis_la_LIBADD = -lcredis
+redis_la_LDFLAGS = -module -avoid-version $(BUILD_WITH_LIBHIREDIS_LDFLAGS)
+redis_la_CFLAGS = $(AM_CFLAGS) $(BUILD_WITH_LIBHIREDIS_CPPFLAGS)
+redis_la_LIBADD = -lhiredis
 collectd_LDADD += "-dlopen" redis.la
 collectd_DEPENDENCIES += redis.la
 endif
@@ -1388,6 +1419,24 @@ endif
 collectd_DEPENDENCIES += write_http.la
 endif
 
+if BUILD_PLUGIN_WRITE_GCM
+pkglib_LTLIBRARIES += write_gcm.la
+write_gcm_la_SOURCES = write_gcm.c
+write_gcm_la_LDFLAGS = -module -avoid-version $(BUILD_WITH_LIBYAJL_LDFLAGS)
+write_gcm_la_CFLAGS = $(AM_CFLAGS) $(BUILD_WITH_LIBYAJL_CPPFLAGS)
+write_gcm_la_LIBADD = $(BUILD_WITH_LIBYAJL_LIBS)
+collectd_LDADD += "-dlopen" write_gcm.la
+if BUILD_WITH_LIBSSL
+write_gcm_la_CFLAGS += $(BUILD_WITH_LIBSSL_CFLAGS)
+write_gcm_la_LIBADD += $(BUILD_WITH_LIBSSL_LIBS)
+endif
+if BUILD_WITH_LIBCURL
+write_gcm_la_CFLAGS += $(BUILD_WITH_LIBCURL_CFLAGS)
+write_gcm_la_LIBADD += $(BUILD_WITH_LIBCURL_LIBS)
+endif
+collectd_DEPENDENCIES += write_gcm.la
+endif
+
 if BUILD_PLUGIN_WRITE_MONGODB
 pkglib_LTLIBRARIES += write_mongodb.la
 write_mongodb_la_SOURCES = write_mongodb.c
@@ -1440,6 +1489,14 @@ zfs_arc_la_LIBADD = -lkstat
 endif
 collectd_LDADD += "-dlopen" zfs_arc.la
 collectd_DEPENDENCIES += zfs_arc.la
+endif
+
+if BUILD_PLUGIN_ZOOKEEPER
+pkglib_LTLIBRARIES += zookeeper.la
+zookeeper_la_SOURCES = zookeeper.c
+zookeeper_la_LDFLAGS = -module -avoid-version
+collectd_LDADD += "-dlopen" zookeeper.la
+collectd_DEPENDENCIES += zookeeper.la
 endif
 
 BUILT_SOURCES += $(dist_man_MANS)
