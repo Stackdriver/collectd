@@ -198,7 +198,7 @@ static int srrd_update (char *filename, char *template,
 } /* int srrd_update */
 #endif /* !HAVE_THREADSAFE_LIBRRD */
 
-static int value_list_to_string (char *buffer, int buffer_len,
+static int value_list_to_string_multiple (char *buffer, int buffer_len,
 		const data_set_t *ds, const value_list_t *vl)
 {
 	int offset;
@@ -242,49 +242,82 @@ static int value_list_to_string (char *buffer, int buffer_len,
 	} /* for ds->ds_num */
 
 	return (0);
+} /* int value_list_to_string_multiple */
+
+static int value_list_to_string (char *buffer, int buffer_len,
+		const data_set_t *ds, const value_list_t *vl)
+{
+	int status;
+	time_t tt;
+
+	if (ds->ds_num != 1)
+		return (value_list_to_string_multiple (buffer, buffer_len,
+					ds, vl));
+
+	tt = CDTIME_T_TO_TIME_T (vl->time);
+	switch (ds->ds[0].type)
+	{
+		case DS_TYPE_DERIVE:
+			status = ssnprintf (buffer, buffer_len, "%u:%"PRIi64,
+				(unsigned) tt, vl->values[0].derive);
+			break;
+		case DS_TYPE_GAUGE:
+			status = ssnprintf (buffer, buffer_len, "%u:%lf",
+				(unsigned) tt, vl->values[0].gauge);
+			break;
+		case DS_TYPE_COUNTER:
+			status = ssnprintf (buffer, buffer_len, "%u:%llu",
+				(unsigned) tt, vl->values[0].counter);
+			break;
+		case DS_TYPE_ABSOLUTE:
+			status = ssnprintf (buffer, buffer_len, "%u:%"PRIu64,
+				(unsigned) tt, vl->values[0].absolute);
+			break;
+		default:
+			return (EINVAL);
+	}
+
+	if ((status < 1) || (status >= buffer_len))
+		return (ENOMEM);
+
+	return (0);
 } /* int value_list_to_string */
 
-static int value_list_to_filename (char *buffer, int buffer_len,
-		const data_set_t __attribute__((unused)) *ds, const value_list_t *vl)
+static int value_list_to_filename (char *buffer, size_t buffer_size,
+		value_list_t const *vl)
 {
-	int offset = 0;
+	char const suffix[] = ".rrd";
 	int status;
+	size_t len;
 
 	if (datadir != NULL)
 	{
-		status = ssnprintf (buffer + offset, buffer_len - offset,
-				"%s/", datadir);
-		if ((status < 1) || (status >= buffer_len - offset))
-			return (-1);
-		offset += status;
+		size_t datadir_len = strlen (datadir) + 1;
+
+		if (datadir_len >= buffer_size)
+			return (ENOMEM);
+
+		sstrncpy (buffer, datadir, buffer_size);
+		buffer[datadir_len - 1] = '/';
+		buffer[datadir_len] = 0;
+
+		buffer += datadir_len;
+		buffer_size -= datadir_len;
 	}
 
-	status = ssnprintf (buffer + offset, buffer_len - offset,
-			"%s/", vl->host);
-	if ((status < 1) || (status >= buffer_len - offset))
-		return (-1);
-	offset += status;
+	status = FORMAT_VL (buffer, buffer_size, vl);
+	if (status != 0)
+		return (status);
 
-	if (strlen (vl->plugin_instance) > 0)
-		status = ssnprintf (buffer + offset, buffer_len - offset,
-				"%s-%s/", vl->plugin, vl->plugin_instance);
-	else
-		status = ssnprintf (buffer + offset, buffer_len - offset,
-				"%s/", vl->plugin);
-	if ((status < 1) || (status >= buffer_len - offset))
-		return (-1);
-	offset += status;
+	len = strlen (buffer);
+	assert (len < buffer_size);
+	buffer += len;
+	buffer_size -= len;
 
-	if (strlen (vl->type_instance) > 0)
-		status = ssnprintf (buffer + offset, buffer_len - offset,
-				"%s-%s.rrd", vl->type, vl->type_instance);
-	else
-		status = ssnprintf (buffer + offset, buffer_len - offset,
-				"%s.rrd", vl->type);
-	if ((status < 1) || (status >= buffer_len - offset))
-		return (-1);
-	offset += status;
+	if (buffer_size <= sizeof (suffix))
+		return (ENOMEM);
 
+	memcpy (buffer, suffix, sizeof (suffix));
 	return (0);
 } /* int value_list_to_filename */
 
@@ -887,7 +920,7 @@ static int rrd_write (const data_set_t *ds, const value_list_t *vl,
 		return -1;
 	}
 
-	if (value_list_to_filename (filename, sizeof (filename), ds, vl) != 0)
+	if (value_list_to_filename (filename, sizeof (filename), vl) != 0)
 		return (-1);
 
 	if (value_list_to_string (values, sizeof (values), ds, vl) != 0)

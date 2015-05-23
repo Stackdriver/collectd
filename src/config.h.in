@@ -1,4 +1,4 @@
-/* src/config.h.in.  Generated from configure.in by autoheader.  */
+/* src/config.h.in.  Generated from configure.ac by autoheader.  */
 
 /* wether or not to enable feature daemon mode */
 #undef COLLECT_DAEMON
@@ -26,6 +26,15 @@
 
 /* Define to 1 if `library_errno' is a member of `amqp_rpc_reply_t'. */
 #undef HAVE_AMQP_RPC_REPLY_T_LIBRARY_ERRNO
+
+/* Define to 1 if you have the <amqp_socket.h> header file. */
+#undef HAVE_AMQP_SOCKET_H
+
+/* Define if librabbitmq provides the new TCP socket interface. */
+#undef HAVE_AMQP_TCP_SOCKET
+
+/* Define to 1 if you have the <amqp_tcp_socket.h> header file. */
+#undef HAVE_AMQP_TCP_SOCKET_H
 
 /* Define to 1 if you have the `argz_add' function. */
 #undef HAVE_ARGZ_ADD
@@ -87,6 +96,10 @@
 
 /* Define to 1 if you have the <dbi/dbi.h> header file. */
 #undef HAVE_DBI_DBI_H
+
+/* Define to 1 if you have the declaration of `amqp_socket_close', and to 0 if
+   you don't. */
+#undef HAVE_DECL_AMQP_SOCKET_CLOSE
 
 /* Define to 1 if you have the declaration of `cygwin_conv_path', and to 0 if
    you don't. */
@@ -231,9 +244,6 @@
 /* Define to 1 if the system has the type `ip6tc_handle_t'. */
 #undef HAVE_IP6TC_HANDLE_T
 
-/* Define to 1 if you have the <iproute/libnetlink.h> header file. */
-#undef HAVE_IPROUTE_LIBNETLINK_H
-
 /* Define to 1 if the system has the type `iptc_handle_t'. */
 #undef HAVE_IPTC_HANDLE_T
 
@@ -260,6 +270,9 @@
 
 /* Define to 1 if you have the <kvm.h> header file. */
 #undef HAVE_KVM_H
+
+/* Define to 1 if you have the <libaquaero5.h> header file. */
+#undef HAVE_LIBAQUAERO5_H
 
 /* Define if you have the libdl library or equivalent. */
 #undef HAVE_LIBDL
@@ -306,17 +319,26 @@
    (-lkvm) */
 #undef HAVE_LIBKVM_NLIST
 
+/* Define if liblvm2app is present and usable. */
+#undef HAVE_LIBLVM2APP
+
 /* Define if libmemcached is present and usable. */
 #undef HAVE_LIBMEMCACHED
 
 /* Define to 1 if you have the <libmemcached/memcached.h> header file. */
 #undef HAVE_LIBMEMCACHED_MEMCACHED_H
 
+/* Define if libmnl is present and usable. */
+#undef HAVE_LIBMNL
+
+/* Define to 1 if you have the <libmnl.h> header file. */
+#undef HAVE_LIBMNL_H
+
+/* Define to 1 if you have the <libmnl/libmnl.h> header file. */
+#undef HAVE_LIBMNL_LIBMNL_H
+
 /* Define to 1 if you have the netapp library (-lnetapp). */
 #undef HAVE_LIBNETAPP
-
-/* Define to 1 if you have the <libnetlink.h> header file. */
-#undef HAVE_LIBNETLINK_H
 
 /* Define to 1 if you have the pcap library (-lpcap). */
 #undef HAVE_LIBPCAP
@@ -338,6 +360,12 @@
 
 /* Define to 1 if you have the sensors library (-lsensors). */
 #undef HAVE_LIBSENSORS
+
+/* Define to 1 if you have the sigrok library (-lsigrok). */
+#undef HAVE_LIBSIGROK
+
+/* Define to 1 if you have the <libsigrok/libsigrok.h> header file. */
+#undef HAVE_LIBSIGROK_LIBSIGROK_H
 
 /* Define if libssl is present and usable. */
 #undef HAVE_LIBSSL
@@ -375,11 +403,11 @@
 /* Define to 1 if you have the <linux/if.h> header file. */
 #undef HAVE_LINUX_IF_H
 
+/* Define to 1 if you have the <linux/inet_diag.h> header file. */
+#undef HAVE_LINUX_INET_DIAG_H
+
 /* Define to 1 if you have the <linux/ip_vs.h> header file. */
 #undef HAVE_LINUX_IP_VS_H
-
-/* Define to 1 if you have the <linux/libnetlink.h> header file. */
-#undef HAVE_LINUX_LIBNETLINK_H
 
 /* Define to 1 if you have the <linux/major.h> header file. */
 #undef HAVE_LINUX_MAJOR_H
@@ -418,6 +446,9 @@
 
 /* Define this if a modern libltdl is already installed */
 #undef HAVE_LTDL
+
+/* Define to 1 if you have the <lvm2app.h> header file. */
+#undef HAVE_LVM2APP_H
 
 /* Define to 1 if you have the <mach/host_priv.h> header file. */
 #undef HAVE_MACH_HOST_PRIV_H
@@ -481,6 +512,9 @@
 
 /* Define to 1 if you have the <memory.h> header file. */
 #undef HAVE_MEMORY_H
+
+/* Define to 1 if you have the <MicAccessApi.h> header file. */
+#undef HAVE_MICACCESSAPI_H
 
 /* Define to 1 if you have the <mntent.h> header file. */
 #undef HAVE_MNTENT_H
@@ -632,6 +666,9 @@
 /* Define to 1 if the apple_sensors plugin is enabled. */
 #undef HAVE_PLUGIN_APPLE_SENSORS
 
+/* Define to 1 if the aquaero plugin is enabled. */
+#undef HAVE_PLUGIN_AQUAERO
+
 /* Define to 1 if the ascent plugin is enabled. */
 #undef HAVE_PLUGIN_ASCENT
 
@@ -640,6 +677,9 @@
 
 /* Define to 1 if the bind plugin is enabled. */
 #undef HAVE_PLUGIN_BIND
+
+/* Define to 1 if the cgroups plugin is enabled. */
+#undef HAVE_PLUGIN_CGROUPS
 
 /* Define to 1 if the conntrack plugin is enabled. */
 #undef HAVE_PLUGIN_CONNTRACK
@@ -731,6 +771,9 @@
 /* Define to 1 if the lpar plugin is enabled. */
 #undef HAVE_PLUGIN_LPAR
 
+/* Define to 1 if the lvm plugin is enabled. */
+#undef HAVE_PLUGIN_LVM
+
 /* Define to 1 if the madwifi plugin is enabled. */
 #undef HAVE_PLUGIN_MADWIFI
 
@@ -763,6 +806,9 @@
 
 /* Define to 1 if the memory plugin is enabled. */
 #undef HAVE_PLUGIN_MEMORY
+
+/* Define to 1 if the mic plugin is enabled. */
+#undef HAVE_PLUGIN_MIC
 
 /* Define to 1 if the modbus plugin is enabled. */
 #undef HAVE_PLUGIN_MODBUS
@@ -866,8 +912,14 @@
 /* Define to 1 if the serial plugin is enabled. */
 #undef HAVE_PLUGIN_SERIAL
 
+/* Define to 1 if the sigrok plugin is enabled. */
+#undef HAVE_PLUGIN_SIGROK
+
 /* Define to 1 if the snmp plugin is enabled. */
 #undef HAVE_PLUGIN_SNMP
+
+/* Define to 1 if the statsd plugin is enabled. */
+#undef HAVE_PLUGIN_STATSD
 
 /* Define to 1 if the swap plugin is enabled. */
 #undef HAVE_PLUGIN_SWAP
@@ -1124,6 +1176,12 @@
 /* Define to 1 if `ifi_opackets' is a member of `struct if_data'. */
 #undef HAVE_STRUCT_IF_DATA_IFI_OPACKETS
 
+/* Define to 1 if `id' is a member of `struct inet_diag_req'. */
+#undef HAVE_STRUCT_INET_DIAG_REQ_ID
+
+/* Define to 1 if `idiag_states' is a member of `struct inet_diag_req'. */
+#undef HAVE_STRUCT_INET_DIAG_REQ_IDIAG_STATES
+
 /* Define to 1 if `imr_ifindex' is a member of `struct ip_mreqn'. */
 #undef HAVE_STRUCT_IP_MREQN_IMR_IFINDEX
 
@@ -1147,6 +1205,9 @@
 
 /* Define if struct kinfo_proc exists in the OpenBSD variant. */
 #undef HAVE_STRUCT_KINFO_PROC_OPENBSD
+
+/* Define if struct inet_diag_req exists and is usable. */
+#undef HAVE_STRUCT_LINUX_INET_DIAG_REQ
 
 /* Define if struct net_device_stats exists and is usable. */
 #undef HAVE_STRUCT_NET_DEVICE_STATS
@@ -1360,6 +1421,9 @@
 /* True if program is to be compiled for a AIX kernel */
 #undef KERNEL_AIX
 
+/* True if program is to be compiled for a FreeBSD kernel */
+#undef KERNEL_FREEBSD
+
 /* True if program is to be compiled for a Linux kernel */
 #undef KERNEL_LINUX
 
@@ -1437,12 +1501,6 @@
 
 /* Define to 1 if your version of the 'perfstat' library supports donation */
 #undef PERFSTAT_SUPPORTS_DONATION
-
-/* Define to 1 if function 'rtnl_dump_filter' expects five arguments. */
-#undef RTNL_DUMP_FILTER_FIVE_ARGS
-
-/* Define to 1 if function 'rtnl_dump_filter' expects three arguments. */
-#undef RTNL_DUMP_FILTER_THREE_ARGS
 
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS

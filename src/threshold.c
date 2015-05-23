@@ -942,22 +942,25 @@ static int ut_missing (const value_list_t *vl,
   cdtime_t missing_time;
   char identifier[6 * DATA_MAX_NAME_LEN];
   notification_t n;
+  cdtime_t now;
 
-  /* dispatch notifications for "interesting" values only */
   if (threshold_tree == NULL)
     return (0);
 
   th = threshold_search (vl);
-  if (th == NULL)
+  /* dispatch notifications for "interesting" values only */
+  if ((th == NULL) || ((th->flags & UT_FLAG_INTERESTING) == 0))
     return (0);
 
-  missing_time = cdtime () - vl->time;
+  now = cdtime ();
+  missing_time = now - vl->time;
   FORMAT_VL (identifier, sizeof (identifier), vl);
 
   NOTIFICATION_INIT_VL (&n, vl);
   ssnprintf (n.message, sizeof (n.message),
       "%s has not been updated for %.3f seconds.",
       identifier, CDTIME_T_TO_DOUBLE (missing_time));
+  n.time = now;
 
   plugin_dispatch_notification (&n);
 

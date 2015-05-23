@@ -1,3 +1,275 @@
+2015-02-26, Version 5.4.2
+	* Build system: Numerous fixes. Thanks to Bjørn Nordbø, Jim Radford,
+	  KOMEDA Shinji, Lauri Tirkkonen, Manuel Luis Sanmartin Rozada, Marc
+	  Fournier, Rainer Müller, Yoga Ramalingam and Yves Mettier. #326,
+	  #373, #653, #828
+	* collectd: A use-after-free has been fixed in the "parse_value()"
+	  function. Thanks to Matthias Urlichs.
+	* collectd: Fix carriage return sign in types_list Thanks to Marc
+	  Fournier and @NsLib.
+	* collectd: Fix programming error in src/configfile.c. Thanks to
+	  Wilfried Goesgens.
+	* collectd: An off-by-one error has been fixed in the
+	  "strstripnewline()" function. Patch by Florian Forster.
+	* collectd: Use the complain mechanism to report filter chain write
+	  failures. Thanks to Sebastian Harl.
+	* collectd: Spelling and grammar of error messages have been fixed.
+	  Thanks to Katelyn Perry and Tim Laszlo.
+	* collectdctl: Fixed buffering issues which caused trouble on AIX and
+	  Solaris. Thanks to Yoga Ramalingam.
+	* Documentation: Details and example about multi-instance filterchain
+	  targets have been added. Thanks to Marc Fournier.
+	* Documentation: The "CollectStatistics" option of the rrdcached has
+	  been documented. Thanks to Micha Krause. #907
+	* Documentation: The write_redis has been documented. Thanks to Marc
+	  Fournier.
+	* Documentation: The "GraphiteSeparateInstances" and
+	  "GraphiteAlwaysAppendDS" options of the amqp have been documented.
+	  Thanks to Marc Fournier.
+	* Documentation: Documentation of the "AutoLoadPlugin" option has been
+	  improved. Thanks to Florian Forster. #715
+	* aggregation: "utils_vl_lookup": A race when creating user objects
+	  has been fixed. Thanks to Sebastian Harl. #535
+	* cpu: Temperature code for Mac&nbsp;OS&nbsp;X has been removed.
+	  Thanks to Florian Forster and Marc Fournier. #22
+	* cURL, cURL-JSON, cURL-XML and Write HTTP plugins: Call
+	  "curl_global_init()" in the plugins' "init()" callback. Thanks to
+	  Jeremy Katz.
+	* cURL and memcachec plugins: Fix calculation of gauge, average,
+	  minimum and maximum. Previously, they were calculated from the start
+	  of the daemon, which is not the documented behavior. Thanks to
+	  Florian Forster. #663
+	* curl-json: A bug, which triggered when two URLs with a long common
+	  prefix were configured, was fixed. Thanks to Marc Fournier. #582
+	* dbi: Compatibility with new versions of libdbi has been restored.
+	  Thanks to Florian Forster. #950
+	* Exec, UnixSock plugins: Fix parsing of the "time" option of the
+	  "PUTNOTIF" command. Thanks to Adrian Miron. #477
+	* ipmi: A conflict with the java over the "SIGUSR2" signal has been
+	  fixed. Thanks to Vincent Bernat. #114
+	* java: Conversion from Java's time representation to collectd's
+	  representation has been fixed. Thanks to Manuel Luis Sanmartín
+	  Rozada.
+	* java: Make sure "cjni_thread_detach()" is called on all paths.
+	  Thanks to Florian Forster.
+	* LogFile and SysLog plugins: Avoid total silence in case of a
+	  misconfiguration. Thanks to Marc Fournier and Wilfried Goesgens.
+	* network: Support for recent versions of gcrypt has been added.
+	  Thanks to Vincent Bernat. #632
+	* network: Robustness of the client connecting behavior has been
+	  improved. Thanks to Florian Forster. #627
+	* python: Don't create empty "meta_data_t" objects. Thanks to Florian
+	  Forster. #716
+	* python: Fix Py list length check in "cpy_build_meta()". Thanks to
+	  Yoga Ramalingam.
+	* python: The "interval" member was fixed to export seconds as a
+	  double. Thanks to Justin Burnham.
+	* RRDtool and RRDCacheD plugins: A memory leak when creating RRD files
+	  has been fixed. Thanks to Yves Mettier. #661
+	* snmp: Fix a memory leak. Thanks to Marc Fournier and Pierre-Yves
+	  Ritschard. #610, #804
+	* statsd: Support for samplerates in timer metrics was added. Thanks
+	  to John Leach. #461
+	* swap: Fix behavior under OpenVZ by making "cached" optional. Thanks
+	  to Florian Forster. #733
+	* threshold: Population of the "time" field in notifications has been
+	  added. Thanks to Manuel Luis Sanmartín Rozada.
+	* libvirt: Only gather stats for running domains. Thanks to Ruben
+	  Kerkhof.
+	* lvm: An issue with Volume Groups (VGs) without Logical Volumes (LVs)
+	  has been fixed. Thanks to Jan Kundrát.
+	* write_graphite: Escape characters not supported by Graphite. Thanks
+	  to Pierre-Yves Ritschard and Marc Fournier.
+	* write_http: Make callback names context-dependent. Thanks to Marc
+	  Fournier. #821
+	* write_redis: A formatting bug, which resulted in totally unusable
+	  numbers being transmitted to Redis, was fixed. Thanks to Marc
+	  Fournier.
+	* write_riemann: Receive acknowledge message when using TCP. Thanks to
+	  John-John Tedro.
+
+2014-01-26, Version 5.4.1
+	* amqp plugin: Add support for RabbitMQ 0.4.x to avoid compiler
+	  warnings. Thanks to Sebastian Harl for implementing this.
+	* apache / network plugins: Improved initialization order hopefully
+	  resolved gcrypt initialization problems.
+	* aquaero plugin: The type used to submit fan utilization was fixed.
+	  Thanks to Alex Deymo for the patch.
+	* cgroups plugin: A small memory leak was fixed. Checking the existence
+	  of a mount option without a value was fixed. More permissive parsing
+	  of the cpuacct.stats file fixes support for some versions of Linux.
+	  Thanks to Marc Fournier for bug reports and patches.
+	* curl plugin: Fix <Match> blocks without an instance. Thanks to
+	  Alexander Golovko for reporting and Sebastian Harl for fixing this.
+	* curl_json plugin: Potentially invalid memory access has been
+	  sanitized. Thanks to Jim Radford for his patch.
+	* interface plugin: Fix behavior under FreeBSD 10: Reporting of
+	  per-address statistics caused duplicate updates to the same metric.
+	  Thanks to demon / @trtrmitya for the patch.
+	* write_graphite plugin: Use TCP to connect to Graphite by default. The
+	  default changed from TCP to UDP between 5.3.1 and 5.4.0, which is a
+	  regression. Thanks to Marc Fournier for fixing this. Reconnect
+	  behavior was improved. Thanks to Michael Hart for his patch.
+	* zfs_arc plugin: Collect "allocated" and "stolen" on FreeBSD only.
+
+2013-08-18, Version 5.4.0
+	* collectd: The "LoadPlugin" config option no longer attempts to load
+	  plugins twice. If more than one "LoadPlugin" statement or block is
+	  encountered, only the first will have any effect.
+	* collectd: The "AutoLoadPlugin" option allows to automatically load
+	  plugins for which a configuration is found.
+	* collectd: The "WriteQueueLimitHigh" and "WriteQueueLimitLow" options
+	  allow collectd to drop values when under stress, to avoid running out
+	  of memory. Thanks to Yves Mettier for his patch.
+	* amqp plugin: The "GraphiteSeparateInstances" and
+	  "GraphiteAlwaysAppendDS" options have been added. Thanks to Laurent
+	  for the patch.
+	* aquaero plugin: This new plugin reads various metrics, e.g. fan
+	  speeds and temperatures, from Aquaero 5, a fan and water cooling
+	  control panel. Thanks to Alex Deymo for his patch.
+	* curl plugin: The "MeasureResponseCode" option has been added. Thanks
+	  to Jan Matějka for his patch.
+	* curl_json plugin: Support for UNIX domain sockets and array wildcards
+	  has been added. Thanks to Jim Radford for his patch.
+	* curl_xml plugin: Support for long URLs has been improved.
+	* cgroups plugin: This new plugin collects CPU accounting information
+	  for processes in a cgroup. Thanks to Michael Stapelberg for his patch.
+	* df plugin: The "ValuesAbsolute" and "ValuesPercentage" options have
+	  been added. Thanks to Vedran Bartonicek for the patch.
+	* exec plugin: Do UID / GID lookups before forking. This should prevent
+	  a race condition in the NSS library. Thanks to Ceri Storey for the
+	  patch.
+	* lvm plugin: This new plugin collects size information from Linux'
+	  Logical Volume Manager (LVM). Thanks to Chad Malfait for his work.
+	* memcached plugin: Support for increment and decrement counts has been
+	  added. Thanks to Blake Matheny for the patch.
+	* mic plugin: This new plugin collects CPU and memory usage, power
+	  consumption and temperatures of Intel's Many-Integrated-Core (MIC)
+	  architecture, such as Xeon Phi cards. Thanks to Evan Felix for his
+	  work.
+	* netlink plugin: This plugin has been converted to use the supported
+	  "libmnl" library. Thanks to Andreas Henriksson for his patch.
+	* nginx plugin: Collection of accepted and handled connections has been
+	  added. Thanks to Patrick Shan for his patch.
+	* sigrok plugin: This new plugin collects metrics from sigrok, a signal
+	  processing framework reading various hardware devices, from light
+	  meters to spectrum analyzers. Thanks to Bert Vermeulen for his patch.
+	* statsd plugin: This new plugin listens to a UDP socket and reads
+	  metrics in the StatsD format.
+	* varnish plugin: Many additional metrics have been added. Thanks to
+	  Nick Stenning for his patch.
+	* write_graphite plugin: Support for "UDP" has been added. Thanks to
+	  Javier Maestro for his patch.
+	* write_riemann plugin: The "TTLFactor" option has been added.
+	* zfs_arc plugin: Support for FreeBSD has been added. Thanks to Xin Li
+	  for his patch.
+
+2015-02-26, Version 5.3.2
+	* Build system: Numerous fixes. Thanks to Bjørn Nordbø, Jim Radford,
+	  KOMEDA Shinji, Lauri Tirkkonen, Manuel Luis Sanmartin Rozada, Marc
+	  Fournier, Rainer Müller, Yoga Ramalingam and Yves Mettier. #326,
+	  #373, #653, #828
+	* collectd: A use-after-free has been fixed in the "parse_value()"
+	  function. Thanks to Matthias Urlichs.
+	* collectd: Fix carriage return sign in types_list Thanks to Marc
+	  Fournier and @NsLib.
+	* collectd: Fix programming error in src/configfile.c Thanks to
+	  Wilfried Goesgens.
+	* collectd: An off-by-one error has been fixed in the
+	  "strstripnewline()" function. Patch by Florian Forster.
+	* collectd: Use the complain mechanism to report filter chain write
+	  failures. Thanks to Sebastian Harl.
+	* collectd: Spelling and grammar of error messages have been fixed.
+	  Thanks to Katelyn Perry and Tim Laszlo.
+	* collectdctl: Fixed buffering issues which caused trouble on AIX and
+	  Solaris. Thanks to Yoga Ramalingam.
+	* Documentation: Details and example about multi-instance filterchain
+	  targets have been added. Thanks to Marc Fournier.
+	* Documentation: The "CollectStatistics" option of the rrdcached has
+	  been documented. Thanks to Micha Krause. #907
+	* Documentation: The write_redis has been documented. Thanks to Marc
+	  Fournier.
+	* Documentation: The synopsis of the threshold has been fixed. Thanks
+	  to Fabien Wernli.
+	* Documentation: The "GraphiteSeparateInstances" and
+	  "GraphiteAlwaysAppendDS" options of the amqp have been documented.
+	  Thanks to Marc Fournier.
+	* aggregation: "utils_vl_lookup": A race when creating user objects
+	  has been fixed. Thanks to Sebastian Harl. #535
+	* cpu: Temperature code for Mac&nbsp;OS&nbsp;X has been removed.
+	  Thanks to Florian Forster and Marc Fournier. #22
+	* csv: A regression which would lead to the "DataDir" option to be
+	  ignored has been fixed. Thanks to Manuel Luis Sanmartin Rozada.
+	* curl, curl-json, curl-xml and write_http plugins: Call
+	  "curl_global_init()" in the plugins' "init()" callback. Thanks to
+	  Jeremy Katz.
+	* curl and memcachec plugins: Fix calculation of gauge, average,
+	  minimum and maximum. Previously, they were calculated from the start
+	  of the daemon, which is not the documented behavior. Thanks to
+	  Florian Forster. #663
+	* dbi plugin: Compatibility with new versions of libdbi has been
+	  restored. Thanks to Florian Forster. #950
+	* exec, unixsock plugins: Fix parsing of the "time" option of the
+	  "PUTNOTIF" command. Thanks to Adrian Miron. #477
+	* java: Conversion from Java's time representation to collectd's
+	  representation has been fixed. Thanks to Manuel Luis Sanmartín
+	  Rozada.
+	* ipmi: A conflict with the java over the "SIGUSR2" signal has been
+	  fixed. Thanks to Vincent Bernat. #114
+	* java: Make sure "cjni_thread_detach()" is called on all paths.
+	  Thanks to Florian Forster.
+	* logfile and syslog plugins: Avoid total silence in case of a
+	  misconfiguration. Thanks to Marc Fournier and Wilfried Goesgens.
+	* memcached: Connecting to a UNIX socket has been fixed. Thanks to Jim
+	  Radford.
+	* network: Support for recent versions of gcrypt has been added.
+	  Thanks to Vincent Bernat. #632
+	* network: Robustness of the client connecting behavior has been
+	  improved. Thanks to Florian Forster. #627
+	* python: Don't create empty "meta_data_t" objects. Thanks to Florian
+	  Forster. #716
+	* python: Fix Py list length check in "cpy_build_meta()". Thanks to
+	  Yoga Ramalingam.
+	* python: The "interval" member was fixed to export seconds as a
+	  double. Thanks to Justin Burnham.
+	* replace and set targets: Fix error message. Thanks to Marc Fournier.
+	  #448
+	* rrdtool and rrdcached plugins: Honor the "DataDir" config option;
+	  this fixes a regression. Thanks to Florian Forster. #380
+	* rrdtool and rrdcached plugins: A memory leak when creating RRD files
+	  has been fixed. Thanks to Yves Mettier. #661
+	* snmp: Fix a memory leak. Thanks to Marc Fournier and Pierre-Yves
+	  Ritschard. #610, #804
+	* swap: Fix behavior under OpenVZ by making "cached" optional. Thanks
+	  to Florian Forster. #733
+	* threshold: Population of the "time" field in notifications has been
+	  added. Thanks to Manuel Luis Sanmartín Rozada.
+	* libvirt: Only gather stats for running domains. Thanks to Ruben
+	  Kerkhof.
+	* write_graphite: Escape characters not supported by Graphite. Thanks
+	  to Pierre-Yves Ritschard and Marc Fournier.
+	* write_http: Make callback names context-dependent. Thanks to Marc
+	  Fournier. #821
+	* write_riemann: Receive acknowledge message when using TCP. Thanks to
+	  John-John Tedro.
+
+2013-07-13, Version 5.3.1
+	* Documentation: Various fixes.
+	* Configuration: Fix error handling: Errors in included files were
+	  ignored, causing configuration mistakes to go unnoticed.
+	* dns plugin: Don't abort when PCAP returns an error.
+	* modbus plugin: The reconnection strategy was improved, fixing a
+	  segfault in the libmodbud library. Thanks to Stefan Nickl and
+	  Fabien Wernli for their patches.
+	* mysql plugin: The notification about a newly running MySQL slave
+	  thread has been fixed. Thanks to Joaquín Cuenca Abela for the patch.
+	* snmp plugin: A build issue has been fixed (C99 mixed declaration).
+	  The end-of-tree check has been improved by Pierre-Yves Ritschard.
+	* threshold plugin: Handling of the "Interesting" configuration option
+	  has been fixed. Thanks to Björn for the patch.
+	* write_riemann plugin: A memory leak has been fixed. Thanks to Dave
+	  Cottlehuber for reporting it.
+
 2013-04-09, Version 5.3.0
 	* collectd: The "Include" statements can now be limited to include
 	  only matching files in a directory. Thanks to Sebastian Harl for his

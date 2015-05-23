@@ -147,7 +147,7 @@ pkglib_LTLIBRARIES += aggregation.la
 aggregation_la_SOURCES = aggregation.c \
                          utils_vl_lookup.c utils_vl_lookup.h
 aggregation_la_LDFLAGS = -module -avoid-version
-aggregation_la_LIBADD =
+aggregation_la_LIBADD = -lm
 collectd_LDADD += "-dlopen" aggregation.la
 collectd_DEPENDENCIES += aggregation.la
 endif
@@ -195,9 +195,19 @@ if BUILD_PLUGIN_APPLE_SENSORS
 pkglib_LTLIBRARIES += apple_sensors.la
 apple_sensors_la_SOURCES = apple_sensors.c
 apple_sensors_la_LDFLAGS = -module -avoid-version
-apple_sensors_la_LIBADD = -lIOKit
+apple_sensors_la_LDFLAGS += -framework IOKit
 collectd_LDADD += "-dlopen" apple_sensors.la
 collectd_DEPENDENCIES += apple_sensors.la
+endif
+
+if BUILD_PLUGIN_AQUAERO
+pkglib_LTLIBRARIES += aquaero.la
+aquaero_la_SOURCES = aquaero.c
+aquaero_la_LDFLAGS = -module -avoid-version
+aquaero_la_CFLAGS = $(AM_CFLAGS) $(BUILD_WITH_LIBAQUAERO5_CFLAGS)
+aquaero_la_LIBADD = $(BUILD_WITH_LIBAQUAERO5_LDFLAGS) -laquaero5
+collectd_LDADD += "-dlopen" aquaero.la
+collectd_DEPENDENCIES += aquaero.la
 endif
 
 if BUILD_PLUGIN_ASCENT
@@ -217,7 +227,7 @@ battery_la_SOURCES = battery.c
 battery_la_LDFLAGS = -module -avoid-version
 battery_la_LIBADD =
 if BUILD_WITH_LIBIOKIT
-battery_la_LIBADD += -lIOKit
+battery_la_LDFLAGS += -framework IOKit
 endif
 collectd_LDADD += "-dlopen" battery.la
 collectd_DEPENDENCIES += battery.la
@@ -232,6 +242,14 @@ bind_la_CFLAGS = $(AM_CFLAGS) \
 bind_la_LIBADD = $(BUILD_WITH_LIBCURL_LIBS) $(BUILD_WITH_LIBXML2_LIBS)
 collectd_LDADD += "-dlopen" bind.la
 collectd_DEPENDENCIES += bind.la
+endif
+
+if BUILD_PLUGIN_CGROUPS
+pkglib_LTLIBRARIES += cgroups.la
+cgroups_la_SOURCES = cgroups.c utils_mount.c utils_mount.h
+cgroups_la_LDFLAGS = -module -avoid-version
+collectd_LDADD += "-dlopen" cgroups.la
+collectd_DEPENDENCIES += cgroups.la
 endif
 
 if BUILD_PLUGIN_CONNTRACK
@@ -365,7 +383,7 @@ if BUILD_WITH_LIBDEVINFO
 disk_la_LIBADD += -ldevinfo
 endif
 if BUILD_WITH_LIBIOKIT
-disk_la_LIBADD += -lIOKit
+disk_la_LDFLAGS += -framework IOKit
 endif
 if BUILD_WITH_LIBSTATGRAB
 disk_la_CFLAGS += $(BUILD_WITH_LIBSTATGRAB_CFLAGS)  
@@ -481,8 +499,8 @@ if BUILD_PLUGIN_IPTABLES
 pkglib_LTLIBRARIES += iptables.la
 iptables_la_SOURCES = iptables.c
 iptables_la_CPPFLAGS = $(AM_CPPFLAGS) $(BUILD_WITH_LIBIPTC_CPPFLAGS)
-iptables_la_LDFLAGS = -module -avoid-version $(BUILD_WITH_LIBIPTC_LDFLAGS)
-iptables_la_LIBADD = -liptc
+iptables_la_LDFLAGS = -module -avoid-version
+iptables_la_LIBADD = $(BUILD_WITH_LIBIPTC_LDFLAGS)
 collectd_LDADD += "-dlopen" iptables.la
 collectd_DEPENDENCIES += iptables.la
 endif
@@ -570,6 +588,15 @@ lpar_la_LDFLAGS = -module -avoid-version
 collectd_LDADD += "-dlopen" lpar.la
 collectd_DEPENDENCIES += lpar.la
 lpar_la_LIBADD = -lperfstat
+endif
+
+if BUILD_PLUGIN_LVM
+pkglib_LTLIBRARIES += lvm.la
+lvm_la_SOURCES = lvm.c
+lvm_la_LDFLAGS = -module -avoid-version
+lvm_la_LIBADD = $(BUILD_WITH_LIBLVM2APP_LIBS)
+collectd_LDADD += "-dlopen" lvm.la
+collectd_DEPENDENCIES += lvm.la
 endif
 
 if BUILD_PLUGIN_MADWIFI
@@ -749,8 +776,8 @@ if BUILD_PLUGIN_NETLINK
 pkglib_LTLIBRARIES += netlink.la
 netlink_la_SOURCES = netlink.c
 netlink_la_LDFLAGS = -module -avoid-version
-netlink_la_CFLAGS = $(AM_CFLAGS) $(BUILD_WITH_LIBNETLINK_CFLAGS)
-netlink_la_LIBADD = $(BUILD_WITH_LIBNETLINK_LIBS)
+netlink_la_CFLAGS = $(AM_CFLAGS) $(BUILD_WITH_LIBMNL_CFLAGS)
+netlink_la_LIBADD = $(BUILD_WITH_LIBMNL_LIBS)
 collectd_LDADD += "-dlopen" netlink.la
 collectd_DEPENDENCIES += netlink.la
 endif
@@ -913,6 +940,7 @@ perl_la_CFLAGS += -Wno-nonnull
 endif
 perl_la_LDFLAGS = -module -avoid-version \
 		$(PERL_LDFLAGS)
+perl_la_LIBADD = $(PERL_LIBS)
 collectd_LDADD += "-dlopen" perl.la
 collectd_DEPENDENCIES += perl.la
 endif
@@ -1066,6 +1094,16 @@ collectd_LDADD += "-dlopen" serial.la
 collectd_DEPENDENCIES += serial.la
 endif
 
+if BUILD_PLUGIN_SIGROK
+pkglib_LTLIBRARIES += sigrok.la
+sigrok_la_SOURCES = sigrok.c
+sigrok_la_CFLAGS = $(AM_CFLAGS) $(BUILD_WITH_LIBSIGROK_CFLAGS)
+sigrok_la_LDFLAGS = -module -avoid-version $(BUILD_WITH_LIBSIGROK_LDFLAGS)
+sigrok_la_LIBADD = -lsigrok
+collectd_LDADD += "-dlopen" sigrok.la
+collectd_DEPENDENCIES += sigrok.la
+endif
+
 if BUILD_PLUGIN_SNMP
 pkglib_LTLIBRARIES += snmp.la
 snmp_la_SOURCES = snmp.c
@@ -1081,6 +1119,16 @@ snmp_la_LIBADD += -lpthread
 endif
 collectd_LDADD += "-dlopen" snmp.la
 collectd_DEPENDENCIES += snmp.la
+endif
+
+if BUILD_PLUGIN_STATSD
+pkglib_LTLIBRARIES += statsd.la
+statsd_la_SOURCES = statsd.c \
+                    utils_latency.h utils_latency.c
+statsd_la_LDFLAGS = -module -avoid-version
+statsd_la_LIBADD = -lpthread
+collectd_LDADD += "-dlopen" statsd.la
+collectd_DEPENDENCIES += statsd.la
 endif
 
 if BUILD_PLUGIN_SWAP
@@ -1302,6 +1350,16 @@ collectd_LDADD += "-dlopen" uuid.la
 collectd_DEPENDENCIES += uuid.la
 endif
 
+if BUILD_PLUGIN_MIC
+pkglib_LTLIBRARIES += mic.la
+mic_la_SOURCES = mic.c
+mic_la_LDFLAGS = -module -avoid-version $(BUILD_WITH_MIC_LIBPATH)
+mic_la_CFLAGS = $(AM_CFLAGS) $(BUILD_WITH_MIC_CPPFLAGS)
+mic_la_LIBADD = $(BUILD_WITH_MIC_LDADD)
+collectd_LDADD += "-dlopen" mic.la
+collectd_DEPENDENCIES += mic.la
+endif
+
 if BUILD_PLUGIN_VARNISH
 pkglib_LTLIBRARIES += varnish.la
 varnish_la_SOURCES = varnish.c
@@ -1424,7 +1482,11 @@ pkglib_LTLIBRARIES += zfs_arc.la
 zfs_arc_la_SOURCES = zfs_arc.c
 zfs_arc_la_CFLAGS = $(AM_CFLAGS)
 zfs_arc_la_LDFLAGS = -module -avoid-version
+if BUILD_FREEBSD
+zfs_arc_la_LIBADD = -lm
+else
 zfs_arc_la_LIBADD = -lkstat
+endif
 collectd_LDADD += "-dlopen" zfs_arc.la
 collectd_DEPENDENCIES += zfs_arc.la
 endif

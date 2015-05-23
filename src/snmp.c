@@ -1316,6 +1316,8 @@ static int csnmp_read_table (host_definition_t *host, data_definition_t *data)
         snmp_free_pdu (res);
       res = NULL;
 
+      /* snmp_synch_response already freed our PDU */
+      req = NULL;
       sfree (errstr);
       csnmp_host_close_session (host);
 
@@ -1373,13 +1375,14 @@ static int csnmp_read_table (host_definition_t *host, data_definition_t *data)
         csnmp_table_values_t *vt;
         oid_t vb_name;
         oid_t suffix;
+        int ret;
 
         csnmp_oid_init (&vb_name, vb->name, vb->name_length);
 
         /* Calculate the current suffix. This is later used to check that the
          * suffix is increasing. This also checks if we left the subtree */
-        status = csnmp_oid_suffix (&suffix, &vb_name, data->values + i);
-        if (status != 0)
+        ret = csnmp_oid_suffix (&suffix, &vb_name, data->values + i);
+        if (ret != 0)
         {
           DEBUG ("snmp plugin: host = %s; data = %s; i = %i; "
               "Value probably left its subtree.",
@@ -1435,6 +1438,10 @@ static int csnmp_read_table (host_definition_t *host, data_definition_t *data)
   if (res != NULL)
     snmp_free_pdu (res);
   res = NULL;
+
+  if (req != NULL)
+    snmp_free_pdu (req);
+  req = NULL;
 
   if (status == 0)
     csnmp_dispatch_table (host, data, instance_list_head, value_list_head);
