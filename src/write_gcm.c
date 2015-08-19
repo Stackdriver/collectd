@@ -32,6 +32,7 @@
 #include "utils_avltree.h"
 
 #include <curl/curl.h>
+#include <errno.h>
 
 #if HAVE_YAJL_YAJL_VERSION_H
 # include <yajl/yajl_version.h>
@@ -362,7 +363,7 @@ static int value_to_timeseries(char *buffer, /* {{{ */
   buffer_size = *ret_buffer_free + *ret_buffer_fill;
   offset = *ret_buffer_fill;
 
-  /* TODO(octo): This assumes that project (a char*) holds a numberic id. */
+  /* TODO(octo): This assumes that project (a char*) holds a numeric id. */
   BUFFER_ADD("{"
              "\"timeseriesDesc\":{"
              "\"project\":");
