@@ -5575,6 +5575,8 @@ then
 	plugin_write_gcm="yes"
 fi
 
+plugin_write_kosak="yes"
+
 if test "x$have_getutent" = "xyes"
 then
 	plugin_users="yes"
@@ -5738,6 +5740,7 @@ AC_PLUGIN([wireless],    [$plugin_wireless],   [Wireless statistics])
 AC_PLUGIN([write_graphite], [yes],             [Graphite / Carbon output plugin])
 AC_PLUGIN([write_http],  [$with_libcurl],      [HTTP output plugin])
 AC_PLUGIN([write_gcm],   [$plugin_write_gcm],  [Google cloud monitoring output plugin])
+AC_PLUGIN([write_kosak],   [$plugin_write_kosak],  [Kosak rewrite of Google cloud monitoring output plugin])
 AC_PLUGIN([write_kafka],  [$with_librdkafka],  [Kafka output plugin])
 AC_PLUGIN([write_log], [yes],                  [Log output plugin])
 AC_PLUGIN([write_mongodb], [$with_libmongoc],  [MongoDB output plugin])
@@ -6119,6 +6122,7 @@ Configuration:
     write_graphite  . . . $enable_write_graphite
     write_http  . . . . . $enable_write_http
     write_gcm   . . . . . $enable_write_gcm
+    write_kosak . . . . . $enable_write_kosak
     write_kafka . . . . . $enable_write_kafka
     write_log . . . . . . $enable_write_log
     write_mongodb . . . . $enable_write_mongodb

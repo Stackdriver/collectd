@@ -131,7 +131,7 @@ int c_avl_get (c_avl_tree_t *t, const void *key, void **value);
  *   c_avl_pick
  *
  * DESCRIPTION
- *   Remove a (pseudo-)random element from the tree and return it's `key' and
+ *   Remove a (pseudo-)random element from the tree and return its `key' and
  *   `value'. Entries are not returned in any particular order. This function
  *   is intended for cache-flushes that don't care about the order but simply
  *   want to remove all elements, one at a time.
