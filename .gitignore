@@ -65,3 +65,20 @@ src/tests/mock/.dirstamp
 src/daemon/.deps/
 src/daemon/.dirstamp
 src/daemon/collectd
+
+# build.sh stuff
+/Makefile.in
+/aclocal.m4
+/autom4te.cache
+/bindings/Makefile.in
+/bindings/java/Makefile.in
+/configure
+/src/Makefile.in
+/src/config.h.in
+/src/daemon/Makefile.in
+/src/libcollectdclient/Makefile.in
+/src/liboconfig/Makefile.in
+/libltdl
+
+# configure stuff
+/src/libmongoc/src/.deps
