@@ -1845,7 +1845,6 @@ static void wg_yajl_dump(void *ctx, const char *str, size_t len) {
   memcpy(*jc->buffer, str, len);
   *jc->buffer += len;
   *jc->size -= len;
-================================================================================
   // Terminate with NUL here because it's convenient (we don't actually need a
   // terminating NUL until we're done building the whole buffer).
   (*jc->buffer)[0] = 0;
