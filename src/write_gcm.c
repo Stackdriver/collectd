@@ -74,7 +74,7 @@ static const char metadata_fetch_auth_token[] =
 // The Agent Translation Service endpoint. This is in printf format,
 // with a single %s placeholder which holds the name of the project.
 static const char agent_translation_service_default_format_string[] =
-  "https://monitoring.googleapis.com/v3/%s/collectd/timeSeries";
+  "https://monitoring.googleapis.com/v3/projects/%s/collectdTimeSeries";
 
 // The application/JSON content header.
 static const char json_content_type_header[] = "Content-Type: application/json";
