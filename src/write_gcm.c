@@ -28,6 +28,7 @@
 
 #include "collectd.h"
 #include "common.h"
+#include "daemon/collectd.h"
 #include "plugin.h"
 #include "configfile.h"
 #include "utils_avltree.h"
@@ -73,7 +74,7 @@ static const char metadata_fetch_auth_token[] =
 // The Agent Translation Service endpoint. This is in printf format,
 // with a single %s placeholder which holds the name of the project.
 static const char agent_translation_service_default_format_string[] =
-  "http://localhost:5000/v3/projects/%s/collectd/timeSeries";
+  "https://monitoring.googleapis.com/v3/%s/collectd/timeSeries";
 
 // The application/JSON content header.
 static const char json_content_type_header[] = "Content-Type: application/json";
@@ -542,7 +543,7 @@ static int wg_oauth2_get_auth_header_nolock(oauth2_ctx_t *ctx,
   // metadata server. This is THE EASY ROUTE as described in the documentation
   // for this method.
   if (cred_ctx == NULL) {
-    ERROR("write_gcm: Asking metadata server for auth token");
+    INFO("write_gcm: Asking metadata server for auth token");
     return wg_oauth2_talk_to_server_and_store_result(ctx,
         metadata_fetch_auth_token, NULL, NULL, 0, now);
   }
@@ -1018,6 +1019,7 @@ typedef struct {
   char *passphrase;
   char *json_log_file;
   char *agent_translation_service_format_string;
+  _Bool pretty_print_json;
 } wg_configbuilder_t;
 
 // Builds a wg_configbuilder_t out of a config node.
@@ -1029,6 +1031,7 @@ static void wg_configbuilder_destroy(wg_configbuilder_t *cb);
 //------------------------------------------------------------------------------
 static wg_configbuilder_t *wg_configbuilder_create(oconfig_item_t *ci) {
   // Items to free on error.
+  char *pretty_print_json = NULL;
   wg_configbuilder_t *cb = NULL;
 
   cb = calloc(1, sizeof(*cb));
@@ -1048,7 +1051,8 @@ static wg_configbuilder_t *wg_configbuilder_create(oconfig_item_t *ci) {
       "PrivateKeyFile",
       "PrivateKeyPass",
       "JSONLogFile",
-      "AgentTranslationServiceFormatString"
+      "AgentTranslationServiceFormatString",
+      "PrettyPrintJSON"
   };
   char **locations[] = {
       &cb->cloud_provider,
@@ -1061,7 +1065,8 @@ static wg_configbuilder_t *wg_configbuilder_create(oconfig_item_t *ci) {
       &cb->key_file,
       &cb->passphrase,
       &cb->json_log_file,
-      &cb->agent_translation_service_format_string
+      &cb->agent_translation_service_format_string,
+      &pretty_print_json
   };
 
   assert(STATIC_ARRAY_SIZE(keys) == STATIC_ARRAY_SIZE(locations));
@@ -1091,6 +1096,10 @@ static wg_configbuilder_t *wg_configbuilder_create(oconfig_item_t *ci) {
     goto error;
   }
 
+  if (pretty_print_json != NULL && strcasecmp(pretty_print_json, "yes") == 0) {
+    cb->pretty_print_json = 1;
+  }
+
   // Either all or none of 'email', 'key_file', and 'passphrase' must be set.
   int num_set = 0;
   if (cb->email != NULL) {
@@ -1114,6 +1123,7 @@ static wg_configbuilder_t *wg_configbuilder_create(oconfig_item_t *ci) {
   return cb;
 
  error:
+  sfree(pretty_print_json);
   wg_configbuilder_destroy(cb);
   return NULL;
 }
@@ -1193,9 +1203,11 @@ static void wg_monitored_resource_destroy(monitored_resource_t *resource) {
   }
   int i;
   for (i = 0; i < resource->num_labels; ++i) {
-    sfree(resource->keys[i]);
     sfree(resource->values[i]);
+    sfree(resource->keys[i]);
   }
+  sfree(resource->values);
+  sfree(resource->keys);
   sfree(resource->project_id);
   sfree(resource->type);
   sfree(resource);
@@ -1203,15 +1215,6 @@ static void wg_monitored_resource_destroy(monitored_resource_t *resource) {
 
 static int wg_monitored_resource_populate_for_gcp(
     monitored_resource_t *resource, const wg_configbuilder_t *cb) {
-
-  // The URL of the GCE metadata server which fetches the auth token.
-  #define dumb_METADATA_FETCH_AUTH_TOKEN \
-    METADATA_SERVER_API "instance/service-accounts/default/token"
-
-
-  // The URL of the GCE metadata server.
-  #define dumb_METADATA_SERVER_API "http://169.254.169.254/computeMetadata/v1beta1/"
-
   char *project_id_to_use = sstrdup(cb->project_id);
   char *instance_id_to_use = sstrdup(cb->instance_id);
   char *zone_to_use = sstrdup(cb->zone);
@@ -1266,7 +1269,9 @@ static int wg_monitored_resource_populate_for_gcp(
       goto error;
     }
   }
+  resource->type = sstrdup("gce_instance");
   resource->project_id = project_id_to_use;
+  resource->num_labels = 2;
   resource->keys = calloc(2, sizeof(resource->keys[0]));
   resource->values = calloc(2, sizeof(resource->keys[0]));
   resource->keys[0] = sstrdup("instance_id");
@@ -1336,6 +1341,7 @@ typedef struct {
   pthread_t queue_thread;
   wg_queue_t *queue;
   FILE *json_log_file;
+  _Bool pretty_print_json;
 } wg_context_t;
 
 static wg_context_t *wg_context_create(const wg_configbuilder_t *cb);
@@ -1403,6 +1409,7 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
     return NULL;
   }
 
+  // Open the JSON log file if requested.
   if (cb->json_log_file != NULL) {
     ctx->json_log_file = fopen(cb->json_log_file, "a");
     if (ctx->json_log_file == NULL) {
@@ -1411,6 +1418,7 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
     }
   }
 
+  ctx->pretty_print_json = cb->pretty_print_json;
   return ctx;
 }
 
@@ -1490,7 +1498,8 @@ typedef struct {
 // fresh wg_json_CreateCollectdTimeseriesPointsRequest requests each
 // time) until the list is exhausted.
 static int wg_json_CreateCollectdTimeseriesPointsRequest(char **buffer,
-    size_t *size, const const monitored_resource_t *monitored_resource,
+    size_t *size, _Bool pretty,
+    const const monitored_resource_t *monitored_resource,
     const wg_payload_t *head, const wg_payload_t **new_head);
 
 //------------------------------------------------------------------------------
@@ -1510,7 +1519,8 @@ static void wg_json_array_close(json_ctx_t *jc);
 static void wg_json_string(json_ctx_t *jc, const char *s);
 static void wg_json_uint64(json_ctx_t *jc, uint64_t value);
 
-static json_ctx_t *wg_json_ctx_create(char **buffer, size_t *size);
+static json_ctx_t *wg_json_ctx_create(char **buffer, size_t *size,
+    _Bool pretty);
 static void wg_json_ctx_destroy(json_ctx_t *jc);
 
 typedef struct {
@@ -1530,7 +1540,7 @@ static int wg_get_vl_value(int ds_type, value_t value,
 //   repeated CollectdPayload collectd_payloads = 4;
 // }
 static int wg_json_CreateCollectdTimeseriesPointsRequest(char **buffer,
-    size_t *size, const monitored_resource_t *monitored_resource,
+    size_t *size, _Bool pretty, const monitored_resource_t *monitored_resource,
     const wg_payload_t *head, const wg_payload_t **new_head) {
   char name[256];
   int result = snprintf(name, sizeof(name), "project/%s",
@@ -1541,7 +1551,7 @@ static int wg_json_CreateCollectdTimeseriesPointsRequest(char **buffer,
     return -1;
   }
 
-  json_ctx_t *jc = wg_json_ctx_create(buffer, size);
+  json_ctx_t *jc = wg_json_ctx_create(buffer, size, pretty);
   if (jc == NULL) {
     ERROR("write_gcm: wg_json_ctx_create failed");
     return -1;
@@ -1554,7 +1564,7 @@ static int wg_json_CreateCollectdTimeseriesPointsRequest(char **buffer,
   wg_json_string(jc, "resource");
   wg_json_MonitoredResource(jc, monitored_resource);
 
-  wg_json_string(jc, "version");
+  wg_json_string(jc, "collectdVersion");
   wg_json_string(jc, COLLECTD_USERAGENT);
 
   wg_json_string(jc, "collectdPayloads");
@@ -1606,6 +1616,7 @@ static void wg_json_CollectdPayloads(json_ctx_t *jc,
     const wg_payload_t *head, const wg_payload_t **new_head) {
   wg_json_array_open(jc);
   while (head != NULL && *jc->size >= JSON_LOW_WATER_MARK && jc->error == 0) {
+    wg_json_map_open(jc);
     wg_json_string(jc, "startTime");
     wg_json_Timestamp(jc, head->start_time);
 
@@ -1626,6 +1637,8 @@ static void wg_json_CollectdPayloads(json_ctx_t *jc,
 
     wg_json_string(jc, "values");
     wg_json_CollectdValues(jc, head);
+    wg_json_map_close(jc);
+
     head = head->next;
   }
   *new_head = head;
@@ -1647,6 +1660,7 @@ static void wg_json_CollectdPayloads(json_ctx_t *jc,
 //     double double_value = 4;
 //   }
 // }
+
 static void wg_json_CollectdValues(json_ctx_t *jc,
     const wg_payload_t *element) {
   wg_json_array_open(jc);
@@ -1655,10 +1669,9 @@ static void wg_json_CollectdValues(json_ctx_t *jc,
     const wg_payload_value_t *value = &element->values[i];
     fleshed_out_value_t fov;
     if (wg_get_vl_value(value->ds_type, value->val, &fov) != 0) {
-      jc->error = -1;
-      return;
+      WARNING("write_gcm: wg_get_vl_value failed! Continuing.");
+      continue;
     }
-
     wg_json_map_open(jc);
 
     wg_json_string(jc, "dataSourceType");
@@ -1699,37 +1712,62 @@ static void wg_json_map_open(json_ctx_t *jc) {
   if (jc->error != 0) {
     return;
   }
-  jc->error = yajl_gen_map_open(jc->gen) != yajl_gen_status_ok ? -1 : 0;
+  int result = yajl_gen_map_open(jc->gen);
+  if (result != yajl_gen_status_ok) {
+    ERROR("yajl_gen_map_open returned %d", result);
+    jc->error = -1;
+  }
 }
 
 static void wg_json_map_close(json_ctx_t *jc) {
   if (jc->error != 0) {
     return;
   }
-  jc->error = yajl_gen_map_close(jc->gen) != yajl_gen_status_ok ? -1 : 0;
+  int result = yajl_gen_map_close(jc->gen);
+  if (result != yajl_gen_status_ok) {
+    ERROR("wg_json_map_close returned %d", result);
+    jc->error = -1;
+  }
 }
 
 static void wg_json_array_open(json_ctx_t *jc) {
   if (jc->error != 0) {
     return;
   }
-  jc->error = yajl_gen_array_open(jc->gen) != yajl_gen_status_ok ? -1 : 0;
+  int result = yajl_gen_array_open(jc->gen);
+  if (result != yajl_gen_status_ok) {
+    ERROR("wg_json_array_open returned %d", result);
+    jc->error = -1;
+  }
 }
 
 static void wg_json_array_close(json_ctx_t *jc) {
   if (jc->error != 0) {
     return;
   }
-  jc->error = yajl_gen_array_close(jc->gen) != yajl_gen_status_ok ? -1 : 0;
+  int result = yajl_gen_array_close(jc->gen);
+  if (result != yajl_gen_status_ok) {
+    ERROR("wg_json_array_close returned %d", result);
+    jc->error = -1;
+  }
 }
 
 static void wg_json_string(json_ctx_t *jc, const char *s) {
   if (jc->error != 0) {
     return;
   }
-  jc->error = yajl_gen_string(jc->gen, (const unsigned char*)s, strlen(s))
-      != yajl_gen_status_ok ?
-      -1 : 0;
+
+  if (s == NULL) {
+    ERROR("write_gcm: wg_json_string passed NULL.");
+    jc->error = -1;
+    return;
+  }
+
+  int result = yajl_gen_string(jc->gen, (const unsigned char*)s, strlen(s));
+  if (result != yajl_gen_status_ok) {
+    ERROR("yajl_gen_string returned %d", result);
+    jc->error = -1;
+  }
 }
 
 static void wg_json_uint64(json_ctx_t *jc, uint64_t value) {
@@ -1738,8 +1776,11 @@ static void wg_json_uint64(json_ctx_t *jc, uint64_t value) {
   }
   char buffer[32];
   snprintf(buffer, sizeof(buffer), "%" PRIu64, value);
-  jc->error = yajl_gen_number(jc->gen, buffer, strlen(buffer))
-      != yajl_gen_status_ok ? -1 : 0;
+  int result = yajl_gen_number(jc->gen, buffer, strlen(buffer));
+  if (result != yajl_gen_status_ok) {
+    ERROR("yajl_gen_number returned %d", result);
+    jc->error = -1;
+  }
 }
 
 // Based on 'ds_type', extracts a value from 'value' and stringifies it,
@@ -1804,9 +1845,14 @@ static void wg_yajl_dump(void *ctx, const char *str, size_t len) {
   memcpy(*jc->buffer, str, len);
   *jc->buffer += len;
   *jc->size -= len;
+================================================================================
+  // Terminate with NUL here because it's convenient (we don't actually need a
+  // terminating NUL until we're done building the whole buffer).
+  (*jc->buffer)[0] = 0;
 }
 
-static json_ctx_t *wg_json_ctx_create(char **buffer, size_t *size) {
+static json_ctx_t *wg_json_ctx_create(char **buffer, size_t *size,
+    _Bool pretty) {
   json_ctx_t *jc = calloc(1, sizeof(*jc));
   if (jc == NULL) {
     ERROR("write_gcm: can't allocate jcon_ctx_t");
@@ -1816,7 +1862,7 @@ static json_ctx_t *wg_json_ctx_create(char **buffer, size_t *size) {
   jc->size = size;
   jc->error = 0;
   jc->gen = yajl_gen_alloc(NULL);
-  yajl_gen_config(jc->gen, yajl_gen_beautify, 1);
+  yajl_gen_config(jc->gen, yajl_gen_beautify, pretty);
   yajl_gen_config(jc->gen, yajl_gen_validate_utf8, 1);
   yajl_gen_config(jc->gen, yajl_gen_print_callback, wg_yajl_dump, jc);
   return jc;
@@ -1889,7 +1935,7 @@ int wg_find_unique_segment(wg_payload_t *list, wg_payload_t **tail);
 // Returns 0 on success, <0 on error.
 static int wg_format_some_of_list(
     const monitored_resource_t *monitored_resource, const wg_payload_t *list,
-    const wg_payload_t **new_list, char **json);
+    const wg_payload_t **new_list, char **json, _Bool pretty);
 
 // Look up an existing, or create a new, deriv_tracker_value_t in the treee.
 // The key is derived from the payload. *created is set to 0 if the tracker was
@@ -2077,6 +2123,17 @@ int wg_transmit_unique_segments(const wg_context_t *ctx, wg_payload_t *list) {
   return 0;
 }
 
+static void wg_log_json_message(const wg_context_t *ctx, const char *fmt, ...) {
+  if (ctx->json_log_file == NULL) {
+    return;
+  }
+  va_list ap;
+  va_start(ap, fmt);
+  vfprintf(ctx->json_log_file, fmt, ap);
+  va_end(ap);
+  fflush(ctx->json_log_file);
+}
+
 static int wg_transmit_unique_segment(const wg_context_t *ctx,
     const wg_payload_t *list) {
   if (list == NULL) {
@@ -2096,11 +2153,13 @@ static int wg_transmit_unique_segment(const wg_context_t *ctx,
 
   while (list != NULL) {
     const wg_payload_t *new_list;
-    if (wg_format_some_of_list(ctx->resource, list, &new_list, &json)
-        != 0) {
+    if (wg_format_some_of_list(ctx->resource, list, &new_list, &json,
+        ctx->pretty_print_json) != 0) {
       ERROR("write_gcm: Error formatting list as JSON");
       goto leave;
     }
+
+    wg_log_json_message(ctx, "Sending json:\n%s\n", json);
 
     // By the way, a successful response is the empty string. An unsuccessful
     // response is a detailed error message from Monarch.
@@ -2109,14 +2168,12 @@ static int wg_transmit_unique_segment(const wg_context_t *ctx,
     if (wg_curl_get_or_post(response, sizeof(response),
         ctx->agent_translation_service_url, json,
         headers, STATIC_ARRAY_SIZE(headers)) != 0) {
+      wg_log_json_message(ctx, "Error contacting server.\n");
       ERROR("write_gcm: Error talking to the endpoint.");
       goto leave;
     }
-    if (ctx->json_log_file != NULL) {
-      fprintf(ctx->json_log_file, "%s\n", json);
-      fprintf(ctx->json_log_file, "%s\n", response);
-      fflush(ctx->json_log_file);
-    }
+
+    wg_log_json_message(ctx, "Server response:\n%s\n", response);
 
     sfree(json);
     json = NULL;
@@ -2132,7 +2189,7 @@ static int wg_transmit_unique_segment(const wg_context_t *ctx,
 
 static int wg_format_some_of_list(
     const monitored_resource_t *monitored_resource, const wg_payload_t *list,
-    const wg_payload_t **new_list, char **json) {
+    const wg_payload_t **new_list, char **json, _Bool pretty) {
   size_t size = JSON_SOFT_TARGET_SIZE + JSON_LOW_WATER_MARK;
   char *buffer_start = malloc(size);
   if (buffer_start == NULL) {
@@ -2142,7 +2199,7 @@ static int wg_format_some_of_list(
 
   char *buffer = buffer_start;
   if (wg_json_CreateCollectdTimeseriesPointsRequest(
-      &buffer, &size, monitored_resource, list, new_list) != 0) {
+      &buffer, &size, pretty, monitored_resource, list, new_list) != 0) {
     ERROR("write_gcm: wg_json_CreateCollectdTimeseriesPointsRequest"
         " failed.");
     goto error;
