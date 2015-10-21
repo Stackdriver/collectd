@@ -45,7 +45,7 @@
 
 #include <yajl/yajl_gen.h>
 #include <yajl/yajl_parse.h>
-#include <yajl/yajl_tree.h>
+#include <yajl/yajl_version.h>
 
 #if HAVE_PTHREAD_H
 #include <pthread.h>
@@ -63,13 +63,9 @@
 
 static const char this_plugin_name[] = "write_gcm";
 
-// The URL of the GCP metadata server.
-static const char gcp_metadata_server[] =
-    "http://169.254.169.254/computeMetadata/v1beta1/";
-
-// The URL to get the auth token from the metadata server.
-static const char metadata_fetch_auth_token[] =
-  "http://169.254.169.254/computeMetadata/v1beta1/instance/service-accounts/default/token";
+// The special HTTP header that needs to be added to any call to the GCP
+// metadata server.
+static const char gcp_metadata_header[] = "Metadata-Flavor: Google";
 
 // The Agent Translation Service endpoint. This is in printf format,
 // with a single %s placeholder which holds the name of the project.
@@ -78,10 +74,6 @@ static const char agent_translation_service_default_format_string[] =
 
 // The application/JSON content header.
 static const char json_content_type_header[] = "Content-Type: application/json";
-
-// The special HTTP header that needs to be added to any call to the GCE
-// metadata server.
-static const char google_metadata_header[] = "Metadata-Flavor: Google";
 
 // The maximum number of entries we keep in our processing queue before flushing
 // it. Ordinarily a flush happens every minute or so, but we also flush if the
@@ -326,7 +318,6 @@ static int wg_curl_get_or_post(char *response_buffer,
   }
 
   write_ctx.data[0] = 0;
-  WARNING("This is the result from curl: %s", response_buffer);
   if (write_ctx.size < 2) {
     WARNING("write_gcm: The buffer overflowed.");
     goto leave;
@@ -364,6 +355,202 @@ static size_t wg_curl_write_callback(char *ptr, size_t size, size_t nmemb,
 }
 
 //==============================================================================
+//==============================================================================
+//==============================================================================
+// Hacky JSON parsing, suitable for use with libyajl v1 or v2.
+// The only JSON parsing we need to do is to pull a string or number field out
+// of a top-level JSON object. i.e. no nested arrays or maps. The code is not
+// especially efficient, but this does not matter for our purposes.
+//==============================================================================
+//==============================================================================
+//==============================================================================
+// Extracts the string value from the top-level json object whose key is given
+// by 'key'. Returns 0 on success, <0 on error.
+int wg_extract_toplevel_json_string(const char *json, const char *key,
+    char **result);
+
+int wg_extract_toplevel_json_long_long(const char *json, const char *key,
+    long long *result);
+
+//------------------------------------------------------------------------------
+// Private implementation starts here.
+//------------------------------------------------------------------------------
+typedef struct {
+  const char *expected_key;
+  size_t expected_key_len;
+  int map_depth;
+  int array_depth;
+  _Bool consume_next;
+  char *result;
+} wg_parse_context_t;
+
+static int wg_handle_null(void *arg) {
+  wg_parse_context_t *ctx = (wg_parse_context_t*)arg;
+  ctx->consume_next = 0;
+  return 1;
+}
+
+static int wg_handle_bool(void *arg, int value) {
+  wg_parse_context_t *ctx = (wg_parse_context_t*)arg;
+  ctx->consume_next = 0;
+  return 1;
+}
+
+#if YAJL_MAJOR == 1
+typedef unsigned int wg_yajl_callback_size_t;
+#else
+typedef size_t wg_yajl_callback_size_t;
+#endif
+
+static int wg_handle_string(void *arg, const unsigned char *val,
+    wg_yajl_callback_size_t length) {
+  wg_parse_context_t *ctx = (wg_parse_context_t*)arg;
+  if (!ctx->consume_next) {
+    // This is not the string we're looking for.
+    return 1;
+  }
+  if (ctx->result != NULL) {
+    ERROR("write_gcm: Internal error: already consumed result?");
+    return 0;
+  }
+  ctx->result = smalloc(length + 1);
+  if (ctx->result == NULL) {
+    ERROR("write_gcm: wg_handle_string: smalloc failed.");
+    return 0;
+  }
+  memcpy(ctx->result, val, length);
+  ctx->result[length] = 0;
+  ctx->consume_next = 0;
+  return 1;
+}
+
+static int wg_handle_number(void *arg, const char *data,
+    wg_yajl_callback_size_t length) {
+  return wg_handle_string(arg, (const unsigned char*)data, length);
+}
+
+static int wg_handle_start_map(void *arg) {
+  wg_parse_context_t *ctx = (wg_parse_context_t*)arg;
+  ++ctx->map_depth;
+  ctx->consume_next = 0;
+  return 1;
+}
+
+static int wg_handle_end_map(void *arg) {
+  wg_parse_context_t *ctx = (wg_parse_context_t*)arg;
+  --ctx->map_depth;
+  ctx->consume_next = 0;
+  return 1;
+}
+
+static int wg_handle_map_key(void *arg, const unsigned char *data,
+    wg_yajl_callback_size_t length) {
+  wg_parse_context_t *ctx = (wg_parse_context_t*)arg;
+  if (ctx->map_depth == 1 &&
+      ctx->array_depth == 0 &&
+      length == ctx->expected_key_len &&
+      strncmp(ctx->expected_key, (const char*)data, length) == 0) {
+    ctx->consume_next = 1;
+  } else {
+    ctx->consume_next = 0;
+  }
+  return 1;
+}
+
+static int wg_handle_start_array(void *arg) {
+  wg_parse_context_t *ctx = (wg_parse_context_t*)arg;
+  ++ctx->array_depth;
+  ctx->consume_next = 0;
+  return 1;
+}
+
+static int wg_handle_end_array(void *arg) {
+  wg_parse_context_t *ctx = (wg_parse_context_t*)arg;
+  --ctx->array_depth;
+  ctx->consume_next = 0;
+  return 1;
+}
+
+char *wg_extract_toplevel_value(const char *json, const char *key) {
+  char *result = NULL;  // Pessimistically assume error.
+  yajl_callbacks callbacks = {
+      .yajl_null = &wg_handle_null,
+      .yajl_boolean = &wg_handle_bool,
+      .yajl_number = &wg_handle_number,
+      .yajl_string = &wg_handle_string,
+      .yajl_start_map = &wg_handle_start_map,
+      .yajl_map_key = &wg_handle_map_key,
+      .yajl_end_map = &wg_handle_end_map,
+      .yajl_start_array = &wg_handle_start_array,
+      .yajl_end_array = &wg_handle_end_array
+  };
+
+  wg_parse_context_t context = {
+      .expected_key = key,
+      .expected_key_len = strlen(key)
+  };
+#if YAJL_MAJOR == 1
+  yajl_parser_config config = { 0, 1 };
+  yajl_handle handle = yajl_alloc(&callbacks, &config, NULL, &context);
+#else
+  yajl_handle handle = yajl_alloc(&callbacks, NULL, &context);
+#endif
+  if (yajl_parse(handle, (const unsigned char*)json, strlen(json))
+      != yajl_status_ok) {
+    ERROR("write_gcm: wg_extract_toplevel_value: error parsing JSON");
+    goto leave;
+  }
+  int parse_result;
+#if YAJL_MAJOR == 1
+  parse_result = yajl_parse_complete(handle);
+#else
+  parse_result = yajl_complete_parse(handle);
+#endif
+  if (parse_result != yajl_status_ok) {
+    ERROR("write_gcm: wg_extract_toplevel_value: error parsing JSON");
+    goto leave;
+  }
+  if (context.result == NULL) {
+    ERROR("write_gcm: wg_extract_toplevel_value failed: key was %s", key);
+    goto leave;
+  }
+
+  result = context.result;
+  context.result = NULL;
+
+ leave:
+  sfree(context.result);
+  yajl_free(handle);
+  return result;
+}
+
+int wg_extract_toplevel_json_string(const char *json, const char *key,
+    char **result) {
+  char *s = wg_extract_toplevel_value(json, key);
+  if (s == NULL) {
+    ERROR("write_gcm: wg_extract_toplevel_value failed.");
+    return -1;
+  }
+  *result = s;
+  return 0;
+}
+
+int wg_extract_toplevel_json_long_long(const char *json, const char *key,
+    long long *result) {
+  char *s = wg_extract_toplevel_value(json, key);
+  if (s == NULL) {
+    ERROR("write_gcm: wg_extract_toplevel_value failed.");
+    return -1;
+  }
+  if (sscanf(s, "%lld", result) != 1) {
+    ERROR("write_gcm: Can't parse '%s' as long long", s);
+    sfree(s);
+    return -1;
+  }
+  sfree(s);
+  return 0;
+}
+
 //==============================================================================
 //==============================================================================
 //==============================================================================
@@ -507,7 +694,7 @@ static void wg_oauth2_base64url_encode(char **buffer, size_t *buffer_size,
                                        size_t source_size);
 
 static int wg_oauth2_parse_result(char **result_buffer, size_t *result_size,
-                                  int *expires_in, const char *json);
+                                  time_t *expires_in, const char *json);
 
 static int wg_oauth2_talk_to_server_and_store_result(oauth2_ctx_t *ctx,
     const char *url, const char *body, const char **headers, int num_headers,
@@ -528,6 +715,10 @@ static int wg_oauth2_get_auth_header(char *result, size_t result_size,
 
 static int wg_oauth2_get_auth_header_nolock(oauth2_ctx_t *ctx,
     const credential_ctx_t *cred_ctx) {
+  // The URL to get the auth token from the metadata server.
+  static const char gcp_metadata_fetch_auth_token[] =
+    "http://169.254.169.254/computeMetadata/v1beta1/instance/service-accounts/default/token";
+
   cdtime_t now = cdtime();
   // Try to reuse an existing token. We build in a minute of slack in order to
   // avoid timing problems (clock skew, races, etc).
@@ -542,10 +733,12 @@ static int wg_oauth2_get_auth_header_nolock(oauth2_ctx_t *ctx,
   // If there are no user-supplied credentials, try to get the token from the
   // metadata server. This is THE EASY ROUTE as described in the documentation
   // for this method.
+  const char *headers[] = { gcp_metadata_header };
   if (cred_ctx == NULL) {
     INFO("write_gcm: Asking metadata server for auth token");
     return wg_oauth2_talk_to_server_and_store_result(ctx,
-        metadata_fetch_auth_token, NULL, NULL, 0, now);
+        gcp_metadata_fetch_auth_token, NULL,
+        headers, STATIC_ARRAY_SIZE(headers), now);
   }
 
   // If there are user-supplied credentials, format and sign a request to the
@@ -645,7 +838,7 @@ static int wg_oauth2_talk_to_server_and_store_result(oauth2_ctx_t *ctx,
   char *resultp = ctx->auth_header;
   size_t result_size = sizeof(ctx->auth_header);
   bufprintf(&resultp, &result_size, "Authorization: Bearer ");
-  int expires_in;
+  time_t expires_in;
   if (wg_oauth2_parse_result(&resultp, &result_size, &expires_in,
                              response) != 0) {
     ERROR("write_gcm: wg_oauth2_parse_result failed");
@@ -723,28 +916,23 @@ static void wg_oauth2_base64url_encode(char **buffer, size_t *buffer_size,
 }
 
 static int wg_oauth2_parse_result(char **result_buffer, size_t *result_size,
-                                  int *expires_in, const char *json) {
-  char errbuf[1024];
-  yajl_val root = yajl_tree_parse(json, errbuf, sizeof(errbuf));
-  if (root == NULL) {
-    ERROR("write_gcm: wg_parse_oauth2_result: parse error %s", errbuf);
+                                  time_t *expires_in, const char *json) {
+  long long temp;
+  if (wg_extract_toplevel_json_long_long(json, "expires_in", &temp) != 0) {
+    ERROR("write_gcm: Can't find expires_in in result.");
     return -1;
   }
 
-  const char *token_path[] = {"access_token", NULL};
-  const char *expire_path[] = {"expires_in", NULL};
-  yajl_val token_val = yajl_tree_get(root, token_path, yajl_t_string);
-  yajl_val expire_val = yajl_tree_get(root, expire_path, yajl_t_number);
-  if (token_val == NULL || expire_val == NULL) {
-    ERROR("write_gcm: wg_parse_oauth2_result: missing one or both of "
-        "'access_token' or 'expires_in' fields in response from server.");
-    yajl_tree_free(root);
+  char *access_token;
+  if (wg_extract_toplevel_json_string(json, "access_token", &access_token)
+      != 0) {
+    ERROR("write_gcm: Can't find access_token in result.");
     return -1;
   }
 
-  bufprintf(result_buffer, result_size, "%s", YAJL_GET_STRING(token_val));
-  *expires_in = YAJL_GET_INTEGER(expire_val);
-  yajl_tree_free(root);
+  *expires_in = (time_t)temp;
+  bufprintf(result_buffer, result_size, "%s", access_token);
+  sfree(access_token);
   return 0;
 }
 
@@ -1161,40 +1349,90 @@ static monitored_resource_t *wg_monitored_resource_create(
     const wg_configbuilder_t *cb);
 static void wg_monitored_resource_destroy(monitored_resource_t *resource);
 
-static int wg_monitored_resource_populate_for_gcp(
-    monitored_resource_t *resource, const wg_configbuilder_t *cb);
-static int wg_monitored_resource_populate_for_aws(
-    monitored_resource_t *resource, const wg_configbuilder_t *cb);
-static char *wg_configbuilder_get_from_gcp_metadata_server(
-    const char *resource);
-
 //------------------------------------------------------------------------------
 // Private implementation starts here.
 //------------------------------------------------------------------------------
+static monitored_resource_t *wg_monitored_resource_create_for_gcp(
+    const wg_configbuilder_t *cb);
+static monitored_resource_t *wg_monitored_resource_create_for_aws(
+    const wg_configbuilder_t *cb);
+
+// Fetch 'resource' from the GCP metadata server.
+static char *wg_get_from_gcp_metadata_server(const char *resource);
+
+// Fetch 'resource' from the AWS metadata server.
+static char *wg_get_from_aws_metadata_server(const char *resource);
+
+// Fetches a resource (defined by the concatenation of 'base' and 'resource')
+// from an AWS or GCE metadata server and returns it. Returns NULL upon error.
+static char *wg_get_from_metadata_server(const char *base, const char *resource,
+    const char **headers, int num_headers);
+
 static monitored_resource_t *wg_monitored_resource_create(
     const wg_configbuilder_t *cb) {
-  monitored_resource_t *resource = calloc(1, sizeof(*resource));
-  if (resource == NULL) {
-    ERROR("write_gcm: wg_monitored_resource_create: calloc failed.");
-    return NULL;
-  }
   const char *cloud_provider_to_use = cb->cloud_provider != NULL ?
       cb->cloud_provider : "gcp";
-  int result;
-  if (strcmp(cloud_provider_to_use, "gcp") == 0) {
-    result = wg_monitored_resource_populate_for_gcp(resource, cb);
-  } else if (strcmp(cloud_provider_to_use, "aws") == 0) {
-    result = wg_monitored_resource_populate_for_aws(resource, cb);
-  } else {
-    WARNING("Cloud provider '%s' not recognized.", cloud_provider_to_use);
-    result = 0;
+  if (strcasecmp(cloud_provider_to_use, "gcp") == 0) {
+    return wg_monitored_resource_create_for_gcp(cb);
   }
-  if (result != 0) {
-    ERROR("write_gcm: failed to populate cloud provider-specific information");
-    wg_monitored_resource_destroy(resource);
+  if (strcasecmp(cloud_provider_to_use, "aws") == 0) {
+    return wg_monitored_resource_create_for_aws(cb);
+  }
+  ERROR("Cloud provider '%s' not recognized.", cloud_provider_to_use);
+  return NULL;
+}
+
+static monitored_resource_t *monitored_resource_create_from_fields(
+    const char *type, const char *project_id, ...) {
+  monitored_resource_t *result = calloc(1, sizeof(*result));
+  if (result == NULL) {
+    ERROR("write_gcm: monitored_resource_create_from_fields: calloc failed.");
     return NULL;
   }
-  return resource;
+  result->type = sstrdup(type);
+  result->project_id = sstrdup(project_id);
+  // count keys/values
+  va_list ap;
+  va_start(ap, project_id);
+  int num_labels = 0;
+  while (1) {
+    const char *nextKey = va_arg(ap, const char*);
+    if (nextKey == NULL) {
+      break;
+    }
+    const char *nextValue = va_arg(ap, const char*);
+    (void)nextValue;  // unused
+    ++num_labels;
+  }
+  va_end(ap);
+
+  result->num_labels = num_labels;
+  result->keys = calloc(num_labels, sizeof(result->keys[0]));
+  result->values = calloc(num_labels, sizeof(result->values[0]));
+  if (result->keys == NULL || result->values == NULL) {
+    ERROR("write_gcm: monitored_resource_create_from_fields: calloc failed.");
+    goto error;
+  }
+
+  va_start(ap, project_id);
+  int i;
+  for (i = 0; i < num_labels; ++i) {
+    const char *nextKey = va_arg(ap, const char*);
+    const char *nextValue = va_arg(ap, const char*);
+    result->keys[i] = sstrdup(nextKey);
+    result->values[i] = sstrdup(nextValue);
+    if (result->keys[i] == NULL || result->values[i] == NULL) {
+      ERROR("write_gcm: monitored_resource_create_from_fields: calloc failed.");
+      va_end(ap);
+      goto error;
+    }
+  }
+  va_end(ap);
+  return result;
+
+ error:
+  wg_monitored_resource_destroy(result);
+  return NULL;
 }
 
 static void wg_monitored_resource_destroy(monitored_resource_t *resource) {
@@ -1202,19 +1440,27 @@ static void wg_monitored_resource_destroy(monitored_resource_t *resource) {
     return;
   }
   int i;
-  for (i = 0; i < resource->num_labels; ++i) {
-    sfree(resource->values[i]);
-    sfree(resource->keys[i]);
+  if (resource->values != NULL) {
+    for (i = 0; i < resource->num_labels; ++i) {
+      sfree(resource->values[i]);
+    }
+    sfree(resource->values);
   }
-  sfree(resource->values);
-  sfree(resource->keys);
+  if (resource->keys != NULL) {
+    for (i = 0; i < resource->num_labels; ++i) {
+      sfree(resource->keys[i]);
+    }
+    sfree(resource->keys);
+  }
   sfree(resource->project_id);
   sfree(resource->type);
   sfree(resource);
 }
 
-static int wg_monitored_resource_populate_for_gcp(
-    monitored_resource_t *resource, const wg_configbuilder_t *cb) {
+static monitored_resource_t *wg_monitored_resource_create_for_gcp(
+    const wg_configbuilder_t *cb) {
+  // Items to clean up upon leaving.
+  monitored_resource_t *result = NULL;
   char *project_id_to_use = sstrdup(cb->project_id);
   char *instance_id_to_use = sstrdup(cb->instance_id);
   char *zone_to_use = sstrdup(cb->zone);
@@ -1223,34 +1469,32 @@ static int wg_monitored_resource_populate_for_gcp(
   // metadata server.
   if (project_id_to_use == NULL) {
     // This gets the string id of the project (not the numeric id).
-    project_id_to_use =
-        wg_configbuilder_get_from_gcp_metadata_server("project/project-id");
+    project_id_to_use = wg_get_from_gcp_metadata_server("project/project-id");
     if (project_id_to_use == NULL) {
       ERROR("write_gcm: Can't get project ID from GCP metadata server "
-          " (and not specified in the config file).");
-      goto error;
+          " (and 'Project' not specified in the config file).");
+      goto leave;
     }
   }
 
   if (instance_id_to_use == NULL) {
     // This gets the numeric instance id.
-    instance_id_to_use =
-        wg_configbuilder_get_from_gcp_metadata_server("instance/id");
+    instance_id_to_use = wg_get_from_gcp_metadata_server("instance/id");
     if (instance_id_to_use == NULL) {
       ERROR("write_gcm: Can't get instance ID from GCP metadata server "
-          " (and not specified in the config file).");
-      goto error;
+          " (and 'Instance' not specified in the config file).");
+      goto leave;
     }
   }
 
   if (zone_to_use == NULL) {
     // This gets the zone.
     char *verbose_zone =
-        wg_configbuilder_get_from_gcp_metadata_server("instance/zone");
+        wg_get_from_gcp_metadata_server("instance/zone");
     if (verbose_zone == NULL) {
       ERROR("write_gcm: Can't get zone ID from GCP metadata server "
-          " (and not specified in the config file).");
-      goto error;
+          " (and 'Zone' not specified in the config file).");
+      goto leave;
     }
     // The zone comes back as projects/${numeric-id}/zones/${zone}
     // where ${zone} is e.g. us-central1-a
@@ -1259,54 +1503,130 @@ static int wg_monitored_resource_populate_for_gcp(
     if (last_slash == NULL) {
       ERROR("write_gcm: Failed to parse zone.");
       sfree(verbose_zone);
-      goto error;
+      goto leave;
     }
 
     zone_to_use = sstrdup(last_slash + 1);
+    sfree(verbose_zone);
     if (zone_to_use == NULL) {
       ERROR("write_gcm: wg_monitored_resource_populate_for_gcp: "
           "sstrdup failed.");
-      goto error;
+      goto leave;
     }
   }
-  resource->type = sstrdup("gce_instance");
-  resource->project_id = project_id_to_use;
-  resource->num_labels = 2;
-  resource->keys = calloc(2, sizeof(resource->keys[0]));
-  resource->values = calloc(2, sizeof(resource->keys[0]));
-  resource->keys[0] = sstrdup("instance_id");
-  resource->keys[1] = sstrdup("zone");
-  resource->values[0] = instance_id_to_use;
-  resource->values[1] = zone_to_use;
-  return 0;
 
- error:
+  result = monitored_resource_create_from_fields(
+      "gce_instance",
+      project_id_to_use,
+      /* keys/values */
+      "instance_id", instance_id_to_use,
+      "zone", zone_to_use,
+      NULL);
+
+ leave:
   sfree(zone_to_use);
   sfree(instance_id_to_use);
   sfree(project_id_to_use);
-  return -1;
+  return result;
 }
 
-static int wg_monitored_resource_populate_for_aws(
-    monitored_resource_t *resource, const wg_configbuilder_t *cb) {
-  ERROR("write_gcm: wg_monitored_resource_populate_for_aws: not implemented.");
-  return -1;
+static monitored_resource_t *wg_monitored_resource_create_for_aws(
+    const wg_configbuilder_t *cb) {
+  // Items to clean up upon leaving.
+  monitored_resource_t *result = NULL;
+  char *project_id_to_use = sstrdup(cb->project_id);
+  char *region_to_use = sstrdup(cb->region);
+  char *instance_id_to_use = sstrdup(cb->instance_id);
+  char *account_id_to_use = sstrdup(cb->account_id);
+  char *iid_document = NULL;
+
+  // GCP project id must be specified in the config file.
+  if (project_id_to_use == NULL) {
+    ERROR("write_gcm: Project was not specified in the config file.");
+    goto leave;
+  }
+
+  // If any of these are unspecified, we will have to talk to the AWS identity
+  // server.
+  if (region_to_use == NULL || instance_id_to_use == NULL ||
+      account_id_to_use == NULL) {
+    iid_document = wg_get_from_aws_metadata_server(
+        "dynamic/instance-identity/document");
+    if (iid_document == NULL) {
+      ERROR("write_gcm: Can't get dynamic data from metadata server");
+      goto leave;
+    }
+  }
+
+  if (region_to_use == NULL) {
+    if (wg_extract_toplevel_json_string(iid_document, "region",
+        &region_to_use) != 0) {
+      ERROR("write_gcm: Can't get region from GCP metadata server "
+          " (and 'Region' not specified in the config file).");
+      goto leave;
+    }
+  }
+
+  if (instance_id_to_use == NULL) {
+    if (wg_extract_toplevel_json_string(iid_document, "instanceId",
+        &instance_id_to_use) != 0) {
+      ERROR("write_gcm: Can't get instance ID from AWS metadata server "
+          " (and 'Instance' not specified in the config file).");
+      goto leave;
+    }
+  }
+
+  if (account_id_to_use == NULL) {
+    if (wg_extract_toplevel_json_string(iid_document, "accountId",
+        &account_id_to_use) != 0) {
+      ERROR("write_gcm: Can't get account ID from AWS metadata server "
+          " (and 'Account' not specified in the config file).");
+      goto leave;
+    }
+  }
+
+  result = monitored_resource_create_from_fields(
+      "aws_instance",
+      project_id_to_use,
+      /* keys/values */
+      "region", region_to_use,
+      "instance_id", instance_id_to_use,
+      "account_id", account_id_to_use,
+      NULL);
+
+ leave:
+  sfree(iid_document);
+  sfree(account_id_to_use);
+  sfree(instance_id_to_use);
+  sfree(region_to_use);
+  sfree(project_id_to_use);
+  return result;
 }
 
-static char *wg_configbuilder_get_from_gcp_metadata_server(
-    const char *resource) {
+static char *wg_get_from_gcp_metadata_server(const char *resource) {
+  const char *headers[] = { gcp_metadata_header };
+  return wg_get_from_metadata_server(
+      "http://169.254.169.254/computeMetadata/v1beta1/", resource,
+      headers, STATIC_ARRAY_SIZE(headers));
+}
+
+static char *wg_get_from_aws_metadata_server(const char *resource) {
+  return wg_get_from_metadata_server(
+      "http://169.254.169.254/latest/", resource, NULL, 0);
+}
+
+static char *wg_get_from_metadata_server(const char *base, const char *resource,
+    const char **headers, int num_headers) {
   char url[256];
-  int result = snprintf(url, sizeof(url), "%s%s", gcp_metadata_server,
-      resource);
+  int result = snprintf(url, sizeof(url), "%s%s", base, resource);
   if (result < 0 || result >= sizeof(url)) {
     ERROR("write_gcm: buffer overflowed while building url");
     return NULL;
   }
 
   char buffer[2048];
-  const char *headers[] = { google_metadata_header };
-  if (wg_curl_get_or_post(buffer, sizeof(buffer), url, NULL,
-      headers, STATIC_ARRAY_SIZE(headers)) != 0) {
+  if (wg_curl_get_or_post(buffer, sizeof(buffer), url, NULL, headers,
+      num_headers) != 0) {
     ERROR("write_gcm: wg_configbuilder_get_from_gcp_metadata_server failed "
         "while fetching %s", url);
     return NULL;
@@ -1378,6 +1698,7 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
       ctx->resource->project_id);
   if (result < 0 || result >= sizeof(url)) {
     ERROR("write_gcm: overflowed url buffer");
+    wg_context_destroy(ctx);
     return NULL;
   }
   ctx->agent_translation_service_url = sstrdup(url);
@@ -1834,7 +2155,8 @@ static int wg_get_vl_value(int ds_type, value_t value,
   return 0;
 }
 
-static void wg_yajl_dump(void *ctx, const char *str, size_t len) {
+static void wg_yajl_dump(void *ctx, const char *str,
+    wg_yajl_callback_size_t len) {
   json_ctx_t *jc = (json_ctx_t*)ctx;
   if (*jc->size == 0) {
     return;
@@ -1845,8 +2167,8 @@ static void wg_yajl_dump(void *ctx, const char *str, size_t len) {
   memcpy(*jc->buffer, str, len);
   *jc->buffer += len;
   *jc->size -= len;
-  // Terminate with NUL here because it's convenient (we don't actually need a
-  // terminating NUL until we're done building the whole buffer).
+  // Terminate with NUL here because it's convenient (although we don't actually
+  // need a terminating NUL until we're done building the whole buffer).
   (*jc->buffer)[0] = 0;
 }
 
@@ -1860,10 +2182,15 @@ static json_ctx_t *wg_json_ctx_create(char **buffer, size_t *size,
   jc->buffer = buffer;
   jc->size = size;
   jc->error = 0;
+#if YAJL_MAJOR == 1
+  yajl_gen_config config = { pretty, "  " };
+  jc->gen = yajl_gen_alloc2(&wg_yajl_dump, &config, NULL, jc);
+#else
   jc->gen = yajl_gen_alloc(NULL);
   yajl_gen_config(jc->gen, yajl_gen_beautify, pretty);
   yajl_gen_config(jc->gen, yajl_gen_validate_utf8, 1);
   yajl_gen_config(jc->gen, yajl_gen_print_callback, wg_yajl_dump, jc);
+#endif
   return jc;
 }
 
