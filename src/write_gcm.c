@@ -312,15 +312,20 @@ static int wg_curl_get_or_post(char *response_buffer,
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, &write_ctx);
   // http://stackoverflow.com/questions/9191668/error-longjmp-causes-uninitialized-stack-frame
   curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+  curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);  // 15 seconds.
 
   int result = -1;  // Pessimistically assume error.
 
+  time_t start_time = cdtime();
   int curl_result = curl_easy_perform(curl);
   if (curl_result != CURLE_OK) {
     WARNING("write_gcm: curl_easy_perform() failed: %s",
             curl_easy_strerror(curl_result));
     goto leave;
   }
+  time_t elapsed_time = cdtime() - start_time;
+  INFO("write_gcm: Elapsed time for curl operation was %g seconds.",
+      CDTIME_T_TO_DOUBLE(elapsed_time));
 
   write_ctx.data[0] = 0;
   if (write_ctx.size < 2) {
@@ -2654,6 +2659,7 @@ int wait_next_queue_event(wg_queue_t *queue, cdtime_t last_flush_time,
         queue->request_terminate ||
         queue->size > QUEUE_FLUSH_SIZE ||
         now > next_flush_time) {
+      size_t current_size = queue->size;
       *payloads = queue->head;
       *want_terminate = queue->request_terminate;
       queue->head = NULL;
@@ -2662,6 +2668,7 @@ int wait_next_queue_event(wg_queue_t *queue, cdtime_t last_flush_time,
       queue->request_flush = 0;
       queue->request_terminate = 0;
       pthread_mutex_unlock(&queue->mutex);
+      INFO("write_gcm: Processing queue of size %zd", current_size);
       return 0;
     }
   }
@@ -2714,8 +2721,16 @@ static int wg_write(const data_set_t *ds, const value_list_t *vl,
     queue->tail = payload;
   }
   ++queue->size;
+  size_t queue_size = queue->size;
   pthread_cond_signal(&queue->cond);
   pthread_mutex_unlock(&queue->mutex);
+
+  static cdtime_t next_message_time;
+  cdtime_t now = cdtime();
+  if (now >= next_message_time) {
+    INFO("write_gcm: current queue size is %zd", queue_size);
+    next_message_time = now + TIME_T_TO_CDTIME_T(10);  // Report every 10 sec.
+  }
 
   return 0;
 }
