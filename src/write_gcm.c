@@ -1567,11 +1567,15 @@ static monitored_resource_t *wg_monitored_resource_create_for_aws(
   }
 
   if (region_to_use == NULL) {
+    char * aws_region;
     if (wg_extract_toplevel_json_string(iid_document, "region",
-        &region_to_use) != 0) {
+        &aws_region) != 0) {
       ERROR("write_gcm: Can't get region from GCP metadata server "
           " (and 'Region' not specified in the config file).");
       goto leave;
+    } else {
+      region_to_use = malloc(strlen(aws_region) + 5);
+      snprintf(region_to_use, strlen(aws_region) + 5, "aws:%s", aws_region);
     }
   }
 
@@ -1594,12 +1598,12 @@ static monitored_resource_t *wg_monitored_resource_create_for_aws(
   }
 
   result = monitored_resource_create_from_fields(
-      "aws_instance",
+      "aws_ec2_instance",
       project_id_to_use,
       /* keys/values */
       "region", region_to_use,
       "instance_id", instance_id_to_use,
-      "account_id", account_id_to_use,
+      "aws_account", account_id_to_use,
       NULL);
 
  leave:
