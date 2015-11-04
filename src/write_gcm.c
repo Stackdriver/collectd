@@ -2696,9 +2696,12 @@ static int wg_write(const data_set_t *ds, const value_list_t *vl,
   pthread_mutex_lock(&queue->mutex);
   // Backpressure. If queue is backed up then something has gone horribly wrong.
   // Maybe the queue processor died.
-  if (queue->size > QUEUE_DROP_SIZE) {
-    INFO("write_gcm: Dropping data point because queue has size %zd",
-        queue->size);
+  if (queue->size >= QUEUE_DROP_SIZE) {
+    INFO("write_gcm: Clearing queue because it has size %zd", queue->size);
+    wg_payload_destroy(queue->head);
+    queue->head = NULL;
+    queue->tail = NULL;
+    queue->size = 0;
     wg_payload_destroy(payload);
     pthread_mutex_unlock(&queue->mutex);
     return 0;
