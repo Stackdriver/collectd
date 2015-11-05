@@ -281,7 +281,7 @@ static int wg_curl_get_or_post(char *response_buffer,
     const char **headers, int num_headers) {
   const char *get_or_post_tag = body == NULL ? "GET" : "POST";
   INFO("write_gcm: Doing %s request: url %s, body %s, num_headers %d",
-        get_or_post_tag, url, body, num_headers);
+      get_or_post_tag, url, body, num_headers);
   CURL *curl = curl_easy_init();
   if (curl == NULL) {
     ERROR("write_gcm: curl_easy_init failed");
@@ -1105,6 +1105,9 @@ static deriv_tracker_key_t *wg_deriv_tracker_key_create(const char *host,
 }
 
 static void wg_deriv_tracker_key_destroy(deriv_tracker_key_t *key) {
+  if (key == NULL) {
+    return;
+  }
   sfree(key);
 }
 
@@ -2250,9 +2253,11 @@ static int wg_transmit_unique_segment(const wg_context_t *ctx,
     const wg_payload_t *list);
 
 // Finds the longest prefix of the list where all the keys are unique.
-// Points '*tail' at the last element of that list. If 'list' is null, *tail
-// will be null. Returns 0 on successs, <0 on error.
-int wg_find_unique_segment(wg_payload_t *list, wg_payload_t **tail);
+// Points '*tail' at the last element of that list. Stores the size of the
+// prefix in *size (useful for debugging). If 'list' is null, *tail will be
+// null. Returns 0 on successs, <0 on error.
+int wg_find_unique_segment(wg_payload_t *list, wg_payload_t **tail,
+    size_t *size);
 
 // Converts the data in the list into a CreateCollectdTimeseriesPointsRequest
 // message (formatted in JSON format). If successful, sets *json to point to
@@ -2325,6 +2330,8 @@ static int wg_rebase_cumulative_values(c_avl_tree_t *deriv_tree,
   wg_payload_t *new_tail = NULL;
   wg_payload_t *item = *list;
   int some_error_occurred = 0;
+  size_t old_size = 0;
+  size_t new_size = 0;
   while (item != NULL) {
     wg_payload_t *next = item->next;
     item->next = NULL;  // Detach from the list.
@@ -2346,12 +2353,17 @@ static int wg_rebase_cumulative_values(c_avl_tree_t *deriv_tree,
         new_tail->next = item;
         new_tail = item;
       }
+      ++new_size;
     } else {
       wg_payload_destroy(item);
     }
     item = next;
+    ++old_size;
   }
   *list = new_head;
+  size_t tree_size = c_avl_size(deriv_tree);
+  INFO("write_gcm: wg_rebase_cumulative_values: old_size %zd, new_size %zd, "
+      "tree_size %zd.", old_size, new_size, tree_size);
   return some_error_occurred ? -1 : 0;
 }
 
@@ -2433,10 +2445,12 @@ static int wg_rebase_item(c_avl_tree_t *deriv_tree, wg_payload_t *payload,
 int wg_transmit_unique_segments(const wg_context_t *ctx, wg_payload_t *list) {
   while (list != NULL) {
     wg_payload_t *tail;
-    if (wg_find_unique_segment(list, &tail) != 0) {
+    size_t size;
+    if (wg_find_unique_segment(list, &tail, &size) != 0) {
       ERROR("write_gcm: wg_find_unique_segment failed");
       return -1;
     }
+    INFO("write_gcm: next unique segment has size %zd", size);
     // Temporarily detach the unique segment from the rest of the list.
     wg_payload_t *save = tail->next;
     tail->next = NULL;
@@ -2519,7 +2533,7 @@ static int wg_format_some_of_list(
     const monitored_resource_t *monitored_resource, const wg_payload_t *list,
     const wg_payload_t **new_list, char **json, _Bool pretty) {
   char *result = wg_json_CreateCollectdTimeseriesPointsRequest(pretty,
-      monitored_resource,list, new_list);
+      monitored_resource, list, new_list);
   if (result == NULL) {
     ERROR("write_gcm: wg_json_CreateCollectdTimeseriesPointsRequest"
         " failed.");
@@ -2534,7 +2548,8 @@ static int wg_format_some_of_list(
   return 0;
 }
 
-int wg_find_unique_segment(wg_payload_t *list, wg_payload_t **tail) {
+int wg_find_unique_segment(wg_payload_t *list, wg_payload_t **tail,
+    size_t *size) {
   // Items to clean up.
   c_avl_tree_t *been_here_tree = NULL;
   wg_payload_t *prev = NULL;
@@ -2546,6 +2561,7 @@ int wg_find_unique_segment(wg_payload_t *list, wg_payload_t **tail) {
     goto leave;
   }
 
+  *size = 0;
   while (list != NULL) {
     deriv_tracker_key_t *been_here_key = wg_deriv_tracker_key_create(
         list->host, list->plugin, list->plugin_instance, list->type,
@@ -2570,6 +2586,7 @@ int wg_find_unique_segment(wg_payload_t *list, wg_payload_t **tail) {
 
     prev = list;
     list = list->next;
+    ++*size;
   }
 
   result = 0;
@@ -2601,8 +2618,7 @@ static int wg_lookup_or_create_tracker_value(c_avl_tree_t *tree,
     return 0;
   }
 
-  // Couldn't find a tracker value. Need to make both a heap-allocated key and
-  // a tracker_value.
+  // Couldn't find a tracker value. Need to create one.
   value = wg_deriv_tracker_value_create(payload->num_values);
   if (value == NULL) {
     ERROR("write_gcm: deriv_tracker_value_create failed.");
@@ -2631,7 +2647,7 @@ int wait_next_queue_event(wg_queue_t *queue, cdtime_t last_flush_time,
     cdtime_t now = cdtime();
     if (queue->request_flush ||
         queue->request_terminate ||
-        queue->size > QUEUE_FLUSH_SIZE ||
+        queue->size >= QUEUE_FLUSH_SIZE ||
         now > next_flush_time) {
       size_t current_size = queue->size;
       *payloads = queue->head;
@@ -2679,13 +2695,17 @@ static int wg_write(const data_set_t *ds, const value_list_t *vl,
   // Append to the queue.
   pthread_mutex_lock(&queue->mutex);
   // Backpressure. If queue is backed up then something has gone horribly wrong.
-  // Maybe the queue processor died.
-  if (queue->size > QUEUE_DROP_SIZE) {
-    INFO("write_gcm: Dropping data point because queue has size %zd",
-        queue->size);
-    wg_payload_destroy(payload);
-    pthread_mutex_unlock(&queue->mutex);
-    return 0;
+  // Maybe the queue processor died. If this happens we drop the item at the
+  // head of the queue.
+  if (queue->size >= QUEUE_DROP_SIZE) {
+    wg_payload_t *to_remove = queue->head;
+    queue->head = queue->head->next;
+    if (queue->head == NULL) {
+      queue->tail = NULL;
+    }
+    --queue->size;
+    to_remove->next = NULL;
+    wg_payload_destroy(to_remove);
   }
   if (queue->head == NULL) {
     queue->head = payload;
