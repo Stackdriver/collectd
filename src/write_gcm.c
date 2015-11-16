@@ -2003,17 +2003,25 @@ static void wg_json_CollectdPayloads(json_ctx_t *jc,
 
 // Array of CollectdValue:
 // message CollectdValue {
-//   optional CollectdValueType value = 1;
-//   optional CollectdDsType dataSourceType = 2;
-//   optional string dataSourceName = 3;
+//   string data_source_name = 1;
+//   enum DataSourceType {
+//     UNSPECIFIED_DATA_SOURCE_TYPE = 0;
+//     GAUGE = 1;
+//     COUNTER = 2;
+//     DERIVE = 3;
+//     ABSOLUTE = 4;
+//   }
+//   DataSourceType data_source_type = 2;
+//   google.monitoring.v3.TypedValue value = 3;
 // }
-// where
-// message CollectdValueType {
+// where google.monitoring.v3.TypedValue is
+// message TypedValue {
 //   oneof value {
-//     bytes unknown = 1;
+//     bool bool_value = 1;
 //     int64 int64_value = 2;
-//     uint64 uint64_value = 3;
-//     double double_value = 4;
+//     double double_value = 3;
+//     string string_value = 4 [enforce_utf8 = false];
+//     Distribution distribution_value = 5;
 //   }
 // }
 
@@ -2025,7 +2033,8 @@ static void wg_json_CollectdValues(json_ctx_t *jc,
     const wg_payload_value_t *value = &element->values[i];
     fleshed_out_value_t fov;
     if (wg_get_vl_value(value->ds_type, value->val, &fov) != 0) {
-      WARNING("write_gcm: wg_get_vl_value failed! Continuing.");
+      WARNING("write_gcm: wg_get_vl_value failed for %s/%s/%s! Continuing.",
+          element->plugin, element->type, value->name);
       continue;
     }
     wg_json_map_open(jc);
@@ -2143,9 +2152,11 @@ static void wg_json_uint64(json_ctx_t *jc, uint64_t value) {
 // storing the resultant string in fov->value_text. Additionally, stores the
 // type of the value as a (statically-allocated) string in fov->type, and the
 // value tag as a (statically-allocated) string in fov->value_tag. Appropriate
-// values for 'type_static' come from the 'CollectdDsType' enum in
-// the proto definition. Appropriate values for 'value_tag_static' come from
-// the 'oneof' field names in the 'CollectdValueType' proto.
+// values for 'type' come from the 'CollectdValue::DataSourceType' enum in
+// the proto definition. Appropriate values for 'value_tag' come from
+// the 'oneof' field names in the 'google.monitoring.v3.TypedValue' proto.
+// Because 'TypedValue' does not support uint64, we convert the values to
+// int64 and hope they don't wrap.
 static int wg_get_vl_value(int ds_type, value_t value,
     fleshed_out_value_t *fov) {
   int result;
@@ -2163,9 +2174,13 @@ static int wg_get_vl_value(int ds_type, value_t value,
       }
     case DS_TYPE_COUNTER:
       fov->type = "counter";
-      fov->value_tag = "uint64Value";
-      result = snprintf(fov->value_text, sizeof(fov->value_text), "%llu",
-          value.counter);
+      fov->value_tag = "int64Value";
+      if (value.counter > INT64_MAX) {
+        WARNING("write_gcm: Counter is too large for an int64.");
+        return -1;
+      }
+      result = snprintf(fov->value_text, sizeof(fov->value_text), "%" PRIi64,
+          (int64_t)value.counter);
       break;
     case DS_TYPE_DERIVE:
       fov->type = "derive";
@@ -2175,9 +2190,13 @@ static int wg_get_vl_value(int ds_type, value_t value,
       break;
     case DS_TYPE_ABSOLUTE:
       fov->type = "absolute";
-      fov->value_tag = "uint64Value";
-      result = snprintf(fov->value_text, sizeof(fov->value_text), "%" PRIu64,
-          value.absolute);
+      fov->value_tag = "int64Value";
+      if (value.absolute > INT64_MAX) {
+        WARNING("write_gcm: Absolute is too large for an int64.");
+        return -1;
+      }
+      result = snprintf(fov->value_text, sizeof(fov->value_text), "%" PRIi64,
+          (int64_t)value.absolute);
       break;
     default:
       ERROR("write_gcm: wg_get_vl_value: Unknown ds_type %i", ds_type);
