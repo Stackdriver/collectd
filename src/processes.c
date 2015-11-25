@@ -668,6 +668,47 @@ static void ps_submit_state (const char *state, double value)
 	plugin_dispatch_values (&vl);
 }
 
+// Note: this forward declaration is insufficient, as ps_get_cmdline has
+// different signatures for different OS'es.
+
+static char *ps_get_cmdline (pid_t pid, char *name, char *buf, size_t buf_len);
+
+static void kosak_superhack(procstat_t *ps) {
+  procstat_entry_t *entry;
+  for (entry = ps->instances; entry != NULL; entry = entry->next) {
+    value_t values[2];
+    value_list_t vl = VALUE_LIST_INIT;
+    vl.values = values;
+
+    sstrncpy (vl.host, hostname_g, sizeof (vl.host));
+    sstrncpy (vl.plugin, "tobysmith", sizeof (vl.plugin));
+    sstrncpy (vl.plugin_instance, ps->name, sizeof (vl.plugin_instance));
+
+    vl.meta = meta_data_create();
+    char commandline[CMDLINE_BUFFER_SIZE];
+    // TODO(kosak): this signature works on Linux only. Make it work on
+    // everything.
+    const char *cmd_line_to_use = ps_get_cmdline(entry->id, ps->name,
+        commandline, sizeof(commandline));
+    if (cmd_line_to_use != NULL) {
+      meta_data_add_string(vl.meta, "command_line", cmd_line_to_use);
+    }
+
+    sstrncpy (vl.type, "ps_vm", sizeof (vl.type));
+    vl.values[0].gauge = ps->vmem_size;
+    vl.values_len = 1;
+    plugin_dispatch_values (&vl);
+
+    sstrncpy (vl.type, "ps_cputime", sizeof (vl.type));
+    vl.values[0].derive = ps->cpu_user_counter;
+    vl.values[1].derive = ps->cpu_system_counter;
+    vl.values_len = 2;
+    plugin_dispatch_values (&vl);
+
+    meta_data_destroy(vl.meta);
+  }
+}
+
 /* submit info about specific process (e.g.: memory taken, cpu usage, etc..) */
 static void ps_submit_proc_list (procstat_t *ps)
 {
@@ -754,6 +795,8 @@ static void ps_submit_proc_list (procstat_t *ps)
 			ps->vmem_minflt_counter, ps->vmem_majflt_counter,
 			ps->cpu_user_counter, ps->cpu_system_counter,
 			ps->io_rchar, ps->io_wchar, ps->io_syscr, ps->io_syscw);
+
+	kosak_superhack(ps);
 } /* void ps_submit_proc_list */
 
 #if KERNEL_LINUX || KERNEL_SOLARIS
