@@ -972,6 +972,23 @@ static void wg_oauth2_ctx_destroy(oauth2_ctx_t *ctx) {
 //==============================================================================
 //==============================================================================
 
+// Holds data suitable for the google.monitoring.v3.TypedValue proto.
+// Field names are always (so far) compile-time string constants, so we
+// don't bother dynamically allocating them.
+typedef struct {
+  const char *field_name_static;
+  // BTW, most values that go here (int, double, etc) are kind of small. But for
+  // string metadata, the values can be of arbitrary size. So we need to
+  // dynamically allocate this particular string buffer.
+  char *value_text;
+} wg_typed_value_t;
+
+// A type suitable for representing the MetadataEntry proto.
+typedef struct wg_metadata_s {
+  char *key;
+  wg_typed_value_t value;
+} wg_metadata_entry_t;
+
 // The element type of the 'values' array of wg_payload_t, defined below.
 typedef struct {
   char name[DATA_MAX_NAME_LEN];
@@ -991,6 +1008,9 @@ typedef struct wg_payload_s {
   char type_instance[DATA_MAX_NAME_LEN];
   cdtime_t start_time;
   cdtime_t end_time;
+
+  int num_metadata_entries;
+  wg_metadata_entry_t *metadata_entries;
 
   int num_values;
   wg_payload_value_t values[1];  // Actually, variable-length.
@@ -1035,6 +1055,16 @@ static wg_payload_t *wg_payload_create(const data_set_t *ds,
     const value_list_t *vl);
 static void wg_payload_destroy(wg_payload_t *list);
 
+static int wg_typed_value_create_from_value_t_inline(int ds_type, value_t value,
+    const char **dataSourceType_static, wg_typed_value_t *tv);
+static int wg_typed_value_create_from_meta_data_inline(meta_data_t *md,
+    const char *key, wg_typed_value_t *result);
+static void wg_typed_value_destroy_inline(wg_typed_value_t *typed_value);
+
+static int wg_metadata_entry_create_inline(meta_data_t *md, char **key,
+    wg_metadata_entry_t *result);
+static void wg_metadata_entry_destroy_inline(wg_metadata_entry_t *entry);
+
 static deriv_tracker_key_t *wg_deriv_tracker_key_create(const char *host,
     const char *plugin, const char *plugin_instance, const char *type,
     const char *type_instance);
@@ -1045,48 +1075,238 @@ static void wg_deriv_tracker_value_destroy(deriv_tracker_value_t *value);
 
 static void wg_deriv_tree_destroy(c_avl_tree_t *tree);
 
+// The comparison function for deriv_tracker_key_t.
+static int wg_deriv_tracker_key_compare(const void *lhs, const void *rhs);
+
 //------------------------------------------------------------------------------
 // Private implementation starts here.
 //------------------------------------------------------------------------------
 
 static wg_payload_t *wg_payload_create(const data_set_t *ds,
     const value_list_t *vl) {
+  // Items to clean up upon exit.
+  wg_payload_t *build = NULL;
+  wg_payload_t *result = NULL;
+  char **toc = NULL;
+  int toc_count = 0;
+
   size_t size = sizeof(wg_payload_t) +
       (vl->values_len - 1) * sizeof(wg_payload_value_t);
-  wg_payload_t *res = calloc(1, size);
-  if (res == NULL) {
+  build = calloc(1, size);
+  if (build == NULL) {
     ERROR("write_gcm: wg_payload_create: calloc failed");
-    return NULL;
+    goto leave;
   }
-  res->next = NULL;
-  strncpy(res->host, vl->host, sizeof(res->host));
-  strncpy(res->plugin, vl->plugin, sizeof(res->plugin));
-  strncpy(res->plugin_instance, vl->plugin_instance,
-      sizeof(res->plugin_instance));
-  strncpy(res->type, vl->type, sizeof(res->type));
-  strncpy(res->type_instance, vl->type_instance, sizeof(res->type_instance));
-  res->start_time = vl->time;
-  res->end_time = vl->time;
-  res->num_values = vl->values_len;
+  build->next = NULL;
+  strncpy(build->host, vl->host, sizeof(build->host));
+  strncpy(build->plugin, vl->plugin, sizeof(build->plugin));
+  strncpy(build->plugin_instance, vl->plugin_instance,
+      sizeof(build->plugin_instance));
+  strncpy(build->type, vl->type, sizeof(build->type));
+  strncpy(build->type_instance, vl->type_instance,
+      sizeof(build->type_instance));
+  build->start_time = vl->time;
+  build->end_time = vl->time;
+
+  if (vl->meta != NULL) {
+    // Use the unfortunate O(N^2) interface to extract the metadata.
+    int count = meta_data_toc(vl->meta, &toc);
+    if (count < 0) {
+      ERROR("write_gcm: error reading metadata table of contents.");
+      goto leave;
+    }
+    toc_count = count;
+    build->num_metadata_entries = count;
+    build->metadata_entries = calloc(count, sizeof(build->metadata_entries[0]));
+    int i;
+    for (i = 0; i < count; ++i) {
+      if (wg_metadata_entry_create_inline(vl->meta, &toc[i],
+          &build->metadata_entries[i]) != 0) {
+        ERROR("write_gcm: wg_typed_value_create_from_meta_data_inline failed.");
+        goto leave;
+      }
+    }
+  }
+
+  build->num_values = vl->values_len;
 
   assert(ds->ds_num == vl->values_len);
   int i;
   for (i = 0; i < ds->ds_num; ++i) {
     data_source_t *src = &ds->ds[i];
-    wg_payload_value_t *dst = &res->values[i];
+    wg_payload_value_t *dst = &build->values[i];
     strncpy(dst->name, src->name, sizeof(dst->name));
     dst->ds_type = src->type;
     dst->val = vl->values[i];
   }
-  return res;
+
+  // Success!
+  result = build;
+  build = NULL;
+
+ leave:
+  if (toc != NULL) {
+    int i;
+    for (i = 0; i < toc_count; ++i) {
+      sfree(toc[i]);
+    }
+    sfree(toc);
+  }
+  wg_payload_destroy(build);
+  return result;
 }
 
 static void wg_payload_destroy(wg_payload_t *list) {
   while (list != NULL) {
     wg_payload_t *next = list->next;
+    int i;
+    for (i = 0; i < list->num_metadata_entries; ++i) {
+      wg_metadata_entry_destroy_inline(&list->metadata_entries[i]);
+    }
     sfree(list);
     list = next;
   }
+}
+
+// Based on 'ds_type', determine the appropriate value for the corresponding
+// CollectdValue.DataSourceType enum (stored here and transmitted in JSON as the
+// string 'dataSourceType_static') and also populate the wg_typed_value_t
+// structure (which itself corresponds to the proto
+// google.monitoring.v3.TypedValue). 'dataSourceType_static' is so named to help
+// us remember that it is a compile-time string constant which does not need to
+// be copied/deallocated.
+static int wg_typed_value_create_from_value_t_inline(int ds_type, value_t value,
+    const char **dataSourceType_static, wg_typed_value_t *tv) {
+  char buffer[128];
+  switch (ds_type) {
+    case DS_TYPE_GAUGE: {
+      if (!isfinite(value.gauge)) {
+        ERROR("write_gcm: can not take infinite value");
+        return -1;
+      }
+      *dataSourceType_static = "gauge";
+      tv->field_name_static = "doubleValue";
+      snprintf(buffer, sizeof(buffer), "%f", value.gauge);
+      break;
+    }
+    case DS_TYPE_COUNTER: {
+      if (value.counter > INT64_MAX) {
+        ERROR("write_gcm: Counter is too large for an int64.");
+        return -1;
+      }
+      *dataSourceType_static = "counter";
+      tv->field_name_static = "int64Value";
+      snprintf(buffer, sizeof(buffer), "%" PRIi64, (int64_t)value.counter);
+      break;
+    }
+    case DS_TYPE_DERIVE: {
+      *dataSourceType_static = "derive";
+      tv->field_name_static = "int64Value";
+      snprintf(buffer, sizeof(buffer), "%" PRIi64, value.derive);
+      break;
+    }
+    case DS_TYPE_ABSOLUTE: {
+      if (value.absolute > INT64_MAX) {
+        ERROR("write_gcm: Absolute is too large for an int64.");
+        return -1;
+      }
+      *dataSourceType_static = "absolute";
+      tv->field_name_static = "int64Value";
+      snprintf(buffer, sizeof(buffer), "%" PRIi64, (int64_t)value.absolute);
+      break;
+    }
+    default:
+      ERROR("write_gcm: wg_get_vl_value: Unknown ds_type %i", ds_type);
+      return -1;
+  }
+  tv->value_text = strdup(buffer);
+  return 0;
+}
+
+static int wg_typed_value_create_from_meta_data_inline(meta_data_t *md,
+    const char *key, wg_typed_value_t *result) {
+  int type = meta_data_type(md, key);
+  char buffer[128];
+  switch(type) {
+    case MD_TYPE_STRING: {
+      result->field_name_static = "stringValue";
+      return meta_data_get_string(md, key, &result->value_text);
+    }
+
+    case MD_TYPE_SIGNED_INT: {
+      result->field_name_static = "int64Value";
+      int64_t intValue;
+      if (meta_data_get_signed_int(md, key, &intValue) != 0) {
+        return -1;
+      }
+      snprintf(buffer, sizeof(buffer), "%" PRIi64, intValue);
+      result->value_text = strdup(buffer);
+      return 0;
+    }
+
+    case MD_TYPE_UNSIGNED_INT: {
+      // map unsigned to signed.
+      result->field_name_static = "int64Value";
+      uint64_t uintValue;
+      if (meta_data_get_unsigned_int(md, key, &uintValue) != 0) {
+        return -1;
+      }
+      if (uintValue > INT64_MAX) {
+        WARNING("write_gcm: metadata uint64 value larger than INT64_MAX.");
+        return -1;
+      }
+      snprintf(buffer, sizeof(buffer), "%" PRIi64, (int64_t)uintValue);
+      result->value_text = strdup(buffer);
+      return 0;
+    }
+
+    case MD_TYPE_DOUBLE: {
+      result->field_name_static = "doubleValue";
+      double doubleValue;
+      if (meta_data_get_double(md, key, &doubleValue) != 0) {
+        return -1;
+      }
+      snprintf(buffer, sizeof(buffer), "%f", doubleValue);
+      result->value_text = strdup(buffer);
+      return 0;
+    }
+
+    case MD_TYPE_BOOLEAN: {
+      result->field_name_static = "boolValue";
+      _Bool boolValue;
+      if (meta_data_get_boolean(md, key, &boolValue) != 0) {
+        return -1;
+      }
+      char *text = boolValue ? "true" : "false";
+      result->value_text = strdup(text);
+      return 0;
+    }
+
+    default: {
+      ERROR("write_gcm: Unrecognized meta_data type %d", type);
+      return -1;
+    }
+  }
+}
+
+static void wg_typed_value_destroy_inline(wg_typed_value_t *typed_value) {
+  sfree(typed_value->value_text);
+}
+
+static int wg_metadata_entry_create_inline(meta_data_t *md,
+    char **key, wg_metadata_entry_t *result) {
+  if (wg_typed_value_create_from_meta_data_inline(md, *key, &result->value)
+      != 0) {
+    return -1;
+  }
+  result->key = *key;  // Take ownership of string.
+  *key = NULL;
+  return 0;
+}
+
+static void wg_metadata_entry_destroy_inline(wg_metadata_entry_t *entry) {
+  sfree(entry->key);
+  wg_typed_value_destroy_inline(&entry->value);
 }
 
 static deriv_tracker_key_t *wg_deriv_tracker_key_create(const char *host,
@@ -1139,9 +1359,6 @@ static void wg_deriv_tracker_value_destroy(deriv_tracker_value_t *value) {
   sfree(value->baselines);
   sfree(value);
 }
-
-// The comparison function for deriv_tracker_key_t.
-static int wg_deriv_tracker_key_compare(const void *lhs, const void *rhs);
 
 static c_avl_tree_t *wg_been_here_tree_create() {
   return c_avl_create(&wg_deriv_tracker_key_compare);
@@ -1867,7 +2084,10 @@ static void wg_json_MonitoredResource(json_ctx_t *jc,
     const monitored_resource_t *resource);
 static void wg_json_CollectdPayloads(json_ctx_t *jc,
     const wg_payload_t *head, const wg_payload_t **new_head);
+static void wg_json_MetadataEntries(json_ctx_t *jc,
+    wg_metadata_entry_t *metadata_entries, int num_entries);
 static void wg_json_CollectdValues(json_ctx_t *jc, const wg_payload_t *element);
+static void wg_json_TypedValue(json_ctx_t *jc, const wg_typed_value_t *tv);
 static void wg_json_Timestamp(json_ctx_t *jc, cdtime_t time_stamp);
 
 static void wg_json_map_open(json_ctx_t *jc);
@@ -1879,15 +2099,6 @@ static void wg_json_uint64(json_ctx_t *jc, uint64_t value);
 
 static json_ctx_t *wg_json_ctx_create(_Bool pretty);
 static void wg_json_ctx_destroy(json_ctx_t *jc);
-
-typedef struct {
-  const char *type;
-  const char *value_tag;
-  char value_text[128];
-} fleshed_out_value_t;
-
-static int wg_get_vl_value(int ds_type, value_t value,
-    fleshed_out_value_t *fov);
 
 // From google/monitoring/v3/agent_service.proto
 // message CreateCollectdTimeSeriesRequest {
@@ -1970,7 +2181,7 @@ static void wg_json_MonitoredResource(json_ctx_t *jc,
 }
 
 
-// Array of CollectdPayload:
+// Array of CollectdPayload, where...
 // message CollectdPayload {
 //   repeated CollectdValue values = 1;
 //   google.protobuf.Timestamp start_time = 2;
@@ -1979,6 +2190,7 @@ static void wg_json_MonitoredResource(json_ctx_t *jc,
 //   string plugin_instance = 5;
 //   string type = 6;
 //   string type_instance = 7;
+//   map<string, google.monitoring.v3.TypedValue> metadata = 8;
 // }
 static void wg_json_CollectdPayloads(json_ctx_t *jc,
     const wg_payload_t *head, const wg_payload_t **new_head) {
@@ -2013,12 +2225,31 @@ static void wg_json_CollectdPayloads(json_ctx_t *jc,
 
     wg_json_string(jc, "values");
     wg_json_CollectdValues(jc, head);
+
+    // Optimization: omit the metadata entry altogether if it's empty.
+    if (head->num_metadata_entries != 0) {
+      wg_json_string(jc, "metadata");
+      wg_json_MetadataEntries(jc, head->metadata_entries,
+          head->num_metadata_entries);
+    }
     wg_json_map_close(jc);
 
     head = head->next;
   }
   *new_head = head;
   wg_json_array_close(jc);
+}
+
+static void wg_json_MetadataEntries(json_ctx_t *jc,
+    wg_metadata_entry_t *metadata_entries, int num_entries) {
+  wg_json_map_open(jc);
+  int i;
+  for (i = 0; i < num_entries; ++i) {
+    wg_metadata_entry_t *entry = &metadata_entries[i];
+    wg_json_string(jc, entry->key);
+    wg_json_TypedValue(jc, &entry->value);
+  }
+  wg_json_map_close(jc);
 }
 
 // Array of CollectdValue:
@@ -2034,7 +2265,39 @@ static void wg_json_CollectdPayloads(json_ctx_t *jc,
 //   DataSourceType data_source_type = 2;
 //   google.monitoring.v3.TypedValue value = 3;
 // }
-// where google.monitoring.v3.TypedValue is
+static void wg_json_CollectdValues(json_ctx_t *jc,
+    const wg_payload_t *element) {
+  wg_json_array_open(jc);
+  int i;
+  for (i = 0; i < element->num_values; ++i) {
+    const wg_payload_value_t *value = &element->values[i];
+
+    wg_typed_value_t typed_value;
+    const char *data_source_type_static;
+    if (wg_typed_value_create_from_value_t_inline(value->ds_type, value->val,
+        &data_source_type_static, &typed_value) != 0) {
+      WARNING("write_gcm: wg_typed_value_create_from_value_t_inline failed for "
+          "%s/%s/%s! Continuing.",
+          element->plugin, element->type, value->name);
+      continue;
+    }
+    wg_json_map_open(jc);
+    wg_json_string(jc, "dataSourceType");
+    wg_json_string(jc, data_source_type_static);
+
+    wg_json_string(jc, "dataSourceName");
+    wg_json_string(jc, value->name);
+
+    wg_json_string(jc, "value");
+    wg_json_TypedValue(jc, &typed_value);
+    wg_json_map_close(jc);
+
+    wg_typed_value_destroy_inline(&typed_value);
+  }
+  wg_json_array_close(jc);
+}
+
+// google.monitoring.v3.TypedValue:
 // message TypedValue {
 //   oneof value {
 //     bool bool_value = 1;
@@ -2044,38 +2307,11 @@ static void wg_json_CollectdPayloads(json_ctx_t *jc,
 //     Distribution distribution_value = 5;
 //   }
 // }
-
-static void wg_json_CollectdValues(json_ctx_t *jc,
-    const wg_payload_t *element) {
-  wg_json_array_open(jc);
-  int i;
-  for (i = 0; i < element->num_values; ++i) {
-    const wg_payload_value_t *value = &element->values[i];
-    fleshed_out_value_t fov;
-    if (wg_get_vl_value(value->ds_type, value->val, &fov) != 0) {
-      WARNING("write_gcm: wg_get_vl_value failed for %s/%s/%s! Continuing.",
-          element->plugin, element->type, value->name);
-      continue;
-    }
-    wg_json_map_open(jc);
-
-    wg_json_string(jc, "dataSourceType");
-    wg_json_string(jc, fov.type);
-
-    wg_json_string(jc, "dataSourceName");
-    wg_json_string(jc, value->name);
-
-    wg_json_string(jc, "value");
-    {
-      wg_json_map_open(jc);
-      wg_json_string(jc, fov.value_tag);
-      wg_json_string(jc, fov.value_text);
-      wg_json_map_close(jc);
-    }
-
-    wg_json_map_close(jc);
-  }
-  wg_json_array_close(jc);
+static void wg_json_TypedValue(json_ctx_t *jc, const wg_typed_value_t *tv) {
+  wg_json_map_open(jc);
+  wg_json_string(jc, tv->field_name_static);
+  wg_json_string(jc, tv->value_text);
+  wg_json_map_close(jc);
 }
 
 //message Timestamp {
@@ -2166,67 +2402,6 @@ static void wg_json_uint64(json_ctx_t *jc, uint64_t value) {
     ERROR("yajl_gen_number returned %d", result);
     jc->error = -1;
   }
-}
-
-// Based on 'ds_type', extracts a value from 'value' and stringifies it,
-// storing the resultant string in fov->value_text. Additionally, stores the
-// type of the value as a (statically-allocated) string in fov->type, and the
-// value tag as a (statically-allocated) string in fov->value_tag. Appropriate
-// values for 'type' come from the 'CollectdValue::DataSourceType' enum in
-// the proto definition. Appropriate values for 'value_tag' come from
-// the 'oneof' field names in the 'google.monitoring.v3.TypedValue' proto.
-// Because 'TypedValue' does not support uint64, we convert the values to
-// int64 and hope they don't wrap.
-static int wg_get_vl_value(int ds_type, value_t value,
-    fleshed_out_value_t *fov) {
-  int result;
-  switch (ds_type) {
-    case DS_TYPE_GAUGE:
-      if (isfinite(value.gauge)) {
-        fov->type = "gauge";
-        fov->value_tag = "doubleValue";
-        result = snprintf(fov->value_text, sizeof(fov->value_text),
-            "%f", value.gauge);
-        break;
-      } else {
-        ERROR("write_gcm: can not take infinite value");
-        return -1;
-      }
-    case DS_TYPE_COUNTER:
-      fov->type = "counter";
-      fov->value_tag = "int64Value";
-      if (value.counter > INT64_MAX) {
-        WARNING("write_gcm: Counter is too large for an int64.");
-        return -1;
-      }
-      result = snprintf(fov->value_text, sizeof(fov->value_text), "%" PRIi64,
-          (int64_t)value.counter);
-      break;
-    case DS_TYPE_DERIVE:
-      fov->type = "derive";
-      fov->value_tag = "int64Value";
-      result = snprintf(fov->value_text, sizeof(fov->value_text), "%" PRIi64,
-          value.derive);
-      break;
-    case DS_TYPE_ABSOLUTE:
-      fov->type = "absolute";
-      fov->value_tag = "int64Value";
-      if (value.absolute > INT64_MAX) {
-        WARNING("write_gcm: Absolute is too large for an int64.");
-        return -1;
-      }
-      result = snprintf(fov->value_text, sizeof(fov->value_text), "%" PRIi64,
-          (int64_t)value.absolute);
-      break;
-    default:
-      ERROR("write_gcm: wg_get_vl_value: Unknown ds_type %i", ds_type);
-      return -1;
-  }
-  if (result < 0 || result >= sizeof(fov->value_text)) {
-    ERROR("write_gcm: wg_get_vl_value: result exceeded buffer size");
-    return -1;
-  }
-  return 0;
 }
 
 static json_ctx_t *wg_json_ctx_create(_Bool pretty) {
