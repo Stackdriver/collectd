@@ -327,7 +327,8 @@ static int wg_curl_get_or_post(char *response_buffer,
 
   write_ctx.data[0] = 0;
   if (write_ctx.size < 2) {
-    WARNING("write_gcm: The buffer overflowed.");
+    WARNING("write_gcm: The buffer overflowed. Data is %s",
+        response_buffer);
     goto leave;
   }
 
@@ -2242,7 +2243,7 @@ static void wg_json_ctx_destroy(json_ctx_t *jc) {
 //==============================================================================
 //==============================================================================
 //==============================================================================
-void *wg_process_queue(void *arg);
+static void *wg_process_queue(void *arg);
 
 //------------------------------------------------------------------------------
 // Private implementation starts here.
@@ -2252,7 +2253,7 @@ void *wg_process_queue(void *arg);
 // - A flag indicating whether the caller wants the processing thread to
 //   terminate.
 // Returns 0 on success, <0 on error.
-int wait_next_queue_event(wg_queue_t *queue, cdtime_t last_flush_time,
+static int wait_next_queue_event(wg_queue_t *queue, cdtime_t last_flush_time,
     int *want_terminate, wg_payload_t **payloads);
 
 // "Rebases" derivative items in the list against their stored values. If this
@@ -2273,7 +2274,8 @@ static int wg_rebase_item(c_avl_tree_t *deriv_tree, wg_payload_t *payload,
 // up into segments, where all the items in the segments have distinct keys.
 // This is necessary because the upstream server rejects submissions with
 // duplicate keys/labels. (why?) Returns 0 on success, <0 on error.
-int wg_transmit_unique_segments(const wg_context_t *ctx, wg_payload_t *list);
+static int wg_transmit_unique_segments(const wg_context_t *ctx,
+    wg_payload_t *list);
 
 // Transmit a segment of the list, where it is guaranteed that all the items
 // in the list have distinct keys. Returns 0 on success, <0 on error.
@@ -2306,7 +2308,7 @@ static int wg_lookup_or_create_tracker_value(c_avl_tree_t *tree,
     const wg_payload_t *payload, deriv_tracker_value_t **tracker, int *created);
 
 
-void *wg_process_queue(void *arg) {
+static void *wg_process_queue(void *arg) {
   wg_context_t *ctx = arg;
   wg_queue_t *queue = ctx->queue;
 
@@ -2470,7 +2472,8 @@ static int wg_rebase_item(c_avl_tree_t *deriv_tree, wg_payload_t *payload,
 // Because we can't send points with the same key and labels in one
 // transmission, we need to break 'list_to_process' into segments, where all
 // the items in a segment have distinct keys.
-int wg_transmit_unique_segments(const wg_context_t *ctx, wg_payload_t *list) {
+static int wg_transmit_unique_segments(const wg_context_t *ctx,
+    wg_payload_t *list) {
   while (list != NULL) {
     wg_payload_t *tail;
     size_t size;
@@ -2666,7 +2669,7 @@ static int wg_lookup_or_create_tracker_value(c_avl_tree_t *tree,
   return -1;
 }
 
-int wait_next_queue_event(wg_queue_t *queue, cdtime_t last_flush_time,
+static int wait_next_queue_event(wg_queue_t *queue, cdtime_t last_flush_time,
     int *want_terminate, wg_payload_t **payloads) {
   cdtime_t next_flush_time = last_flush_time + plugin_get_interval();
   pthread_mutex_lock(&queue->mutex);
