@@ -1672,17 +1672,18 @@ typedef struct {
   size_t size;
   int request_flush;
   int request_terminate;
+  pthread_t consumer_thread;
+  _Bool consumer_thread_created;
 } wg_queue_t;
 
 typedef struct {
+  _Bool pretty_print_json;
+  FILE *json_log_file;
   monitored_resource_t *resource;
   char *agent_translation_service_url;
   credential_ctx_t *cred_ctx;
   oauth2_ctx_t *oauth2_ctx;
-  pthread_t queue_thread;
   wg_queue_t *queue;
-  FILE *json_log_file;
-  _Bool pretty_print_json;
 } wg_context_t;
 
 static wg_context_t *wg_context_create(const wg_configbuilder_t *cb);
@@ -1699,6 +1700,15 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
   if (ctx == NULL) {
     ERROR("wg_context_create: calloc failed.");
     return NULL;
+  }
+
+  // Open the JSON log file if requested.
+  if (cb->json_log_file != NULL) {
+    ctx->json_log_file = fopen(cb->json_log_file, "a");
+    if (ctx->json_log_file == NULL) {
+      WARNING("write_gcm: Can't open log file %s. errno is %d. Continuing.",
+          cb->json_log_file, errno);
+    }
   }
 
   // Create the subcontext holding various pieces of server information.
@@ -1751,15 +1761,6 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
     return NULL;
   }
 
-  // Open the JSON log file if requested.
-  if (cb->json_log_file != NULL) {
-    ctx->json_log_file = fopen(cb->json_log_file, "a");
-    if (ctx->json_log_file == NULL) {
-      WARNING("write_gcm: Can't open log file %s. errno is %d. Continuing.",
-          cb->json_log_file, errno);
-    }
-  }
-
   ctx->pretty_print_json = cb->pretty_print_json;
   return ctx;
 }
@@ -1768,14 +1769,15 @@ static void wg_context_destroy(wg_context_t *ctx) {
   if (ctx == NULL) {
     return;
   }
-  if (ctx->json_log_file != NULL) {
-    fclose(ctx->json_log_file);
-  }
+  WARNING("write_gcm: Tearing down context.");
   wg_queue_destroy(ctx->queue);
   wg_oauth2_ctx_destroy(ctx->oauth2_ctx);
   wg_credential_ctx_destroy(ctx->cred_ctx);
   sfree(ctx->agent_translation_service_url);
   wg_monitored_resource_destroy(ctx->resource);
+  if (ctx->json_log_file != NULL) {
+    fclose(ctx->json_log_file);
+  }
   sfree(ctx);
 }
 
@@ -1808,6 +1810,23 @@ static wg_queue_t *wg_queue_create() {
 }
 
 static void wg_queue_destroy(wg_queue_t *queue) {
+  if (queue == NULL) {
+    return;
+  }
+  // Tear down consumer thread if necessary.
+  pthread_mutex_lock(&queue->mutex);
+  _Bool thread_exists = queue->consumer_thread_created;
+  if (thread_exists) {
+    queue->request_terminate = 1;
+    pthread_cond_signal(&queue->cond);
+  }
+  pthread_mutex_unlock(&queue->mutex);
+  if (thread_exists) {
+    WARNING("write_gcm: Waiting for consumer thread to terminate.");
+    pthread_join(queue->consumer_thread, NULL);
+    WARNING("write_gcm: Consumer thread has successfully terminated.");
+  }
+
   wg_payload_destroy(queue->head);
   pthread_cond_destroy(&queue->cond);
   pthread_mutex_destroy(&queue->mutex);
@@ -2349,8 +2368,8 @@ static void *wg_process_queue(void *arg) {
   }
 
  leave:
-  WARNING("write_gcm: queue processor thread dying.");
   wg_deriv_tree_destroy(deriv_tree);
+  WARNING("write_gcm: Consumer thread is exiting.");
   return NULL;
 }
 
@@ -2674,13 +2693,11 @@ static int wait_next_queue_event(wg_queue_t *queue, cdtime_t last_flush_time,
   cdtime_t next_flush_time = last_flush_time + plugin_get_interval();
   pthread_mutex_lock(&queue->mutex);
   while (1) {
-    pthread_cond_wait(&queue->cond, &queue->mutex);
     cdtime_t now = cdtime();
     if (queue->request_flush ||
         queue->request_terminate ||
         queue->size >= QUEUE_FLUSH_SIZE ||
         now > next_flush_time) {
-      size_t current_size = queue->size;
       *payloads = queue->head;
       *want_terminate = queue->request_terminate;
       queue->head = NULL;
@@ -2689,9 +2706,9 @@ static int wait_next_queue_event(wg_queue_t *queue, cdtime_t last_flush_time,
       queue->request_flush = 0;
       queue->request_terminate = 0;
       pthread_mutex_unlock(&queue->mutex);
-      INFO("write_gcm: Processing queue of size %zd", current_size);
       return 0;
     }
+    pthread_cond_wait(&queue->cond, &queue->mutex);
   }
 }
 
@@ -2714,7 +2731,8 @@ static int wg_init(void) {
 static int wg_write(const data_set_t *ds, const value_list_t *vl,
                     user_data_t *user_data) {
   assert(ds->ds_num > 0);
-  wg_queue_t *queue = user_data->data;
+  wg_context_t *ctx = user_data->data;
+  wg_queue_t *queue = ctx->queue;
 
   // Allocate the payload.
   wg_payload_t *payload = wg_payload_create(ds, vl);
@@ -2723,8 +2741,18 @@ static int wg_write(const data_set_t *ds, const value_list_t *vl,
     return -1;
   }
 
-  // Append to the queue.
   pthread_mutex_lock(&queue->mutex);
+  // One-time startup of the consumer thread.
+  if (!queue->consumer_thread_created) {
+    if (plugin_thread_create(&queue->consumer_thread, NULL, &wg_process_queue,
+        ctx) != 0) {
+      ERROR("write_gcm: plugin_thread_create failed");
+      pthread_mutex_unlock(&queue->mutex);
+      return -1;
+    }
+    queue->consumer_thread_created = 1;
+  }
+
   // Backpressure. If queue is backed up then something has gone horribly wrong.
   // Maybe the queue processor died. If this happens we drop the item at the
   // head of the queue.
@@ -2738,6 +2766,8 @@ static int wg_write(const data_set_t *ds, const value_list_t *vl,
     to_remove->next = NULL;
     wg_payload_destroy(to_remove);
   }
+
+  // Append to queue.
   if (queue->head == NULL) {
     queue->head = payload;
     queue->tail = payload;
@@ -2746,17 +2776,15 @@ static int wg_write(const data_set_t *ds, const value_list_t *vl,
     queue->tail = payload;
   }
   ++queue->size;
-  size_t queue_size = queue->size;
 
   static cdtime_t next_message_time;
   cdtime_t now = cdtime();
   if (now >= next_message_time) {
-    INFO("write_gcm: current queue size is %zd", queue_size);
+    INFO("write_gcm: current queue size is %zd", queue->size);
     next_message_time = now + TIME_T_TO_CDTIME_T(10);  // Report every 10 sec.
   }
   pthread_cond_signal(&queue->cond);
   pthread_mutex_unlock(&queue->mutex);
-
   return 0;
 }
 
@@ -2764,7 +2792,8 @@ static int wg_write(const data_set_t *ds, const value_list_t *vl,
 static int wg_flush(cdtime_t timeout,
                     const char *identifier __attribute__((unused)),
                     user_data_t *user_data) {
-  wg_queue_t *queue = user_data->data;
+  wg_context_t *ctx = user_data->data;
+  wg_queue_t *queue = ctx->queue;
   pthread_mutex_lock(&queue->mutex);
   queue->request_flush = 1;
   pthread_cond_signal(&queue->cond);
@@ -2804,22 +2833,21 @@ static int wg_config(oconfig_item_t *ci) {
     goto leave;
   }
 
-  if (pthread_create(&ctx->queue_thread, NULL, &wg_process_queue, ctx) != 0) {
-    ERROR("write_gcm: pthread_create failed");
-    goto leave;
-  }
-
   user_data_t user_data = {
-      .data = ctx->queue,
+      .data = ctx,
       .free_func = NULL
   };
-  ctx = NULL;  // Now owned by thread.
   if (plugin_register_flush(this_plugin_name, &wg_flush, &user_data) != 0) {
+    ERROR("There was an error from plugin_register_flush");
     goto leave;
   }
-  //TODO
-  //    user_data.free_func = &wg_queue_free_func;
+  user_data.free_func = (void(*)(void*))&wg_context_destroy;
   result = plugin_register_write(this_plugin_name, &wg_write, &user_data);
+  if (result != 0) {
+    ERROR("There was an error from plugin_register_write");
+    goto leave;
+  }
+  ctx = NULL;
 
  leave:
   wg_context_destroy(ctx);
