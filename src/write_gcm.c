@@ -39,8 +39,10 @@
 #include <string.h>
 
 #include "curl/curl.h"
+#include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <openssl/pem.h>
 #include <openssl/pkcs12.h>
 
 #include <yajl/yajl_gen.h>
@@ -166,6 +168,51 @@ static void bufprintf(char **buffer, size_t *size, const char *fmt, ...) {
   *size -= result;
 }
 
+static char *wg_read_all_bytes(const char *filename, const char *mode) {
+  // Items to clean up at the end.
+  char *result = NULL;
+  char *buffer = NULL;
+  FILE *f = NULL;
+
+  f = fopen(filename, mode);
+  if (f == NULL) {
+    ERROR("write_gcm: wg_read_all_bytes: can't open \"%s\"", filename);
+    goto leave;
+  }
+  if (fseek(f, 0L, SEEK_END) != 0) {
+    ERROR("write_gcm: fseek failed");
+    goto leave;
+  }
+  long size = ftell(f);
+  if (size < 0) {
+    ERROR("write_gcm: ftell failed");
+    goto leave;
+  }
+  rewind(f);
+  buffer = malloc(size + 1);
+  if (buffer == NULL) {
+    ERROR("write_gcm: wg_read_all_bytes: malloc failed");
+    goto leave;
+  }
+
+  size_t bytes_read = fread(buffer, 1, size, f);
+  if (bytes_read != size) {
+    ERROR("write_gcm: wg_read_all_bytes: fread failed");
+    goto leave;
+  }
+
+  buffer[size] = 0;
+  result = buffer;
+  buffer = NULL;
+
+ leave:
+  sfree(buffer);
+  if (f != NULL) {
+    fclose(f);
+  }
+  return result;
+}
+
 //==============================================================================
 //==============================================================================
 //==============================================================================
@@ -178,8 +225,10 @@ typedef struct {
   EVP_PKEY *private_key;
 } credential_ctx_t;
 
-static credential_ctx_t *wg_credential_ctx_create(
+static credential_ctx_t *wg_credential_ctx_create_from_p12_file(
     const char *email, const char *key_file, const char *passphrase);
+static credential_ctx_t *wg_credential_ctx_create_from_cred_file(
+    const char *cred_file);
 static void wg_credential_ctx_destroy(credential_ctx_t *ctx);
 
 //------------------------------------------------------------------------------
@@ -189,11 +238,11 @@ static void wg_credential_ctx_destroy(credential_ctx_t *ctx);
 static EVP_PKEY *wg_credential_contex_load_pkey(char const *filename,
                                                 char const *passphrase);
 
-static credential_ctx_t *wg_credential_ctx_create(
+static credential_ctx_t *wg_credential_ctx_create_from_p12_file(
     const char *email, const char *key_file, const char *passphrase) {
   credential_ctx_t *result = calloc(1, sizeof(*result));
   if (result == NULL) {
-    ERROR("write_gcm: wg_credential_ctx_create: calloc failed.");
+    ERROR("write_gcm: wg_credential_ctx_create_from_p12_file: calloc failed.");
     return NULL;
   }
   result->email = sstrdup(email);
@@ -203,17 +252,6 @@ static credential_ctx_t *wg_credential_ctx_create(
     return NULL;
   }
   return result;
-}
-
-static void wg_credential_ctx_destroy(credential_ctx_t *ctx) {
-  if (ctx == NULL) {
-    return;
-  }
-  if (ctx->private_key != NULL) {
-    EVP_PKEY_free(ctx->private_key);
-  }
-  sfree(ctx->email);
-  sfree(ctx);
 }
 
 static EVP_PKEY *wg_credential_contex_load_pkey(char const *filename,
@@ -249,6 +287,88 @@ static EVP_PKEY *wg_credential_contex_load_pkey(char const *filename,
   X509_free(cert);
   PKCS12_free(p12);
   return pkey;
+}
+
+int wg_extract_toplevel_json_string(const char *json, const char *key,
+    char **result);
+
+static credential_ctx_t *wg_credential_ctx_create_from_cred_file(
+    const char *cred_file) {
+  // Things to clean up upon exit.
+  credential_ctx_t *result = NULL;
+  credential_ctx_t *ctx = NULL;
+  char *creds = NULL;
+  char *private_key_pem = NULL;
+  PKCS8_PRIV_KEY_INFO *p8inf = NULL;
+  BIO *in = NULL;
+
+  ctx = calloc(1, sizeof(*ctx));
+  if (ctx == NULL) {
+    ERROR("write_gcm: wg_credential_ctx_create_from_cred_file: calloc failed.");
+    goto leave;
+  }
+
+  creds = wg_read_all_bytes(cred_file, "r");
+  if (creds == NULL) {
+    ERROR("write_gcm: Failed to read application default credentials file %s",
+        cred_file);
+    goto leave;
+  }
+
+  if (wg_extract_toplevel_json_string(creds, "client_email", &ctx->email)
+      != 0) {
+    ERROR("write_gcm: Couldn't find 'client_email' entry in credentials file.");
+    goto leave;
+  }
+
+  if (wg_extract_toplevel_json_string(creds, "private_key", &private_key_pem)
+      != 0) {
+    ERROR("write_gcm: Couldn't find 'private_key' entry in credentials file.");
+    goto leave;
+  }
+
+  in = BIO_new_mem_buf((void*)private_key_pem, -1);
+  if (in == NULL) {
+    ERROR("write_gcm: BIO_new_mem_buf failed.");
+    goto leave;
+  }
+  p8inf = PEM_read_bio_PKCS8_PRIV_KEY_INFO(in, NULL, NULL, NULL);
+  if (p8inf == NULL) {
+    ERROR("write_gcm: PEM_read_bio_PKCS8_PRIV_KEY_INFO failed.");
+    goto leave;
+  }
+  ctx->private_key = EVP_PKCS82PKEY(p8inf);
+  if (ctx->private_key == NULL) {
+    ERROR("write_gcm: EVP_PKCS82PKEY failed.");
+    goto leave;
+  }
+  INFO("write_gcm: application default credentials parsed successfully.");
+
+  result = ctx;
+  ctx = NULL;
+
+ leave:
+  if (p8inf != NULL) {
+    PKCS8_PRIV_KEY_INFO_free(p8inf);
+  }
+  if (in != NULL) {
+    BIO_free(in);
+  }
+  wg_credential_ctx_destroy(ctx);
+  sfree(private_key_pem);
+  sfree(creds);
+  return result;
+}
+
+static void wg_credential_ctx_destroy(credential_ctx_t *ctx) {
+  if (ctx == NULL) {
+    return;
+  }
+  if (ctx->private_key != NULL) {
+    EVP_PKEY_free(ctx->private_key);
+  }
+  sfree(ctx->email);
+  sfree(ctx);
 }
 
 //==============================================================================
@@ -515,7 +635,7 @@ char *wg_extract_toplevel_value(const char *json, const char *key) {
   parse_result = yajl_parse_complete(handle);
 #endif
   if (parse_result != yajl_status_ok) {
-    ERROR("write_gcm: wg_extract_toplevel_value: error parsing JSON");
+    ERROR("write_gcm: wg_extract_toplevel_value: parse_complete failed.");
     goto leave;
   }
   if (context.result == NULL) {
@@ -1213,6 +1333,7 @@ typedef struct {
   char *zone;
   char *region;
   char *account_id;
+  char *application_default_credentials_file;
   char *email;
   char *key_file;
   char *passphrase;
@@ -1246,6 +1367,7 @@ static wg_configbuilder_t *wg_configbuilder_create(oconfig_item_t *ci) {
       "Zone",
       "Region",
       "Account",
+      "ApplicationDefaultCredentialsFile",
       "Email",
       "PrivateKeyFile",
       "PrivateKeyPass",
@@ -1260,6 +1382,7 @@ static wg_configbuilder_t *wg_configbuilder_create(oconfig_item_t *ci) {
       &cb->zone,
       &cb->region,
       &cb->account_id,
+      &cb->application_default_credentials_file,
       &cb->email,
       &cb->key_file,
       &cb->passphrase,
@@ -1318,6 +1441,14 @@ static wg_configbuilder_t *wg_configbuilder_create(oconfig_item_t *ci) {
     goto error;
   }
 
+  // 'email'/'key_file'/'passphrase' should not be set at the same time as
+  // 'application_default_credentials_file'.
+  if (num_set != 0 && cb->application_default_credentials_file != NULL) {
+    ERROR("write_gcm: Error reading configuration. "
+        "It is an error to set both ApplicationDefaultCredentialsFile and "
+        "Email/PrivateKeyFile/PrivateKeyPass.");
+  }
+
   // Success!
   return cb;
 
@@ -1325,6 +1456,25 @@ static wg_configbuilder_t *wg_configbuilder_create(oconfig_item_t *ci) {
   sfree(pretty_print_json);
   wg_configbuilder_destroy(cb);
   return NULL;
+}
+
+static void wg_configbuilder_destroy(wg_configbuilder_t *cb) {
+  if (cb == NULL) {
+    return;
+  }
+  sfree(cb->agent_translation_service_format_string);
+  sfree(cb->json_log_file);
+  sfree(cb->passphrase);
+  sfree(cb->key_file);
+  sfree(cb->email);
+  sfree(cb->application_default_credentials_file);
+  sfree(cb->account_id);
+  sfree(cb->region);
+  sfree(cb->zone);
+  sfree(cb->instance_id);
+  sfree(cb->project_id);
+  sfree(cb->cloud_provider);
+  sfree(cb);
 }
 
 //==============================================================================
@@ -1733,12 +1883,28 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
   }
   ctx->agent_translation_service_url = sstrdup(url);
 
-  // Optionally create the subcontext holding the service account credentials.
-  if (cb->email != NULL && cb->key_file != NULL && cb->passphrase != NULL) {
-    ctx->cred_ctx = wg_credential_ctx_create(cb->email, cb->key_file,
-        cb->passphrase);
+  // Try to create the credential context in a couple of different ways,
+  // depending on what was specified in the config file.
+  // By the way, the credential context isn't required for users on Google
+  // Cloud Platform: if they have the monitoring scope turned on, we can get an
+  // auth token from the metadata server. But people who don't have the scope
+  // turned on, or non GCP customers, need to do one of the two following
+  // approaches.
+
+  if (cb->application_default_credentials_file != NULL) {
+    ctx->cred_ctx = wg_credential_ctx_create_from_cred_file(
+        cb->application_default_credentials_file);
     if (ctx->cred_ctx == NULL) {
-      ERROR("write_gcm: wg_credential_context_create failed.");
+      ERROR("write_gcm: wg_credential_ctx_create_from_cred_file failed.");
+      wg_context_destroy(ctx);
+      return NULL;
+    }
+  } else if (cb->email != NULL && cb->key_file != NULL &&
+      cb->passphrase != NULL) {
+    ctx->cred_ctx = wg_credential_ctx_create_from_p12_file(cb->email,
+        cb->key_file, cb->passphrase);
+    if (ctx->cred_ctx == NULL) {
+      ERROR("write_gcm: wg_credential_ctx_create_from_p12_file failed.");
       wg_context_destroy(ctx);
       return NULL;
     }
@@ -2850,24 +3016,6 @@ static int wg_config(oconfig_item_t *ci) {
   wg_context_destroy(ctx);
   wg_configbuilder_destroy(cb);
   return result;
-}
-
-static void wg_configbuilder_destroy(wg_configbuilder_t *cb) {
-  if (cb == NULL) {
-    return;
-  }
-  sfree(cb->agent_translation_service_format_string);
-  sfree(cb->json_log_file);
-  sfree(cb->passphrase);
-  sfree(cb->key_file);
-  sfree(cb->email);
-  sfree(cb->account_id);
-  sfree(cb->region);
-  sfree(cb->zone);
-  sfree(cb->instance_id);
-  sfree(cb->project_id);
-  sfree(cb->cloud_provider);
-  sfree(cb);
 }
 
 //==============================================================================
