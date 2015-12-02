@@ -327,7 +327,8 @@ static int wg_curl_get_or_post(char *response_buffer,
 
   write_ctx.data[0] = 0;
   if (write_ctx.size < 2) {
-    WARNING("write_gcm: The buffer overflowed. Data is %s",
+    WARNING("write_gcm: wg_curl_get_or_post: The receive buffer overflowed.");
+    DEBUG("write_gcm: wg_curl_get_or_post: Received data is: %s",
         response_buffer);
     goto leave;
   }
