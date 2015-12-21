@@ -2300,13 +2300,11 @@ static void wg_json_CollectdPayloads(json_ctx_t *jc,
     wg_json_string(jc, "values");
     wg_json_CollectdValues(jc, head);
 
-    if (0) {  // For now: Don't send metadata until the server is ready.
-      // Optimization: omit the metadata entry altogether if it's empty.
-      if (head->num_metadata_entries != 0) {
-        wg_json_string(jc, "metadata");
-        wg_json_MetadataEntries(jc, head->metadata_entries,
-            head->num_metadata_entries);
-      }
+    // Optimization: omit the metadata entry altogether if it's empty.
+    if (head->num_metadata_entries != 0) {
+      wg_json_string(jc, "metadata");
+      wg_json_MetadataEntries(jc, head->metadata_entries,
+          head->num_metadata_entries);
     }
     wg_json_map_close(jc);
 
