@@ -331,9 +331,9 @@ static size_t wg_curl_write_callback(char *ptr, size_t size, size_t nmemb,
 static int wg_curl_get_or_post(char *response_buffer,
     size_t response_buffer_size, const char *url, const char *body,
     const char **headers, int num_headers) {
-  const char *get_or_post_tag = body == NULL ? "GET" : "POST";
-  INFO("write_gcm: Doing %s request: url %s, body %s, num_headers %d",
-      get_or_post_tag, url, body, num_headers);
+  DEBUG("write_gcm: Doing %s request: url %s, body %s, num_headers %d",
+	body == NULL ? "GET" : "POST",
+	url, body, num_headers);
   CURL *curl = curl_easy_init();
   if (curl == NULL) {
     ERROR("write_gcm: curl_easy_init failed");
@@ -366,21 +366,21 @@ static int wg_curl_get_or_post(char *response_buffer,
 
   int result = -1;  // Pessimistically assume error.
 
-  time_t start_time = cdtime();
+  time_t start_time __attribute__ ((unused)) = cdtime();
   int curl_result = curl_easy_perform(curl);
   if (curl_result != CURLE_OK) {
     ERROR("write_gcm: curl_easy_perform() failed: %s",
             curl_easy_strerror(curl_result));
     goto leave;
   }
-  time_t elapsed_time = cdtime() - start_time;
-  INFO("write_gcm: Elapsed time for curl operation was %g seconds.",
-      CDTIME_T_TO_DOUBLE(elapsed_time));
+  DEBUG("write_gcm: Elapsed time for curl operation was %g seconds.",
+	CDTIME_T_TO_DOUBLE(cdtime() - start_time))
 
   long response_code;
   curl_result = curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
   if (response_code >= 400) {
-    WARNING("write_gcm: Got HTTP %ld: %s", response_code, response_buffer);
+    WARNING("write_gcm: Unsuccessful HTTP request %ld: %s",
+	    response_code, response_buffer);
     goto leave;
   }
 
@@ -901,7 +901,7 @@ static int wg_oauth2_talk_to_server_and_store_result(oauth2_ctx_t *ctx,
       headers, num_headers) != 0) {
     return -1;
   }
-  INFO("I have a response which looks like this: %s", response);
+  DEBUG("I have a response which looks like this: %s", response);
 
   // Fill ctx->auth_header with the string "Authorization: Bearer $TOKEN"
   char *resultp = ctx->auth_header;
@@ -2881,7 +2881,7 @@ static void wg_context_destroy(wg_context_t *ctx) {
   if (ctx == NULL) {
     return;
   }
-  WARNING("write_gcm: Tearing down context.");
+  DEBUG("write_gcm: Tearing down context.");
   wg_key_tracker_destroy(ctx->key_tracker);
   wg_queue_destroy(ctx->queue);
   wg_oauth2_ctx_destroy(ctx->oauth2_ctx);
@@ -2935,9 +2935,9 @@ static void wg_queue_destroy(wg_queue_t *queue) {
   }
   pthread_mutex_unlock(&queue->mutex);
   if (thread_exists) {
-    WARNING("write_gcm: Waiting for consumer thread to terminate.");
+    DEBUG("write_gcm: Waiting for consumer thread to terminate.");
     pthread_join(queue->consumer_thread, NULL);
-    WARNING("write_gcm: Consumer thread has successfully terminated.");
+    DEBUG("write_gcm: Consumer thread has successfully terminated.");
   }
 
   wg_payload_destroy(queue->head);
@@ -3637,7 +3637,7 @@ static int wg_transmit_unique_segments(const wg_context_t *ctx,
       wg_payload_destroy(residual_list);
       return -1;
     }
-    INFO("write_gcm: next distinct segment has size %d", distinct_size);
+    DEBUG("write_gcm: next distinct segment has size %d", distinct_size);
     int result = wg_transmit_unique_segment(ctx, distinct_list);
     if (result != 0) {
       ERROR("write_gcm: wg_transmit_unique_segment failed.");
@@ -3870,7 +3870,7 @@ static int wait_next_queue_event(wg_queue_t *queue, cdtime_t last_flush_time,
         queue->request_terminate ||
         queue->size >= QUEUE_FLUSH_SIZE ||
         now > next_flush_time) {
-      WARNING("write_gcm: wait_next_queue_event: returning a queue of size %zd",
+      DEBUG("write_gcm: wait_next_queue_event: returning a queue of size %zd",
           queue->size);
       *payloads = queue->head;
       *want_terminate = queue->request_terminate;
@@ -3954,7 +3954,7 @@ static int wg_write(const data_set_t *ds, const value_list_t *vl,
   static cdtime_t next_message_time;
   cdtime_t now = cdtime();
   if (now >= next_message_time) {
-    INFO("write_gcm: current queue size is %zd", queue->size);
+    DEBUG("write_gcm: current queue size is %zd", queue->size);
     next_message_time = now + TIME_T_TO_CDTIME_T(10);  // Report every 10 sec.
   }
   pthread_cond_signal(&queue->cond);
