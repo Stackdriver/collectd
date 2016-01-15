@@ -39,8 +39,10 @@
 #include <string.h>
 
 #include "curl/curl.h"
+#include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <openssl/pem.h>
 #include <openssl/pkcs12.h>
 
 #include <yajl/yajl_gen.h>
@@ -218,6 +220,51 @@ static _Bool wg_value_less(int ds_type, const value_t *a, const value_t *b) {
   }
 }
 
+static char *wg_read_all_bytes(const char *filename, const char *mode) {
+  // Items to clean up at the end.
+  char *result = NULL;
+  char *buffer = NULL;
+  FILE *f = NULL;
+
+  f = fopen(filename, mode);
+  if (f == NULL) {
+    ERROR("write_gcm: wg_read_all_bytes: can't open \"%s\"", filename);
+    goto leave;
+  }
+  if (fseek(f, 0L, SEEK_END) != 0) {
+    ERROR("write_gcm: fseek failed");
+    goto leave;
+  }
+  long size = ftell(f);
+  if (size < 0) {
+    ERROR("write_gcm: ftell failed");
+    goto leave;
+  }
+  rewind(f);
+  buffer = malloc(size + 1);
+  if (buffer == NULL) {
+    ERROR("write_gcm: wg_read_all_bytes: malloc failed");
+    goto leave;
+  }
+
+  size_t bytes_read = fread(buffer, 1, size, f);
+  if (bytes_read != size) {
+    ERROR("write_gcm: wg_read_all_bytes: fread failed");
+    goto leave;
+  }
+
+  buffer[size] = 0;
+  result = buffer;
+  buffer = NULL;
+
+ leave:
+  sfree(buffer);
+  if (f != NULL) {
+    fclose(f);
+  }
+  return result;
+}
+
 //==============================================================================
 //==============================================================================
 //==============================================================================
@@ -230,8 +277,10 @@ typedef struct {
   EVP_PKEY *private_key;
 } credential_ctx_t;
 
-static credential_ctx_t *wg_credential_ctx_create(
+static credential_ctx_t *wg_credential_ctx_create_from_p12_file(
     const char *email, const char *key_file, const char *passphrase);
+static credential_ctx_t *wg_credential_ctx_create_from_json_file(
+    const char *cred_file);
 static void wg_credential_ctx_destroy(credential_ctx_t *ctx);
 
 //------------------------------------------------------------------------------
@@ -241,11 +290,11 @@ static void wg_credential_ctx_destroy(credential_ctx_t *ctx);
 static EVP_PKEY *wg_credential_contex_load_pkey(char const *filename,
                                                 char const *passphrase);
 
-static credential_ctx_t *wg_credential_ctx_create(
+static credential_ctx_t *wg_credential_ctx_create_from_p12_file(
     const char *email, const char *key_file, const char *passphrase) {
   credential_ctx_t *result = calloc(1, sizeof(*result));
   if (result == NULL) {
-    ERROR("write_gcm: wg_credential_ctx_create: calloc failed.");
+    ERROR("write_gcm: wg_credential_ctx_create_from_p12_file: calloc failed.");
     return NULL;
   }
   result->email = sstrdup(email);
@@ -254,6 +303,77 @@ static credential_ctx_t *wg_credential_ctx_create(
     wg_credential_ctx_destroy(result);
     return NULL;
   }
+  return result;
+}
+
+int wg_extract_toplevel_json_string(const char *json, const char *key,
+				    char **result);
+
+static credential_ctx_t *wg_credential_ctx_create_from_json_file(
+								 const char *cred_file) {
+  // Things to clean up upon exit.
+  credential_ctx_t *result = NULL;
+  credential_ctx_t *ctx = NULL;
+  char *creds = NULL;
+  char *private_key_pem = NULL;
+  PKCS8_PRIV_KEY_INFO *p8inf = NULL;
+  BIO *in = NULL;
+
+  ctx = calloc(1, sizeof(*ctx));
+  if (ctx == NULL) {
+    ERROR("write_gcm: wg_credential_ctx_create_from_cred_file: calloc failed.");
+    goto leave;
+  }
+
+  creds = wg_read_all_bytes(cred_file, "r");
+  if (creds == NULL) {
+    ERROR("write_gcm: Failed to read application default credentials file %s",
+	  cred_file);
+    goto leave;
+  }
+
+  if (wg_extract_toplevel_json_string(creds, "client_email", &ctx->email)
+      != 0) {
+    ERROR("write_gcm: Couldn't find 'client_email' entry in credentials file.");
+    goto leave;
+  }
+
+  if (wg_extract_toplevel_json_string(creds, "private_key", &private_key_pem)
+      != 0) {
+    ERROR("write_gcm: Couldn't find 'private_key' entry in credentials file.");
+    goto leave;
+  }
+
+  in = BIO_new_mem_buf((void*)private_key_pem, -1);
+  if (in == NULL) {
+    ERROR("write_gcm: BIO_new_mem_buf failed.");
+    goto leave;
+  }
+  p8inf = PEM_read_bio_PKCS8_PRIV_KEY_INFO(in, NULL, NULL, NULL);
+  if (p8inf == NULL) {
+    ERROR("write_gcm: PEM_read_bio_PKCS8_PRIV_KEY_INFO failed.");
+    goto leave;
+  }
+  ctx->private_key = EVP_PKCS82PKEY(p8inf);
+  if (ctx->private_key == NULL) {
+    ERROR("write_gcm: EVP_PKCS82PKEY failed.");
+    goto leave;
+  }
+  INFO("write_gcm: json credentials parsed successfully.");
+
+  result = ctx;
+  ctx = NULL;
+
+ leave:
+  if (p8inf != NULL) {
+    PKCS8_PRIV_KEY_INFO_free(p8inf);
+  }
+  if (in != NULL) {
+    BIO_free(in);
+  }
+  wg_credential_ctx_destroy(ctx);
+  sfree(private_key_pem);
+  sfree(creds);
   return result;
 }
 
@@ -1902,6 +2022,7 @@ typedef struct {
   char *zone;
   char *region;
   char *account_id;
+  char *credentials_json_file;
   char *email;
   char *key_file;
   char *passphrase;
@@ -1938,6 +2059,7 @@ static wg_configbuilder_t *wg_configbuilder_create(oconfig_item_t *ci) {
       "Zone",
       "Region",
       "Account",
+      "CredentialsJSON",
       "Email",
       "PrivateKeyFile",
       "PrivateKeyPass",
@@ -1951,6 +2073,7 @@ static wg_configbuilder_t *wg_configbuilder_create(oconfig_item_t *ci) {
       &cb->zone,
       &cb->region,
       &cb->account_id,
+      &cb->credentials_json_file,
       &cb->email,
       &cb->key_file,
       &cb->passphrase,
@@ -2059,6 +2182,14 @@ static wg_configbuilder_t *wg_configbuilder_create(oconfig_item_t *ci) {
         "or none of them must be set. However, the provided config file "
         "set %d of them.", num_set);
     goto error;
+  }
+
+  // 'email'/'key_file'/'passphrase' should not be set at the same time as
+  // 'application_default_credentials_file'.
+  if (num_set != 0 && cb->credentials_json_file != NULL) {
+    ERROR("write_gcm: Error reading configuration. "
+	  "It is an error to set both CredentialsJSON and "
+	  "Email/PrivateKeyFile/PrivateKeyPass.");
   }
 
   // Success!
@@ -2827,8 +2958,16 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
   build->agent_translation_service_url = sstrdup(url);
 
   // Optionally create the subcontext holding the service account credentials.
+  if (cb->credentials_json_file != NULL) {
+    build->cred_ctx = wg_credential_ctx_create_from_json_file(cb->credentials_json_file);
+    if (build->cred_ctx == NULL) {
+      ERROR("write_gcm: wg_credential_ctx_create_from_json_file failed.");
+      goto leave;
+    }
+  }
+
   if (cb->email != NULL && cb->key_file != NULL && cb->passphrase != NULL) {
-    build->cred_ctx = wg_credential_ctx_create(cb->email, cb->key_file,
+    build->cred_ctx = wg_credential_ctx_create_from_p12_file(cb->email, cb->key_file,
         cb->passphrase);
     if (build->cred_ctx == NULL) {
       ERROR("write_gcm: wg_credential_context_create failed.");
@@ -4032,6 +4171,7 @@ static void wg_configbuilder_destroy(wg_configbuilder_t *cb) {
   sfree(cb->key_file);
   sfree(cb->email);
   sfree(cb->account_id);
+  sfree(cb->credentials_json_file);
   sfree(cb->region);
   sfree(cb->zone);
   sfree(cb->instance_id);
