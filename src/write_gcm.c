@@ -377,6 +377,13 @@ static int wg_curl_get_or_post(char *response_buffer,
   INFO("write_gcm: Elapsed time for curl operation was %g seconds.",
       CDTIME_T_TO_DOUBLE(elapsed_time));
 
+  long response_code;
+  curl_result = curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+  if (response_code >= 400) {
+    WARNING("write_gcm: Got HTTP %ld: %s", response_code, response_buffer);
+    goto leave;
+  }
+
   write_ctx.data[0] = 0;
   if (write_ctx.size < 2) {
     ERROR("write_gcm: wg_curl_get_or_post: The receive buffer overflowed.");
