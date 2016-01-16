@@ -2252,17 +2252,41 @@ static char *wg_get_from_aws_metadata_server(const char *resource);
 static char *wg_get_from_metadata_server(const char *base, const char *resource,
     const char **headers, int num_headers);
 
+static char * detect_cloud_provider() {
+    char * gcp_hostname = wg_get_from_gcp_metadata_server("instance/hostname");
+    if (gcp_hostname != NULL) {
+      sfree(gcp_hostname);
+      return "gcp";
+    }
+    
+    char * aws_hostname = wg_get_from_aws_metadata_server("meta-data/hostname");
+    if (aws_hostname != NULL) {
+      sfree(aws_hostname);
+      return "aws";
+    }
+    ERROR("Unable to contact metadata server to detect cloud provider");
+    return NULL;
+}
+
 static monitored_resource_t *wg_monitored_resource_create(
     const wg_configbuilder_t *cb) {
-  const char *cloud_provider_to_use = cb->cloud_provider != NULL ?
-      cb->cloud_provider : "gcp";
+  char *cloud_provider_to_use;
+  if (cb->cloud_provider != NULL) {
+    cloud_provider_to_use = cb->cloud_provider;
+  } else {
+    cloud_provider_to_use = detect_cloud_provider();
+  }
+  if (cloud_provider_to_use == NULL) {
+    ERROR("write_gcm: Cloud provider not specified and autodetect failed.");
+    return NULL;
+  }
   if (strcasecmp(cloud_provider_to_use, "gcp") == 0) {
-    return wg_monitored_resource_create_for_gcp(cb);
+    return wg_monitored_resource_create_for_gcp(cb, project_id);
   }
   if (strcasecmp(cloud_provider_to_use, "aws") == 0) {
-    return wg_monitored_resource_create_for_aws(cb);
+    return wg_monitored_resource_create_for_aws(cb, project_id);
   }
-  ERROR("Cloud provider '%s' not recognized.", cloud_provider_to_use);
+  ERROR("write_gcm: Cloud provider '%s' not recognized.", cloud_provider_to_use);
   return NULL;
 }
 
