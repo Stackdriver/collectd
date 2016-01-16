@@ -2940,10 +2940,45 @@ static void wg_queue_destroy(wg_queue_t *queue);
 //------------------------------------------------------------------------------
 // Private implementation starts here.
 //------------------------------------------------------------------------------
+static char * find_application_default_creds_path() {
+  // first see if there is a file specified by $GOOGLE_APPLICATION_CREDENTIALS 
+  const char * env_creds_path = getenv("GOOGLE_APPLICATION_CREDENTIALS");
+  if (env_creds_path != NULL && access(env_creds_path, R_OK) == 0) {
+    return strdup(env_creds_path);
+  }
+  
+  // next check for $HOME/.config/gcloud/application_default_credentials.json
+  const char * home_path = getenv("HOME");
+  if (home_path != NULL) {
+    static char suffix[] = "/.config/gcloud/application_default_credentials.json";
+    size_t bytes_needed = strlen(home_path) + sizeof(suffix);
+    char *home_config_path = malloc(bytes_needed);
+    if (home_config_path == NULL) {
+      ERROR("write_gcm: find_application_default_creds_path: malloc failed");
+      return NULL;
+    }
+    int result = snprintf(home_config_path, bytes_needed,
+			  "%s%s", home_path, suffix);
+    if (result > 0 && access(home_config_path, R_OK) == 0) {
+      return home_config_path;
+    }
+    sfree(home_config_path);
+  }
+
+  // finally, check the system default path
+  const char * system_default_path = "/etc/google/auth/application_default_credentials.json";
+  if (access(system_default_path, R_OK) == 0) {
+    return strdup(system_default_path);
+  }
+
+  return NULL;
+}
+
 static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
   // Items to clean up on exit.
   wg_context_t *build = NULL;
   wg_context_t *result = NULL;
+  char * cred_path = NULL;
 
   build = calloc(1, sizeof(*build));
   if (build == NULL) {
@@ -2999,6 +3034,20 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
     }
   }
 
+  // We don't have an explicit location for the creds specified. Let's check to see
+  // if any of the paths for an application default creds file exists and read that.
+  if (build->cred_ctx == NULL) {
+    cred_path = find_application_default_creds_path();
+    if (cred_path) {
+      build->cred_ctx = wg_credential_ctx_create_from_json_file(cred_path);
+      if (build->cred_ctx == NULL) {
+        ERROR("write_gcm: wg_credential_ctx_create_from_json_file failed to "
+	      "parse %s", cred_path);
+	goto leave;
+      }
+    }
+  }
+
   // Create the subcontext holding the oauth2 state.
   build->oauth2_ctx = wg_oauth2_cxt_create();
   if (build->oauth2_ctx == NULL) {
@@ -3029,6 +3078,7 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
   build = NULL;
 
  leave:
+  sfree(cred_path);
   wg_context_destroy(build);
   return result;
 }
