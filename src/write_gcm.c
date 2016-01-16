@@ -274,6 +274,7 @@ static char *wg_read_all_bytes(const char *filename, const char *mode) {
 //==============================================================================
 typedef struct {
   char *email;
+  char *project_id;
   EVP_PKEY *private_key;
 } credential_ctx_t;
 
@@ -337,6 +338,28 @@ static credential_ctx_t *wg_credential_ctx_create_from_json_file(
     ERROR("write_gcm: Couldn't find 'client_email' entry in credentials file.");
     goto leave;
   }
+  // use the client email to determine the project
+  if (strstr(ctx->email, "@developer.gserviceaccount.com") != NULL) {
+    // old style email address like projectnumber-hash@developer.gserviceaccount.com
+    char *dash;
+    dash = strstr(ctx->email, "-");
+    if (dash != NULL) {
+      char * project = strdup(ctx->email);
+      dash = strstr(project, "-");
+      *dash = '\0';
+      ctx->project_id = project;
+    }
+  } else if (strstr(ctx->email, ".iam.gserviceaccount.com") != NULL) {
+    // new style email address like string@project.iam.gserviceaccount.com
+    char *at, *dot;
+    at = strstr(ctx->email, "@");
+    dot = strstr(ctx->email, ".iam.gserviceaccount.com");
+    if (at != NULL && dot != NULL) {
+      char *project = malloc(dot - at) + 1;
+      project = strndup(at+1, dot - at - 1);
+      ctx->project_id = project;
+    }
+  }
 
   if (wg_extract_toplevel_json_string(creds, "private_key", &private_key_pem)
       != 0) {
@@ -359,7 +382,8 @@ static credential_ctx_t *wg_credential_ctx_create_from_json_file(
     ERROR("write_gcm: EVP_PKCS82PKEY failed.");
     goto leave;
   }
-  INFO("write_gcm: json credentials parsed successfully.");
+  INFO("write_gcm: json credentials parsed successfully. email=%s, "
+       "project=%s", ctx->email, ctx->project_id);
 
   result = ctx;
   ctx = NULL;
@@ -385,6 +409,7 @@ static void wg_credential_ctx_destroy(credential_ctx_t *ctx) {
     EVP_PKEY_free(ctx->private_key);
   }
   sfree(ctx->email);
+  sfree(ctx->project_id);
   sfree(ctx);
 }
 
@@ -2230,16 +2255,16 @@ typedef struct {
 } monitored_resource_t;
 
 static monitored_resource_t *wg_monitored_resource_create(
-    const wg_configbuilder_t *cb);
+    const wg_configbuilder_t *cb, const char *project_id);
 static void wg_monitored_resource_destroy(monitored_resource_t *resource);
 
 //------------------------------------------------------------------------------
 // Private implementation starts here.
 //------------------------------------------------------------------------------
 static monitored_resource_t *wg_monitored_resource_create_for_gcp(
-    const wg_configbuilder_t *cb);
+    const wg_configbuilder_t *cb, const char *project_id);
 static monitored_resource_t *wg_monitored_resource_create_for_aws(
-    const wg_configbuilder_t *cb);
+    const wg_configbuilder_t *cb, const char *project_id);
 
 // Fetch 'resource' from the GCP metadata server.
 static char *wg_get_from_gcp_metadata_server(const char *resource);
@@ -2269,7 +2294,7 @@ static char * detect_cloud_provider() {
 }
 
 static monitored_resource_t *wg_monitored_resource_create(
-    const wg_configbuilder_t *cb) {
+    const wg_configbuilder_t *cb, const char *project_id) {
   char *cloud_provider_to_use;
   if (cb->cloud_provider != NULL) {
     cloud_provider_to_use = cb->cloud_provider;
@@ -2366,10 +2391,10 @@ static void wg_monitored_resource_destroy(monitored_resource_t *resource) {
 }
 
 static monitored_resource_t *wg_monitored_resource_create_for_gcp(
-    const wg_configbuilder_t *cb) {
+    const wg_configbuilder_t *cb,  const char *project_id) {
   // Items to clean up upon leaving.
   monitored_resource_t *result = NULL;
-  char *project_id_to_use = sstrdup(cb->project_id);
+  char *project_id_to_use = sstrdup(project_id);
   char *instance_id_to_use = sstrdup(cb->instance_id);
   char *zone_to_use = sstrdup(cb->zone);
 
@@ -2439,10 +2464,10 @@ static monitored_resource_t *wg_monitored_resource_create_for_gcp(
 }
 
 static monitored_resource_t *wg_monitored_resource_create_for_aws(
-    const wg_configbuilder_t *cb) {
+    const wg_configbuilder_t *cb, const char *project_id) {
   // Items to clean up upon leaving.
   monitored_resource_t *result = NULL;
-  char *project_id_to_use = sstrdup(cb->project_id);
+  char *project_id_to_use = sstrdup(project_id);
   char *region_to_use = sstrdup(cb->region);
   char *instance_id_to_use = sstrdup(cb->instance_id);
   char *account_id_to_use = sstrdup(cb->account_id);
@@ -2995,27 +3020,6 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
     }
   }
 
-  // Create the subcontext holding various pieces of server information.
-  build->resource = wg_monitored_resource_create(cb);
-  if (build->resource == NULL) {
-    ERROR("write_gcm: wg_monitored_resource_create failed.");
-    goto leave;
-  }
-
-  const char *format_string_to_use =
-      cb->agent_translation_service_format_string != NULL ?
-          cb->agent_translation_service_format_string :
-          agent_translation_service_default_format_string;
-
-  char url[512];  // Big enough?
-  int sprintf_result = snprintf(url, sizeof(url), format_string_to_use,
-      build->resource->project_id);
-  if (sprintf_result < 0 || sprintf_result >= sizeof(url)) {
-    ERROR("write_gcm: overflowed url buffer");
-    goto leave;
-  }
-  build->agent_translation_service_url = sstrdup(url);
-
   // Optionally create the subcontext holding the service account credentials.
   if (cb->credentials_json_file != NULL) {
     build->cred_ctx = wg_credential_ctx_create_from_json_file(cb->credentials_json_file);
@@ -3047,6 +3051,35 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
       }
     }
   }
+
+  // If we got a project id from the credentials, use that one
+  const char * project_id;
+  if (build->cred_ctx != NULL && build->cred_ctx->project_id != NULL) {
+    project_id = build->cred_ctx->project_id;
+  } else {
+    project_id = cb->project_id;
+  }
+
+  // Create the subcontext holding various pieces of server information.
+  build->resource = wg_monitored_resource_create(cb, project_id);
+  if (build->resource == NULL) {
+    ERROR("write_gcm: wg_monitored_resource_create failed.");
+    goto leave;
+  }
+
+  const char *format_string_to_use =
+      cb->agent_translation_service_format_string != NULL ?
+          cb->agent_translation_service_format_string :
+          agent_translation_service_default_format_string;
+
+  char url[512];  // Big enough?
+  int sprintf_result = snprintf(url, sizeof(url), format_string_to_use,
+      build->resource->project_id);
+  if (sprintf_result < 0 || sprintf_result >= sizeof(url)) {
+    ERROR("write_gcm: overflowed url buffer");
+    goto leave;
+  }
+  build->agent_translation_service_url = sstrdup(url);
 
   // Create the subcontext holding the oauth2 state.
   build->oauth2_ctx = wg_oauth2_cxt_create();
