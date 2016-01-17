@@ -549,6 +549,12 @@ match_value_la_SOURCES = match_value.c
 match_value_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 endif
 
+if BUILD_PLUGIN_MATCH_THROTTLE_GCM
+pkglib_LTLIBRARIES += match_throttle_gcm.la
+match_throttle_gcm_la_SOURCES = match_throttle_gcm.c
+match_throttle_gcm_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+endif
+
 if BUILD_PLUGIN_MBMON
 pkglib_LTLIBRARIES += mbmon.la
 mbmon_la_SOURCES = mbmon.c
