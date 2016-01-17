@@ -1019,202 +1019,6 @@ static void wg_oauth2_ctx_destroy(oauth2_ctx_t *ctx) {
 //==============================================================================
 //==============================================================================
 //==============================================================================
-// Austin Appleby's MurmurHash3, retrieved from Wikipedia on December 22, 2015.
-// https://en.wikipedia.org/wiki/MurmurHash
-//
-// This version requires that your processor be tolerant of unaligned reads.
-//==============================================================================
-//==============================================================================
-//==============================================================================
-#define ROT32(x, y) ((x << y) | (x >> (32 - y))) // avoid effor
-uint32_t murmur3_32(const char *key, uint32_t len, uint32_t seed) {
-  static const uint32_t c1 = 0xcc9e2d51;
-  static const uint32_t c2 = 0x1b873593;
-  static const uint32_t r1 = 15;
-  static const uint32_t r2 = 13;
-  static const uint32_t m = 5;
-  static const uint32_t n = 0xe6546b64;
-
-  uint32_t hash = seed;
-
-  const int nblocks = len / 4;
-  const uint32_t *blocks = (const uint32_t *) key;
-  int i;
-  uint32_t k;
-  for (i = 0; i < nblocks; i++) {
-    k = blocks[i];
-    k *= c1;
-    k = ROT32(k, r1);
-    k *= c2;
-
-    hash ^= k;
-    hash = ROT32(hash, r2) * m + n;
-  }
-
-  const uint8_t *tail = (const uint8_t *) (key + nblocks * 4);
-  uint32_t k1 = 0;
-
-  switch (len & 3) {
-    case 3:
-      k1 ^= tail[2] << 16;
-    case 2:
-      k1 ^= tail[1] << 8;
-    case 1:
-      k1 ^= tail[0];
-
-      k1 *= c1;
-      k1 = ROT32(k1, r1);
-      k1 *= c2;
-      hash ^= k1;
-  }
-
-  hash ^= len;
-  hash ^= (hash >> 16);
-  hash *= 0x85ebca6b;
-  hash ^= (hash >> 13);
-  hash *= 0xc2b2ae35;
-  hash ^= (hash >> 16);
-
-  return hash;
-}
-#undef ROT32
-
-//==============================================================================
-//==============================================================================
-//==============================================================================
-// Canonical metadata values. The only metadata values we currently care about
-// are those that function as a 'key' for the Stackdriver product. When a value
-// comes in, we keep those (sorting them to put them in a canonical order) and
-// discard the rest.
-//==============================================================================
-//==============================================================================
-//==============================================================================
-
-// Identifying information for plugins with supported metadata.
-typedef struct {
-  // These fields form a filter. A given field is NULL if it does not
-  // participate in the match.
-  const char *plugin;
-  const char *type;
-  const char *plugin_instance;
-  const char *type_instance;
-
-  // The metadata keys we care about.
-  const char **supported_keys;
-
-  // The number of keys in this structure.
-  // num_keys == arraysize(supported_keys).
-  int num_supported_keys;
-} wg_recognized_plugin_t;
-
-// Finds the wg_recognized_plugin_t structure that matches the incoming
-// parameters. Returns NULL if no match was found.
-static wg_recognized_plugin_t *wg_find_recognized_plugin(
-    const char *plugin, const char *type, const char *plugin_instance,
-    const char *type_instance);
-// Canonicalizes the array of metadata keys so that they are limited to those
-// supported by Stackdriver. (We don't care about metadata that some other
-// plugin may have added for its own purposes). This operation may shorten the
-// array. If it does, the deleted keys will be freed. Returns the new size of
-// the array.
-static int wg_canonicalize_keys(const char *plugin, const char *type,
-    const char *plugin_instance, const char *type_instance, char **keys,
-    int num_keys);
-
-//------------------------------------------------------------------------------
-// Private implementation starts here.
-//------------------------------------------------------------------------------
-// Removes entries from the 'keys' array which are not present in the
-// 'supported_keys' array. Returns the new array size. Frees removed keys.
-static int wg_filter_keys(char **keys, int keys_size,
-    const char **supported_keys, int supported_keys_len);
-static _Bool wg_array_contains_key(const char *key, const char **array,
-    int array_size);
-
-static const char *wg_supported_keys_processes[] = {
-    "processes:pid",
-    "processes:owner",
-    "processes:command",
-    "processes:command_line",
-};
-
-static wg_recognized_plugin_t wg_recognized_plugins[] = {
-    {
-        .plugin = "processes",
-        // .type_instance = "detail",
-        .supported_keys = wg_supported_keys_processes,
-        .num_supported_keys = STATIC_ARRAY_SIZE(wg_supported_keys_processes),
-    },
-};
-
-static wg_recognized_plugin_t *wg_find_recognized_plugin(
-    const char *plugin, const char *plugin_instance,
-    const char *type, const char *type_instance) {
-  int i;
-  for (i = 0; i < STATIC_ARRAY_SIZE(wg_recognized_plugins); ++i) {
-    wg_recognized_plugin_t *rec = &wg_recognized_plugins[i];
-    if (rec->plugin != NULL && strcmp(rec->plugin, plugin) != 0) continue;
-    if (rec->plugin_instance != NULL &&
-        strcmp(rec->plugin_instance, plugin_instance) != 0) continue;
-    if (rec->type != NULL && strcmp(rec->type, type) != 0) continue;
-    if (rec->type_instance != NULL &&
-        strcmp(rec->type_instance, type_instance) != 0) continue;
-    // Match found!
-    return rec;
-  }
-  return NULL;
-}
-
-static int wg_canonicalize_keys(const char *plugin, const char *plugin_instance,
-    const char *type, const char *type_instance,
-    char **keys, int num_keys) {
-  wg_recognized_plugin_t *rec = wg_find_recognized_plugin(
-      plugin, plugin_instance, type, type_instance);
-  if (rec == NULL) {
-    // Plugin not recognized. In this case we can free all the metadata entries.
-    return wg_filter_keys(keys, num_keys, NULL, 0);
-  }
-
-  // Plugin recognized. Limit the metadata entries to the supported keys.
-  num_keys = wg_filter_keys(keys, num_keys,
-      rec->supported_keys, rec->num_supported_keys);
-  // Canonicalize key order.
-  qsort(keys, num_keys, sizeof(keys[0]),
-      (int (*)(const void *, const void *))&strcmp);
-  return num_keys;
-}
-
-static int wg_filter_keys(char **keys, int num_keys,
-    const char **supported_keys, int num_supported_keys) {
-  int i = 0;
-  while (i < num_keys) {
-    if (wg_array_contains_key(keys[i], supported_keys, num_supported_keys)) {
-      // Key supported! Keep it.
-      ++i;
-      continue;
-    }
-    // Key not supported. Delete it!
-    sfree(keys[i]);
-    keys[i] = keys[num_keys - 1];
-    --num_keys;
-  }
-  return num_keys;
-}
-
-static _Bool wg_array_contains_key(const char *key, const char **array,
-    int array_size) {
-  int i;
-  for (i = 0; i < array_size; ++i) {
-    if (strcmp(array[i], key) == 0) {
-      return 1;
-    }
-  }
-  return 0;
-}
-
-//==============================================================================
-//==============================================================================
-//==============================================================================
 // Submodule for holding the monitored data while we are waiting to send it
 // upstream.
 //==============================================================================
@@ -1254,9 +1058,6 @@ typedef struct {
 
   int num_metadata_entries;
   wg_metadata_entry_t *metadata_entries;
-
-  // The hash of all the fields above, including the metadata values if any.
-  uint32_t hash_code;
 } wg_payload_key_t;
 
 // The element type of the 'values' array of wg_payload_t, defined below.
@@ -1316,8 +1117,6 @@ static int wg_typed_value_create_from_meta_data_inline(wg_typed_value_t *item,
 static void wg_typed_value_destroy_inline(wg_typed_value_t *item);
 static int wg_typed_value_copy(wg_typed_value_t *dest,
     const wg_typed_value_t *src);
-static uint32_t wg_typed_value_compute_hash_code(const wg_typed_value_t *item,
-    uint32_t seed);
 
 static int wg_metadata_entry_create_inline(wg_metadata_entry_t *result,
     meta_data_t *md, const char *key);
@@ -1329,20 +1128,6 @@ static int wg_payload_key_create_inline(wg_payload_key_t *item,
     const value_list_t *vl);
 static void wg_payload_key_destroy_inline(wg_payload_key_t *item);
 static wg_payload_key_t *wg_payload_key_clone(const wg_payload_key_t *item);
-// Compute the hash code of the payload key. It is assumed at this point that
-// the metadata is canonicalized (to be only those keys that Stackdriver
-// supports) and that the keys are sorted lexicographically. This is done by
-// the wg_canonicalize_keys method.
-static uint32_t wg_payload_key_compute_hash_code(const wg_payload_key_t *item,
-    uint32_t seed);
-// Estimate the memory impact of the payload key. This is basically the sum of
-// the string lengths of the main values (plugin, plugin_instance, type,
-// type_instance) plus the lengths of the metadata values.
-static uint32_t wg_payload_key_estimate_memory_impact(
-    const wg_payload_key_t *item);
-// Returns true if the payload key is a candidate for throttling (when server
-// memory usage gets tight).
-static _Bool wg_payload_key_is_throttleable(const wg_payload_key_t *item);
 
 static void wg_payload_value_create_inline(wg_payload_value_t *result,
     const char *name, int ds_type, value_t value);
@@ -1568,22 +1353,6 @@ static int wg_typed_value_compare(const wg_typed_value_t *lhs,
   return strcmp(lhs->value_text, rhs->value_text);
 }
 
-static uint32_t wg_typed_value_compute_hash_code(const wg_typed_value_t *item,
-    uint32_t seed) {
-  if (item->value_type == wg_typed_value_bool) {
-    return seed + item->bool_value;
-  }
-  return murmur3_32(item->value_text, strlen(item->value_text), seed);
-}
-
-static uint32_t wg_typed_value_estimate_memory_impact(
-    const wg_typed_value_t *item) {
-  if (item->value_type == wg_typed_value_bool) {
-    return 0;
-  }
-  return strlen(item->value_text);
-}
-
 static int wg_payload_key_create_inline(wg_payload_key_t *item,
     const value_list_t *vl) {
   // Items to clean up upon exit.
@@ -1605,8 +1374,6 @@ static int wg_payload_key_create_inline(wg_payload_key_t *item,
       ERROR("write_gcm: error reading metadata table of contents.");
       goto leave;
     }
-    toc_size = wg_canonicalize_keys(vl->plugin, vl->plugin_instance,
-        vl->type, vl->type_instance, toc, toc_size);
     item->num_metadata_entries = toc_size;
     item->metadata_entries = calloc(toc_size,
         sizeof(item->metadata_entries[0]));
@@ -1619,7 +1386,6 @@ static int wg_payload_key_create_inline(wg_payload_key_t *item,
       }
     }
   }
-  item->hash_code = wg_payload_key_compute_hash_code(item, 0);
   result = 0;  //Success!
 
  leave:
@@ -1688,44 +1454,6 @@ static wg_payload_key_t *wg_payload_key_clone(const wg_payload_key_t *item) {
     sfree(build);
   }
   return result;
-}
-
-static uint32_t wg_payload_key_compute_hash_code(const wg_payload_key_t *item,
-    uint32_t seed) {
-  uint32_t result = seed;
-  result = murmur3_32(item->host, strlen(item->host), result);
-  result = murmur3_32(item->plugin, strlen(item->plugin), result);
-  result = murmur3_32(item->plugin_instance, strlen(item->plugin_instance),
-      result);
-  result = murmur3_32(item->type, strlen(item->type), result);
-  result = murmur3_32(item->type_instance, strlen(item->type_instance),
-      result);
-
-  int i;
-  for (i = 0; i < item->num_metadata_entries; ++i) {
-    result = wg_typed_value_compute_hash_code(
-        &item->metadata_entries[i].value, result);
-  }
-  return result;
-}
-
-static uint32_t wg_payload_key_estimate_memory_impact(
-    const wg_payload_key_t *item) {
-  uint32_t result = 0;
-  result += strlen(item->plugin);
-  result += strlen(item->plugin_instance);
-  result += strlen(item->type);
-  result += strlen(item->type_instance);
-  int i;
-  for (i = 0; i < item->num_metadata_entries; ++i) {
-    result += wg_typed_value_estimate_memory_impact(
-        &item->metadata_entries[i].value);
-  }
-  return result;
-}
-
-static _Bool wg_payload_key_is_throttleable(const wg_payload_key_t *item) {
-  return item->num_metadata_entries != 0;
 }
 
 static int wg_metadata_entry_create_inline(wg_metadata_entry_t *item,
@@ -1931,7 +1659,7 @@ static wg_configbuilder_t *wg_configbuilder_create(oconfig_item_t *ci) {
     goto error;
   }
 
-  const char *string_keys[] = {
+  static const char *string_keys[] = {
       "CloudProvider",
       "Project",
       "Instance",
@@ -1957,7 +1685,7 @@ static wg_configbuilder_t *wg_configbuilder_create(oconfig_item_t *ci) {
       &cb->json_log_file,
       &cb->agent_translation_service_format_string,
   };
-  const char *int_keys[] = {
+  static const char *int_keys[] = {
       "ThrottlingLowWaterMark",
       "ThrottlingHighWaterMark",
       "ThrottlingChunkInterval",
@@ -1969,7 +1697,7 @@ static wg_configbuilder_t *wg_configbuilder_create(oconfig_item_t *ci) {
       &cb->throttling_chunk_interval_secs,
       &cb->throttling_purge_interval_secs,
   };
-  const char *bool_keys[] = {
+  static const char *bool_keys[] = {
       "PrettyPrintJSON",
   };
   _Bool *bool_locations[] = {
@@ -2396,354 +2124,6 @@ static char *wg_get_from_metadata_server(const char *base, const char *resource,
   return sstrdup(buffer);
 }
 
-
-//==============================================================================
-//==============================================================================
-//==============================================================================
-// "Cloud Key Tracker" submodule. This keeps track of the keys that the server
-// knows about, and initiates throttling if the server is tracking too many
-// keys.
-//==============================================================================
-//==============================================================================
-//==============================================================================
-struct wg_key_history_s;
-
-typedef struct {
-  // Mode: whether throttling is on right now.
-  _Bool is_throttling;
-  // Estimated amount of memory in use at the server (in bytes).
-  size_t server_memory_in_use;
-  // All keys sent in the past 24 hours.
-  struct wg_key_history_s *key_history_head;
-  struct wg_key_history_s *key_history_tail;
-  // Length of the above list.
-  size_t num_key_history_entries;
-  // map<hash code, hash_count_value_t>
-  c_avl_tree_t *hash_counts;
-
-  // Configuration parameters:
-
-  // When 'server_memory_in_use' is less than this value, throttling is turned
-  // off.
-  size_t low_water_mark_bytes;
-
-  // When 'server_memory_in_use' is greater than this value, throttling is
-  // turned on.
-  size_t high_water_mark_bytes;
-
-  // How long to keep adding hashes to the same chunk before making a new chunk
-  // (typically 1/2 hour).
-  int chunk_interval_secs;
-
-  // How long to keep wg_key_history_s chunks before purging them (typically
-  // 24 hours).
-  int purge_interval_secs;
-} wg_key_tracker_t;
-
-typedef struct {
-  uint32_t count;
-  uint32_t memory_impact;
-} hash_count_value_t;
-
-static wg_key_tracker_t *wg_key_tracker_create(size_t low_water_mark,
-    size_t high_water_mark, int chunk_interval_secs, int purge_interval_secs);
-static void wg_key_tracker_destroy(wg_key_tracker_t *item);
-
-// Updates the statistics which keep track of how much memory we think the
-// server is using. Starts throttling data (removing items from the list,
-// modifying it in place) if we feel the server is tracking too much data.
-static int wg_throttle_excessive_keys(wg_key_tracker_t *tracker, cdtime_t now,
-    wg_payload_t **list);
-
-//------------------------------------------------------------------------------
-// Private implementation starts here.
-//------------------------------------------------------------------------------
-static int wg_lookup_or_create_hash_count_value(wg_key_tracker_t *tracker,
-    uint32_t hash, hash_count_value_t **hc_value);
-static int wg_destroy_hash_count_entry(wg_key_tracker_t *tracker,
-    uint32_t hash);
-int wg_compare_uint32_t(void *lhs, void *rhs);
-
-// We track all the keys sent in the previous 24 hours. But we don't hang on to
-// the complete key; rather we just remember the hash of the key. This
-// significantly reduces the amount of memory needed for this tracking, at the
-// cost of being a little bit wrong about our estimate (due to occasional hash
-// collisions).
-typedef struct wg_key_history_s {
-  struct wg_key_history_s *next;
-
-  time_t creation_time;
-  time_t last_append_time;
-  int num_hashes;
-  uint32_t hashes[1024];
-} wg_key_history_t;
-
-static wg_key_history_t *wg_key_history_create(time_t now);
-static void wg_key_history_destroy(wg_key_history_t *item);
-
-
-static int wg_throttle_excessive_keys(wg_key_tracker_t *tracker, cdtime_t now,
-    wg_payload_t **list) {
-  // Trim the key history (removing entries older than 'purge_time')
-  size_t num_chunks_destroyed = 0;
-  cdtime_t purge_time = now - TIME_T_TO_CDTIME_T(tracker->purge_interval_secs);
-
-  while (tracker->key_history_head != NULL &&
-      tracker->key_history_head->last_append_time < purge_time) {
-    wg_key_history_t *kh = tracker->key_history_head;
-
-    int i;
-    for (i = 0; i < kh->num_hashes; ++i) {
-      uint32_t hash = kh->hashes[i];
-      hash_count_value_t *hc_value;
-      if (wg_lookup_or_create_hash_count_value(tracker, hash, &hc_value) != 0) {
-        ERROR("write_gcm: wg_lookup_or_create_hash_count_value (v1) failed.");
-        return -1;
-      }
-      if (hc_value->count == 0) {
-        ERROR("write_gcm: Failed to find existing hash entry.");
-        return -1;
-      }
-      --hc_value->count;
-      if (hc_value->count == 0) {
-        // The last instance! We get to delete it and reduce our estimate of
-        // server memory impact.
-        tracker->server_memory_in_use -= hc_value->memory_impact;
-        if (wg_destroy_hash_count_entry(tracker, hash) != 0) {
-          ERROR("write_gcm: wg_destroy_hash_count_entry failed");
-          return -1;
-        }
-      }
-    }
-    // Pop head.
-    tracker->key_history_head = kh->next;
-    kh->next = NULL;
-    if (tracker->key_history_head == NULL) {
-      tracker->key_history_tail = NULL;
-    }
-    wg_key_history_destroy(kh);
-    ++num_chunks_destroyed;
-    --tracker->num_key_history_entries;
-  }
-
-  // Decide whether to start or stop throttling.
-  if (tracker->is_throttling &&
-      tracker->server_memory_in_use < tracker->low_water_mark_bytes) {
-    WARNING("Estimated server memory is %zd. Throttling is now OFF.",
-        tracker->server_memory_in_use);
-    tracker->is_throttling = 0;
-  }
-  if (!tracker->is_throttling &&
-      tracker->server_memory_in_use > tracker->high_water_mark_bytes) {
-    WARNING("Estimated server memory is %zd. Throttling is now ON.",
-        tracker->server_memory_in_use);
-    tracker->is_throttling = 1;
-  }
-
-  if (tracker->is_throttling) {
-    // Throttle payloads and rewrite the list as we go.
-    wg_payload_t *new_head = NULL;
-    wg_payload_t *new_tail = NULL;
-    wg_payload_t *payload = *list;
-    while (payload != NULL) {
-      // Detach from rest of list.
-      wg_payload_t *next = payload->next;
-      payload->next = NULL;
-      if (wg_payload_key_is_throttleable(&payload->key)) {
-        // This payload is eligible for throttling, so delete it.
-        wg_payload_destroy(payload);
-        payload = next;
-        continue;
-      }
-      // Can't throttle this payload, so add it to the new list we're building.
-      if (new_head == NULL) {
-        new_head = payload;
-      } else {
-        new_tail->next = payload;
-      }
-      new_tail = payload;
-      payload = next;
-    }
-    *list = new_head;
-  }
-
-  // Update server impact of remaining keys.
-  wg_payload_t *payload;
-  hash_count_value_t *hc_value;
-  size_t num_chunks_created = 0;
-  for (payload = *list; payload != NULL; payload = payload->next) {
-    if (wg_lookup_or_create_hash_count_value(tracker, payload->key.hash_code,
-        &hc_value) != 0) {
-      ERROR("write_gcm: wg_lookup_or_create_hash_count_value (v2) failed.");
-      return -1;
-    }
-    if (hc_value->count == 0) {
-      // New entry!
-      uint32_t memory_impact = wg_payload_key_estimate_memory_impact(
-          &payload->key);
-      hc_value->memory_impact = memory_impact;
-      tracker->server_memory_in_use += memory_impact;
-    }
-    ++hc_value->count;
-
-    // Update history. We will make a new history node if:
-    // 1. There is no current history node.
-    // 2. The current history node is full.
-    // 3. The current history node was created prior to 'chunk_time'.
-    cdtime_t chunk_time = now -
-        TIME_T_TO_CDTIME_T(tracker->chunk_interval_secs);
-    wg_key_history_t *tail = tracker->key_history_tail;  // alias
-    if (tail == NULL ||
-        tail->num_hashes == STATIC_ARRAY_SIZE(tail->hashes) ||
-        tail->creation_time < chunk_time) {
-      wg_key_history_t *new = wg_key_history_create(now);
-      if (new == NULL) {
-        ERROR("write_gcm: wg_key_history_create failed");
-        return -1;
-      }
-      if (tail == NULL) {
-        tracker->key_history_head = new;
-      } else {
-        tail->next = new;
-      }
-      tracker->key_history_tail = new;
-      tail = new;  // Keep our alias up to date.
-      ++num_chunks_created;
-      ++tracker->num_key_history_entries;
-    }
-    tail->last_append_time = now;
-    tail->hashes[tail->num_hashes++] = payload->key.hash_code;
-  }
-  size_t keys_in_use = c_avl_size(tracker->hash_counts);
-  if (num_chunks_created != 0 || num_chunks_destroyed != 0) {
-    INFO("write_gcm: After destroying %zd tracking chunks and creating %zd"
-        " more, there are %zd chunks remaining, representing %zd tracked keys."
-        " Throttling mode is %d and estimated server memory used is %zd bytes.",
-        num_chunks_destroyed, num_chunks_created,
-        tracker->num_key_history_entries, keys_in_use, tracker->is_throttling,
-        tracker->server_memory_in_use);
-  }
-  return 0;
-}
-
-static int wg_lookup_or_create_hash_count_value(wg_key_tracker_t *tracker,
-    uint32_t hash, hash_count_value_t **hc_value) {
-  // Items to clean up on exit.
-  uint32_t *new_hash = NULL;
-  hash_count_value_t *new_value = NULL;
-
-  if (c_avl_get(tracker->hash_counts, &hash, (void**)hc_value) == 0) {
-    // Existing value found!
-    return 0;
-  }
-  new_hash = calloc(1, sizeof(*new_hash));
-  new_value = calloc(1, sizeof(*new_value));
-  if (new_hash == NULL || new_value == NULL) {
-    ERROR("write_gcm: wg_lookup_or_create_hash_count_value: calloc failed");
-    goto error;
-  }
-  *new_hash = hash;
-
-  if (c_avl_insert(tracker->hash_counts, new_hash, new_value) != 0) {
-    ERROR("write_gcm: c_avl_insert (hash_count_value) failed");
-    goto error;
-  }
-
-  // Successfully inserted!
-  *hc_value = new_value;
-  return 0;
-
- error:
-  sfree(new_value);
-  sfree(new_hash);
-  return -1;
-}
-
-static int wg_destroy_hash_count_entry(wg_key_tracker_t *tracker,
-    uint32_t hash) {
-  uint32_t *tree_key;
-  hash_count_value_t *tree_value;
-  if (c_avl_remove(tracker->hash_counts, &hash, (void**)&tree_key,
-      (void**)&tree_value) != 0) {
-    ERROR("write_gcm: wg_destroy_hash_count_entry: c_avl_remove failed");
-    return -1;
-  }
-  sfree(tree_value);
-  sfree(tree_key);
-  return 0;
-}
-
-int wg_compare_uint32_t(void *lhs, void *rhs) {
-  uint32_t *l = (uint32_t*)lhs;
-  uint32_t *r = (uint32_t*)rhs;
-  if (*l < *r) {
-    return -1;
-  }
-  if (*l > *r) {
-    return 1;
-  }
-  return 0;
-}
-
-static wg_key_tracker_t *wg_key_tracker_create(size_t low_water_mark,
-    size_t high_water_mark, int chunk_interval_secs, int purge_interval_secs) {
-  // Items to clean up at exist.
-  wg_key_tracker_t *result = NULL;
-  wg_key_tracker_t *build = NULL;
-
-  build = calloc(1, sizeof(*build));
-  build->hash_counts = c_avl_create(
-      (int (*)(const void*, const void*))&wg_compare_uint32_t);
-  if (build->hash_counts == NULL) {
-    ERROR("write_gcm: wg_key_tracker_create failed");
-    goto leave;
-  }
-
-  build->low_water_mark_bytes = low_water_mark;
-  build->high_water_mark_bytes = high_water_mark;
-  build->chunk_interval_secs = chunk_interval_secs;
-  build->purge_interval_secs = purge_interval_secs;
-
-  // Success!
-  result = build;
-  build = NULL;
-
- leave:
-  wg_key_tracker_destroy(build);
-  return result;
-}
-
-static void wg_key_tracker_destroy(wg_key_tracker_t *item) {
-  if (item == NULL) {
-    return;
-  }
-  c_avl_tree_t *tree = item->hash_counts;
-  if (tree != NULL) {
-    void *key;
-    void *value;
-    while (c_avl_size(tree) > 0) {
-      c_avl_pick(tree, &key, &value);
-      sfree(value);
-      sfree(key);
-    }
-    c_avl_destroy(tree);
-  }
-}
-
-static wg_key_history_t *wg_key_history_create(time_t now) {
-  wg_key_history_t *result = calloc(1, sizeof(*result));
-  if (result == NULL) {
-    ERROR("write_gcm: wg_key_history_create: calloc failed");
-    return NULL;
-  }
-  result->creation_time = now;
-  return result;
-}
-
-static void wg_key_history_destroy(wg_key_history_t *item) {
-  sfree(item);
-}
-
 //==============================================================================
 //==============================================================================
 //==============================================================================
@@ -2773,7 +2153,6 @@ typedef struct {
   credential_ctx_t *cred_ctx;
   oauth2_ctx_t *oauth2_ctx;
   wg_queue_t *queue;
-  wg_key_tracker_t *key_tracker;
 } wg_context_t;
 
 static wg_context_t *wg_context_create(const wg_configbuilder_t *cb);
@@ -2850,15 +2229,6 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
     goto leave;
   }
 
-  // Create the throttling context.
-  build->key_tracker = wg_key_tracker_create(cb->throttling_low_water_mark,
-      cb->throttling_high_water_mark, cb->throttling_chunk_interval_secs,
-      cb->throttling_purge_interval_secs);
-  if (build->key_tracker == NULL) {
-    ERROR("write_gcm: wg_key_tracker_create failed.");
-    goto leave;
-  }
-
   build->pretty_print_json = cb->pretty_print_json;
 
   // Success!
@@ -2875,7 +2245,6 @@ static void wg_context_destroy(wg_context_t *ctx) {
     return;
   }
   WARNING("write_gcm: Tearing down context.");
-  wg_key_tracker_destroy(ctx->key_tracker);
   wg_queue_destroy(ctx->queue);
   wg_oauth2_ctx_destroy(ctx->oauth2_ctx);
   wg_credential_ctx_destroy(ctx->cred_ctx);
@@ -3466,13 +2835,6 @@ static void *wg_process_queue(void *arg) {
       break;
     }
     last_flush_time = cdtime();
-    if (wg_throttle_excessive_keys(ctx->key_tracker, last_flush_time,
-        &payloads) != 0) {
-      // Fatal.
-      ERROR("write_gcm: wg_throttle_excessive_keys failed.");
-      wg_payload_destroy(payloads);
-      break;
-    }
     if (wg_rebase_cumulative_values(deriv_tree, &payloads) != 0) {
       // Also fatal.
       ERROR("write_gcm: wg_rebase_cumulative_values failed.");
