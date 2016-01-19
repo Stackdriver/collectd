@@ -1,6 +1,6 @@
 /**
  * collectd - src/match_throttle_gcm.c
- * Copyright (C) 2016       Corey Kosak
+ * Copyright 2010 Google Inc. All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -41,7 +41,7 @@
 #include "filter_chain.h"
 #include "utils_avltree.h"
 
-static char this_plugin_name[] = "match_throttle_gcm";
+static char this_plugin_name[] = "match_throttle_metadata_keys";
 
 typedef struct mtg_key_history_s
 {
@@ -680,7 +680,7 @@ static int mtg_match (const data_set_t __attribute__((unused)) *ds,
     int result;
     mtg_context_t *context = *user_data;
     // I'm not really sure about the thread safety of filters, so take a big
-    // lock and do the actual work inside tg_match_helper.
+    // lock and do the actual work inside mtg_match_helper.
     pthread_mutex_lock(context->mutex);
     result = mtg_match_helper(vl, context);
     pthread_mutex_unlock(context->mutex);
@@ -694,5 +694,5 @@ void module_register (void)
         .destroy = &mtg_destroy,
         .match = &mtg_match
     };
-    fc_register_match ("throttle_gcm", m);
+    fc_register_match ("throttle_metadata_keys", m);
 }

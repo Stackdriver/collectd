@@ -5573,7 +5573,7 @@ fi
 if test "x$with_libcurl" = "xyes" && test "x$with_libyajl" = "xyes"
 then
 	plugin_write_gcm="yes"
-        match_throttle_gcm="yes"
+        match_throttle_metadata_keys="yes"
 fi
 
 if test "x$have_getutent" = "xyes"
@@ -5663,7 +5663,7 @@ AC_PLUGIN([match_hashed], [yes],               [The hashed match])
 AC_PLUGIN([match_regex], [yes],                [The regex match])
 AC_PLUGIN([match_timediff], [yes],             [The timediff match])
 AC_PLUGIN([match_value], [yes],                [The value match])
-AC_PLUGIN([match_throttle_gcm], [$match_throttle_gcm], [Google cloud monitoring throttling plugin])
+AC_PLUGIN([match_throttle_metadata_keys], [$match_throttle_metadata_keys], [Metadata key throttling plugin])
 AC_PLUGIN([mbmon],       [yes],                [Query mbmond])
 AC_PLUGIN([md],          [$have_linux_raid_md_u_h], [md (Linux software RAID) devices])
 AC_PLUGIN([memcachec],   [$with_libmemcached], [memcachec statistics])
@@ -6046,7 +6046,7 @@ Configuration:
     match_regex . . . . . $enable_match_regex
     match_timediff  . . . $enable_match_timediff
     match_value . . . . . $enable_match_value
-    match_throttle_gcm  . $enable_match_throttle_gcm
+    match_throttle_metadata_keys $enable_match_throttle_metadata_keys
     mbmon . . . . . . . . $enable_mbmon
     md  . . . . . . . . . $enable_md
     memcachec . . . . . . $enable_memcachec
