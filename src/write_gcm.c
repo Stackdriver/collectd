@@ -39,8 +39,10 @@
 #include <string.h>
 
 #include "curl/curl.h"
+#include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <openssl/pem.h>
 #include <openssl/pkcs12.h>
 
 #include <yajl/yajl_gen.h>
@@ -218,6 +220,51 @@ static _Bool wg_value_less(int ds_type, const value_t *a, const value_t *b) {
   }
 }
 
+static char *wg_read_all_bytes(const char *filename, const char *mode) {
+  // Items to clean up at the end.
+  char *result = NULL;
+  char *buffer = NULL;
+  FILE *f = NULL;
+
+  f = fopen(filename, mode);
+  if (f == NULL) {
+    ERROR("write_gcm: wg_read_all_bytes: can't open \"%s\"", filename);
+    goto leave;
+  }
+  if (fseek(f, 0L, SEEK_END) != 0) {
+    ERROR("write_gcm: fseek failed");
+    goto leave;
+  }
+  long size = ftell(f);
+  if (size < 0) {
+    ERROR("write_gcm: ftell failed");
+    goto leave;
+  }
+  rewind(f);
+  buffer = malloc(size + 1);
+  if (buffer == NULL) {
+    ERROR("write_gcm: wg_read_all_bytes: malloc failed");
+    goto leave;
+  }
+
+  size_t bytes_read = fread(buffer, 1, size, f);
+  if (bytes_read != size) {
+    ERROR("write_gcm: wg_read_all_bytes: fread failed");
+    goto leave;
+  }
+
+  buffer[size] = 0;
+  result = buffer;
+  buffer = NULL;
+
+ leave:
+  sfree(buffer);
+  if (f != NULL) {
+    fclose(f);
+  }
+  return result;
+}
+
 //==============================================================================
 //==============================================================================
 //==============================================================================
@@ -227,11 +274,14 @@ static _Bool wg_value_less(int ds_type, const value_t *a, const value_t *b) {
 //==============================================================================
 typedef struct {
   char *email;
+  char *project_id;
   EVP_PKEY *private_key;
 } credential_ctx_t;
 
-static credential_ctx_t *wg_credential_ctx_create(
+static credential_ctx_t *wg_credential_ctx_create_from_p12_file(
     const char *email, const char *key_file, const char *passphrase);
+static credential_ctx_t *wg_credential_ctx_create_from_json_file(
+    const char *cred_file);
 static void wg_credential_ctx_destroy(credential_ctx_t *ctx);
 
 //------------------------------------------------------------------------------
@@ -241,11 +291,11 @@ static void wg_credential_ctx_destroy(credential_ctx_t *ctx);
 static EVP_PKEY *wg_credential_contex_load_pkey(char const *filename,
                                                 char const *passphrase);
 
-static credential_ctx_t *wg_credential_ctx_create(
+static credential_ctx_t *wg_credential_ctx_create_from_p12_file(
     const char *email, const char *key_file, const char *passphrase) {
   credential_ctx_t *result = calloc(1, sizeof(*result));
   if (result == NULL) {
-    ERROR("write_gcm: wg_credential_ctx_create: calloc failed.");
+    ERROR("write_gcm: wg_credential_ctx_create_from_p12_file: calloc failed.");
     return NULL;
   }
   result->email = sstrdup(email);
@@ -257,6 +307,100 @@ static credential_ctx_t *wg_credential_ctx_create(
   return result;
 }
 
+int wg_extract_toplevel_json_string(const char *json, const char *key,
+				    char **result);
+
+static credential_ctx_t *wg_credential_ctx_create_from_json_file(
+								 const char *cred_file) {
+  // Things to clean up upon exit.
+  credential_ctx_t *result = NULL;
+  credential_ctx_t *ctx = NULL;
+  char *creds = NULL;
+  char *private_key_pem = NULL;
+  PKCS8_PRIV_KEY_INFO *p8inf = NULL;
+  BIO *in = NULL;
+
+  ctx = calloc(1, sizeof(*ctx));
+  if (ctx == NULL) {
+    ERROR("write_gcm: wg_credential_ctx_create_from_cred_file: calloc failed.");
+    goto leave;
+  }
+
+  creds = wg_read_all_bytes(cred_file, "r");
+  if (creds == NULL) {
+    ERROR("write_gcm: Failed to read application default credentials file %s",
+	  cred_file);
+    goto leave;
+  }
+
+  if (wg_extract_toplevel_json_string(creds, "client_email", &ctx->email)
+      != 0) {
+    ERROR("write_gcm: Couldn't find 'client_email' entry in credentials file.");
+    goto leave;
+  }
+  // use the client email to determine the project
+  if (strstr(ctx->email, "@developer.gserviceaccount.com") != NULL) {
+    // old style email address like projectnumber-hash@developer.gserviceaccount.com
+    char *dash;
+    dash = strstr(ctx->email, "-");
+    if (dash != NULL) {
+      char * project = strdup(ctx->email);
+      dash = strstr(project, "-");
+      *dash = '\0';
+      ctx->project_id = project;
+    }
+  } else if (strstr(ctx->email, ".iam.gserviceaccount.com") != NULL) {
+    // new style email address like string@project.iam.gserviceaccount.com
+    char *at, *dot;
+    at = strstr(ctx->email, "@");
+    dot = strstr(ctx->email, ".iam.gserviceaccount.com");
+    if (at != NULL && dot != NULL) {
+      char *project = malloc(dot - at) + 1;
+      project = strndup(at+1, dot - at - 1);
+      ctx->project_id = project;
+    }
+  }
+
+  if (wg_extract_toplevel_json_string(creds, "private_key", &private_key_pem)
+      != 0) {
+    ERROR("write_gcm: Couldn't find 'private_key' entry in credentials file.");
+    goto leave;
+  }
+
+  in = BIO_new_mem_buf((void*)private_key_pem, -1);
+  if (in == NULL) {
+    ERROR("write_gcm: BIO_new_mem_buf failed.");
+    goto leave;
+  }
+  p8inf = PEM_read_bio_PKCS8_PRIV_KEY_INFO(in, NULL, NULL, NULL);
+  if (p8inf == NULL) {
+    ERROR("write_gcm: PEM_read_bio_PKCS8_PRIV_KEY_INFO failed.");
+    goto leave;
+  }
+  ctx->private_key = EVP_PKCS82PKEY(p8inf);
+  if (ctx->private_key == NULL) {
+    ERROR("write_gcm: EVP_PKCS82PKEY failed.");
+    goto leave;
+  }
+  INFO("write_gcm: json credentials parsed successfully. email=%s, "
+       "project=%s", ctx->email, ctx->project_id);
+
+  result = ctx;
+  ctx = NULL;
+
+ leave:
+  if (p8inf != NULL) {
+    PKCS8_PRIV_KEY_INFO_free(p8inf);
+  }
+  if (in != NULL) {
+    BIO_free(in);
+  }
+  wg_credential_ctx_destroy(ctx);
+  sfree(private_key_pem);
+  sfree(creds);
+  return result;
+}
+
 static void wg_credential_ctx_destroy(credential_ctx_t *ctx) {
   if (ctx == NULL) {
     return;
@@ -265,6 +409,7 @@ static void wg_credential_ctx_destroy(credential_ctx_t *ctx) {
     EVP_PKEY_free(ctx->private_key);
   }
   sfree(ctx->email);
+  sfree(ctx->project_id);
   sfree(ctx);
 }
 
@@ -1630,6 +1775,7 @@ typedef struct {
   char *zone;
   char *region;
   char *account_id;
+  char *credentials_json_file;
   char *email;
   char *key_file;
   char *passphrase;
@@ -1666,6 +1812,7 @@ static wg_configbuilder_t *wg_configbuilder_create(oconfig_item_t *ci) {
       "Zone",
       "Region",
       "Account",
+      "CredentialsJSON",
       "Email",
       "PrivateKeyFile",
       "PrivateKeyPass",
@@ -1679,6 +1826,7 @@ static wg_configbuilder_t *wg_configbuilder_create(oconfig_item_t *ci) {
       &cb->zone,
       &cb->region,
       &cb->account_id,
+      &cb->credentials_json_file,
       &cb->email,
       &cb->key_file,
       &cb->passphrase,
@@ -1789,6 +1937,14 @@ static wg_configbuilder_t *wg_configbuilder_create(oconfig_item_t *ci) {
     goto error;
   }
 
+  // 'email'/'key_file'/'passphrase' should not be set at the same time as
+  // 'application_default_credentials_file'.
+  if (num_set != 0 && cb->credentials_json_file != NULL) {
+    ERROR("write_gcm: Error reading configuration. "
+	  "It is an error to set both CredentialsJSON and "
+	  "Email/PrivateKeyFile/PrivateKeyPass.");
+  }
+
   // Success!
   return cb;
 
@@ -1827,16 +1983,16 @@ typedef struct {
 } monitored_resource_t;
 
 static monitored_resource_t *wg_monitored_resource_create(
-    const wg_configbuilder_t *cb);
+    const wg_configbuilder_t *cb, const char *project_id);
 static void wg_monitored_resource_destroy(monitored_resource_t *resource);
 
 //------------------------------------------------------------------------------
 // Private implementation starts here.
 //------------------------------------------------------------------------------
 static monitored_resource_t *wg_monitored_resource_create_for_gcp(
-    const wg_configbuilder_t *cb);
+    const wg_configbuilder_t *cb, const char *project_id);
 static monitored_resource_t *wg_monitored_resource_create_for_aws(
-    const wg_configbuilder_t *cb);
+    const wg_configbuilder_t *cb, const char *project_id);
 
 // Fetch 'resource' from the GCP metadata server.
 static char *wg_get_from_gcp_metadata_server(const char *resource);
@@ -1849,17 +2005,41 @@ static char *wg_get_from_aws_metadata_server(const char *resource);
 static char *wg_get_from_metadata_server(const char *base, const char *resource,
     const char **headers, int num_headers);
 
+static char * detect_cloud_provider() {
+    char * gcp_hostname = wg_get_from_gcp_metadata_server("instance/hostname");
+    if (gcp_hostname != NULL) {
+      sfree(gcp_hostname);
+      return "gcp";
+    }
+    
+    char * aws_hostname = wg_get_from_aws_metadata_server("meta-data/hostname");
+    if (aws_hostname != NULL) {
+      sfree(aws_hostname);
+      return "aws";
+    }
+    ERROR("Unable to contact metadata server to detect cloud provider");
+    return NULL;
+}
+
 static monitored_resource_t *wg_monitored_resource_create(
-    const wg_configbuilder_t *cb) {
-  const char *cloud_provider_to_use = cb->cloud_provider != NULL ?
-      cb->cloud_provider : "gcp";
+    const wg_configbuilder_t *cb, const char *project_id) {
+  char *cloud_provider_to_use;
+  if (cb->cloud_provider != NULL) {
+    cloud_provider_to_use = cb->cloud_provider;
+  } else {
+    cloud_provider_to_use = detect_cloud_provider();
+  }
+  if (cloud_provider_to_use == NULL) {
+    ERROR("write_gcm: Cloud provider not specified and autodetect failed.");
+    return NULL;
+  }
   if (strcasecmp(cloud_provider_to_use, "gcp") == 0) {
-    return wg_monitored_resource_create_for_gcp(cb);
+    return wg_monitored_resource_create_for_gcp(cb, project_id);
   }
   if (strcasecmp(cloud_provider_to_use, "aws") == 0) {
-    return wg_monitored_resource_create_for_aws(cb);
+    return wg_monitored_resource_create_for_aws(cb, project_id);
   }
-  ERROR("Cloud provider '%s' not recognized.", cloud_provider_to_use);
+  ERROR("write_gcm: Cloud provider '%s' not recognized.", cloud_provider_to_use);
   return NULL;
 }
 
@@ -1939,10 +2119,10 @@ static void wg_monitored_resource_destroy(monitored_resource_t *resource) {
 }
 
 static monitored_resource_t *wg_monitored_resource_create_for_gcp(
-    const wg_configbuilder_t *cb) {
+    const wg_configbuilder_t *cb,  const char *project_id) {
   // Items to clean up upon leaving.
   monitored_resource_t *result = NULL;
-  char *project_id_to_use = sstrdup(cb->project_id);
+  char *project_id_to_use = sstrdup(project_id);
   char *instance_id_to_use = sstrdup(cb->instance_id);
   char *zone_to_use = sstrdup(cb->zone);
 
@@ -2012,10 +2192,10 @@ static monitored_resource_t *wg_monitored_resource_create_for_gcp(
 }
 
 static monitored_resource_t *wg_monitored_resource_create_for_aws(
-    const wg_configbuilder_t *cb) {
+    const wg_configbuilder_t *cb, const char *project_id) {
   // Items to clean up upon leaving.
   monitored_resource_t *result = NULL;
-  char *project_id_to_use = sstrdup(cb->project_id);
+  char *project_id_to_use = sstrdup(project_id);
   char *region_to_use = sstrdup(cb->region);
   char *instance_id_to_use = sstrdup(cb->instance_id);
   char *account_id_to_use = sstrdup(cb->account_id);
@@ -2164,10 +2344,45 @@ static void wg_queue_destroy(wg_queue_t *queue);
 //------------------------------------------------------------------------------
 // Private implementation starts here.
 //------------------------------------------------------------------------------
+static char * find_application_default_creds_path() {
+  // first see if there is a file specified by $GOOGLE_APPLICATION_CREDENTIALS 
+  const char * env_creds_path = getenv("GOOGLE_APPLICATION_CREDENTIALS");
+  if (env_creds_path != NULL && access(env_creds_path, R_OK) == 0) {
+    return strdup(env_creds_path);
+  }
+  
+  // next check for $HOME/.config/gcloud/application_default_credentials.json
+  const char * home_path = getenv("HOME");
+  if (home_path != NULL) {
+    static char suffix[] = "/.config/gcloud/application_default_credentials.json";
+    size_t bytes_needed = strlen(home_path) + sizeof(suffix);
+    char *home_config_path = malloc(bytes_needed);
+    if (home_config_path == NULL) {
+      ERROR("write_gcm: find_application_default_creds_path: malloc failed");
+      return NULL;
+    }
+    int result = snprintf(home_config_path, bytes_needed,
+			  "%s%s", home_path, suffix);
+    if (result > 0 && access(home_config_path, R_OK) == 0) {
+      return home_config_path;
+    }
+    sfree(home_config_path);
+  }
+
+  // finally, check the system default path
+  const char * system_default_path = "/etc/google/auth/application_default_credentials.json";
+  if (access(system_default_path, R_OK) == 0) {
+    return strdup(system_default_path);
+  }
+
+  return NULL;
+}
+
 static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
   // Items to clean up on exit.
   wg_context_t *build = NULL;
   wg_context_t *result = NULL;
+  char * cred_path = NULL;
 
   build = calloc(1, sizeof(*build));
   if (build == NULL) {
@@ -2184,8 +2399,48 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
     }
   }
 
+  // Optionally create the subcontext holding the service account credentials.
+  if (cb->credentials_json_file != NULL) {
+    build->cred_ctx = wg_credential_ctx_create_from_json_file(cb->credentials_json_file);
+    if (build->cred_ctx == NULL) {
+      ERROR("write_gcm: wg_credential_ctx_create_from_json_file failed.");
+      goto leave;
+    }
+  }
+
+  if (cb->email != NULL && cb->key_file != NULL && cb->passphrase != NULL) {
+    build->cred_ctx = wg_credential_ctx_create_from_p12_file(cb->email, cb->key_file,
+        cb->passphrase);
+    if (build->cred_ctx == NULL) {
+      ERROR("write_gcm: wg_credential_context_create failed.");
+      goto leave;
+    }
+  }
+
+  // We don't have an explicit location for the creds specified. Let's check to see
+  // if any of the paths for an application default creds file exists and read that.
+  if (build->cred_ctx == NULL) {
+    cred_path = find_application_default_creds_path();
+    if (cred_path) {
+      build->cred_ctx = wg_credential_ctx_create_from_json_file(cred_path);
+      if (build->cred_ctx == NULL) {
+        ERROR("write_gcm: wg_credential_ctx_create_from_json_file failed to "
+	      "parse %s", cred_path);
+	goto leave;
+      }
+    }
+  }
+
+  // If we got a project id from the credentials, use that one
+  const char * project_id;
+  if (build->cred_ctx != NULL && build->cred_ctx->project_id != NULL) {
+    project_id = build->cred_ctx->project_id;
+  } else {
+    project_id = cb->project_id;
+  }
+
   // Create the subcontext holding various pieces of server information.
-  build->resource = wg_monitored_resource_create(cb);
+  build->resource = wg_monitored_resource_create(cb, project_id);
   if (build->resource == NULL) {
     ERROR("write_gcm: wg_monitored_resource_create failed.");
     goto leave;
@@ -2204,16 +2459,6 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
     goto leave;
   }
   build->agent_translation_service_url = sstrdup(url);
-
-  // Optionally create the subcontext holding the service account credentials.
-  if (cb->email != NULL && cb->key_file != NULL && cb->passphrase != NULL) {
-    build->cred_ctx = wg_credential_ctx_create(cb->email, cb->key_file,
-        cb->passphrase);
-    if (build->cred_ctx == NULL) {
-      ERROR("write_gcm: wg_credential_context_create failed.");
-      goto leave;
-    }
-  }
 
   // Create the subcontext holding the oauth2 state.
   build->oauth2_ctx = wg_oauth2_cxt_create();
@@ -2236,6 +2481,7 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
   build = NULL;
 
  leave:
+  sfree(cred_path);
   wg_context_destroy(build);
   return result;
 }
@@ -3394,6 +3640,7 @@ static void wg_configbuilder_destroy(wg_configbuilder_t *cb) {
   sfree(cb->key_file);
   sfree(cb->email);
   sfree(cb->account_id);
+  sfree(cb->credentials_json_file);
   sfree(cb->region);
   sfree(cb->zone);
   sfree(cb->instance_id);
