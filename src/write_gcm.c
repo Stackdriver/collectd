@@ -37,6 +37,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "curl/curl.h"
 #include <openssl/bio.h>
@@ -2278,19 +2279,19 @@ static char *wg_get_from_metadata_server(const char *base, const char *resource,
     const char **headers, int num_headers);
 
 static char * detect_cloud_provider() {
-    char * gcp_hostname = wg_get_from_gcp_metadata_server("instance/hostname");
-    if (gcp_hostname != NULL) {
-      sfree(gcp_hostname);
-      return "gcp";
-    }
-    
-    char * aws_hostname = wg_get_from_aws_metadata_server("meta-data/hostname");
-    if (aws_hostname != NULL) {
-      sfree(aws_hostname);
-      return "aws";
-    }
-    ERROR("Unable to contact metadata server to detect cloud provider");
-    return NULL;
+  char * gcp_hostname = wg_get_from_gcp_metadata_server("instance/hostname");
+  if (gcp_hostname != NULL) {
+    sfree(gcp_hostname);
+    return "gcp";
+  }
+
+  char * aws_hostname = wg_get_from_aws_metadata_server("meta-data/hostname");
+  if (aws_hostname != NULL) {
+    sfree(aws_hostname);
+    return "aws";
+  }
+  ERROR("Unable to contact metadata server to detect cloud provider");
+  return NULL;
 }
 
 static monitored_resource_t *wg_monitored_resource_create(
@@ -2311,7 +2312,8 @@ static monitored_resource_t *wg_monitored_resource_create(
   if (strcasecmp(cloud_provider_to_use, "aws") == 0) {
     return wg_monitored_resource_create_for_aws(cb, project_id);
   }
-  ERROR("write_gcm: Cloud provider '%s' not recognized.", cloud_provider_to_use);
+  ERROR("write_gcm: Cloud provider '%s' not recognized.",
+        cloud_provider_to_use);
   return NULL;
 }
 
@@ -2991,7 +2993,8 @@ static char * find_application_default_creds_path() {
   }
 
   // finally, check the system default path
-  const char * system_default_path = "/etc/google/auth/application_default_credentials.json";
+  const char * system_default_path =
+          "/etc/google/auth/application_default_credentials.json";
   if (access(system_default_path, R_OK) == 0) {
     return strdup(system_default_path);
   }
@@ -3022,7 +3025,8 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
 
   // Optionally create the subcontext holding the service account credentials.
   if (cb->credentials_json_file != NULL) {
-    build->cred_ctx = wg_credential_ctx_create_from_json_file(cb->credentials_json_file);
+    build->cred_ctx = wg_credential_ctx_create_from_json_file(
+            cb->credentials_json_file);
     if (build->cred_ctx == NULL) {
       ERROR("write_gcm: wg_credential_ctx_create_from_json_file failed.");
       goto leave;
@@ -3030,16 +3034,17 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
   }
 
   if (cb->email != NULL && cb->key_file != NULL && cb->passphrase != NULL) {
-    build->cred_ctx = wg_credential_ctx_create_from_p12_file(cb->email, cb->key_file,
-        cb->passphrase);
+    build->cred_ctx = wg_credential_ctx_create_from_p12_file(
+            cb->email, cb->key_file, cb->passphrase);
     if (build->cred_ctx == NULL) {
       ERROR("write_gcm: wg_credential_context_create failed.");
       goto leave;
     }
   }
 
-  // We don't have an explicit location for the creds specified. Let's check to see
-  // if any of the paths for an application default creds file exists and read that.
+  // We don't have an explicit location for the creds specified. Let's check to
+  // see if any of the paths for an application default creds file exists and
+  // read that.
   if (build->cred_ctx == NULL) {
     cred_path = find_application_default_creds_path();
     if (cred_path) {
@@ -3047,7 +3052,7 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
       if (build->cred_ctx == NULL) {
         ERROR("write_gcm: wg_credential_ctx_create_from_json_file failed to "
 	      "parse %s", cred_path);
-	goto leave;
+        goto leave;
       }
     }
   }
