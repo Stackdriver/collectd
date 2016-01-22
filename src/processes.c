@@ -1356,21 +1356,24 @@ static char *ps_get_command(pid_t pid)
 {
     char *result = NULL;
     char file_name[128];
+    char buffer[128];
     FILE *f = NULL;
-    size_t line_size = 0;
 
     snprintf(file_name, sizeof(file_name), "/proc/%d/comm", pid);
     f = fopen(file_name, "r");
-    if (f)
+    if (!f)
+        return NULL;
+
+    result = fgets(buffer, sizeof(buffer), f);
+    if (result)
     {
-        ssize_t num_chars = getline (&result, &line_size, f);
         // Trim trailing newline.
-        if (num_chars > 0 && result[num_chars - 1] == '\n') {
+        ssize_t num_chars = strlen(result);
+        if (num_chars > 0 && result[num_chars - 1] == '\n')
             result[num_chars - 1] = 0;
-        }
-        fclose (f);
     }
-    return result;
+    fclose (f);
+    return sstrdup(result);
 }
 
 static char *ps_get_owner(pid_t pid)
@@ -1378,29 +1381,26 @@ static char *ps_get_owner(pid_t pid)
     char *result = NULL;
     char file_name[128];
     FILE *f = NULL;
-    char *line = NULL;
-    size_t line_size = 0;
 
     snprintf (file_name, sizeof(file_name), "/proc/%d/status", pid);
     f = fopen (file_name, "r");
     if (!f)
-    {
         return NULL;
-    }
-    while (1) {
+    while (1)
+    {
         struct passwd passwd;
         struct passwd *passwd_result;
+        char line_buffer[1024];
         char passwd_buffer[16384];
         int uid;
+        char *line = fgets(line_buffer, sizeof(line_buffer), f);
 
-        if (getline (&line, &line_size, f) < 0)
-        {
+        if (line == NULL)
             break;
-        }
+
         if (strncmp (line, "Uid:", 4) != 0)
-        {
             continue;
-        }
+
         uid = atoi (line + 5);
         getpwuid_r (uid, &passwd, passwd_buffer, sizeof(passwd_buffer),
                 &passwd_result);
@@ -1408,7 +1408,6 @@ static char *ps_get_owner(pid_t pid)
         break;
     }
 
-    sfree (line);
     fclose (f);
     return result;
 }
