@@ -226,9 +226,9 @@ static int wh_flush_nolock (cdtime_t timeout, wh_callback_t *cb) /* {{{ */
         int status;
 
         DEBUG ("write_http plugin: wh_flush_nolock: timeout = %.3f; "
-                        "send_buffer_fill = %"PRIu64";",
+                        "send_buffer_fill = %"PRIsz";",
                         CDTIME_T_TO_DOUBLE (timeout),
-                        (uint64_t)cb->send_buffer_fill);
+                        cb->send_buffer_fill);
 
         /* timeout == 0  => flush unconditionally */
         if (timeout > 0)
@@ -386,7 +386,7 @@ static int wh_write_command (const data_set_t *ds, const value_list_t *vl, /* {{
                         values);
         if (command_len >= sizeof (command)) {
                 ERROR ("write_http plugin: Command buffer too small: "
-                                "Need %"PRIu64" bytes.", (uint64_t) command_len + 1);
+                                "Need %"PRIsz" bytes.", command_len + 1);
                 return (-1);
         }
 
@@ -422,9 +422,9 @@ static int wh_write_command (const data_set_t *ds, const value_list_t *vl, /* {{
         cb->send_buffer_free -= command_len;
 
 
-        DEBUG ("write_http plugin: <%s> buffer %"PRIu64"/%"PRIu64" (%g%%) \"%s\"",
+        DEBUG ("write_http plugin: <%s> buffer %"PRIsz"/%"PRIsz" (%g%%) \"%s\"",
                         cb->location,
-                        (uint64_t)cb->send_buffer_fill, (uint64_t)cb->send_buffer_size,
+                        cb->send_buffer_fill, cb->send_buffer_size,
                         100.0 * ((double) cb->send_buffer_fill) / ((double) cb->send_buffer_size),
                         command);
 
@@ -477,9 +477,9 @@ static int wh_write_json (const data_set_t *ds, const value_list_t *vl, /* {{{ *
                 return (status);
         }
 
-        DEBUG ("write_http plugin: <%s> buffer %"PRIu64"/%"PRIu64" (%g%%)",
+        DEBUG ("write_http plugin: <%s> buffer %"PRIsz"/%"PRIsz" (%g%%)",
                         cb->location,
-                        (uint64_t)cb->send_buffer_fill, (uint64_t)cb->send_buffer_size,
+                        cb->send_buffer_fill, cb->send_buffer_size,
                         100.0 * ((double) cb->send_buffer_fill) / ((double) cb->send_buffer_size));
 
         /* Check if we have enough space for this command. */
@@ -676,7 +676,7 @@ static int wh_config_node (oconfig_item_t *ci) /* {{{ */
         cb->send_buffer = malloc (cb->send_buffer_size);
         if (cb->send_buffer == NULL)
         {
-                ERROR ("write_http plugin: malloc(%"PRIu64") failed.", (uint64_t) cb->send_buffer_size);
+                ERROR ("write_http plugin: malloc(%"PRIsz") failed.", cb->send_buffer_size);
                 wh_callback_free (cb);
                 return (-1);
         }

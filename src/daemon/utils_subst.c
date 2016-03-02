@@ -156,9 +156,9 @@ char *subst_string (char *buf, size_t buflen, const char *string,
 
 	if (i >= buflen)
 	{
-		WARNING ("subst_string: Loop exited after %"PRIu64" iterations: "
+		WARNING ("subst_string: Loop exited after %"PRIsz" iterations: "
 				"string = %s; needle = %s; replacement = %s;",
-				(uint64_t)i, string, needle, replacement);
+				i, string, needle, replacement);
 	}
 
 	return (buf);

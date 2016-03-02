@@ -919,7 +919,7 @@ static void stop_write_threads (void) /* {{{ */
 	if (write_threads == NULL)
 		return;
 
-	INFO ("collectd: Stopping %"PRIu64" write threads.", (uint64_t)write_threads_num);
+	INFO ("collectd: Stopping %"PRIsz" write threads.", write_threads_num);
 
 	pthread_mutex_lock (&write_lock);
 	write_loop = 0;
@@ -955,7 +955,7 @@ static void stop_write_threads (void) /* {{{ */
 
 	if (i > 0)
 	{
-		WARNING ("plugin: %zu value list%s left after shutting down "
+		WARNING ("plugin: %"PRIsz" value list%s left after shutting down "
 				"the write threads.",
 				i, (i == 1) ? " was" : "s were");
 	}
@@ -2174,8 +2174,8 @@ static int plugin_dispatch_values_internal (value_list_t *vl)
 	if (ds->ds_num != vl->values_len)
 	{
 		ERROR ("plugin_dispatch_values: ds->type = %s: "
-				"(ds->ds_num = %zu) != "
-				"(vl->values_len = %zu)",
+				"(ds->ds_num = %"PRIsz") != "
+				"(vl->values_len = %"PRIsz")",
 				ds->type, ds->ds_num, vl->values_len);
 		return (-1);
 	}
