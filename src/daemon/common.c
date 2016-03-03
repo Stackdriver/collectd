@@ -62,9 +62,6 @@
 #include <netdb.h>
 
 #include <poll.h>
-#ifndef MSG_DONTWAIT
-# define MSG_DONTWAIT 0
-#endif
 
 #if HAVE_NETINET_IN_H
 # include <netinet/in.h>
@@ -299,10 +296,8 @@ ssize_t swrite (int fd, const void *buf, size_t count)
 	pfd.events = POLLIN | POLLHUP;
 	pfd.revents = 0;
 	if (poll(&pfd, 1, 0) > 0) {
-		char buffer[32];
-		if (recv(fd, buffer, sizeof(buffer), MSG_PEEK | MSG_DONTWAIT) == 0) {
-			// if recv returns zero (even though poll() said there is data to be read),
-			// that means the connection has been closed
+		if ((pfd.revents & POLLHUP) != 0) {
+			// the connection has been closed
 			return -1;
 		}
 	}
