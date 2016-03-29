@@ -524,13 +524,13 @@ static int wg_curl_get_or_post(char *response_buffer,
 
   long response_code;
   curl_result = curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+  write_ctx.data[0] = 0;
   if (response_code >= 400) {
     WARNING("write_gcm: Unsuccessful HTTP request %ld: %s",
 	    response_code, response_buffer);
     goto leave;
   }
 
-  write_ctx.data[0] = 0;
   if (write_ctx.size < 2) {
     ERROR("write_gcm: wg_curl_get_or_post: The receive buffer overflowed.");
     DEBUG("write_gcm: wg_curl_get_or_post: Received data is: %s",
@@ -2560,6 +2560,7 @@ static wg_queue_t *wg_queue_create() {
   queue->size = 0;
   queue->request_flush = 0;
   queue->request_terminate = 0;
+  queue->consumer_thread_created = 0;
   return queue;
 }
 
@@ -3335,8 +3336,8 @@ static int wg_transmit_unique_segment(const wg_context_t *ctx,
 
     wg_log_json_message(ctx, "Sending json:\n%s\n", json);
 
-    // By the way, a successful response is the empty string. An unsuccessful
-    // response is a detailed error message from Monarch.
+    // By the way, a successful response is an empty JSON record (i.e. "{}").
+    // An unsuccessful response is a detailed error message from Monarch.
     char response[2048];
     const char *headers[] = { auth_header, json_content_type_header };
     if (wg_curl_get_or_post(response, sizeof(response),
@@ -3348,6 +3349,9 @@ static int wg_transmit_unique_segment(const wg_context_t *ctx,
     }
 
     wg_log_json_message(ctx, "Server response:\n%s\n", response);
+    if (strncmp(response, "{}", 2) != 0) {
+      goto leave;
+    }
 
     sfree(json);
     json = NULL;
@@ -3669,6 +3673,6 @@ static int wg_init(void) {
 //==============================================================================
 //==============================================================================
 void module_register(void) {
-  plugin_register_complex_config(this_plugin_name, wg_config);
-  plugin_register_init(this_plugin_name, wg_init);
+  plugin_register_complex_config(this_plugin_name, &wg_config);
+  plugin_register_init(this_plugin_name, &wg_init);
 }
