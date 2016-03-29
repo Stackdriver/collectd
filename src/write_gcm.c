@@ -80,6 +80,11 @@ static const char agent_translation_service_default_format_string[] =
 // The application/JSON content header.
 static const char json_content_type_header[] = "Content-Type: application/json";
 
+// Used when we are in end-to-end test mode (-T from the command line) to
+// indicate that some important error occurred during processing so that we can
+// bubble it back up to the exit status of collectd.
+static _Bool wg_some_error_occured_g = 0;
+
 // The maximum number of entries we keep in our processing queue before flushing
 // it. Ordinarily a flush happens every minute or so, but we also flush if the
 // list size exceeds a certain value.
@@ -107,6 +112,10 @@ static const char json_content_type_header[] = "Content-Type: application/json";
 //==============================================================================
 //==============================================================================
 //==============================================================================
+
+static _Bool wg_end_to_end_test_mode() {
+  return atoi(global_option_get("ReadThreads")) == -1;
+}
 
 // Prints data to a buffer. *buffer and *size are adjusted by the number of
 // characters printed. Remaining arguments are the same as snprintf. Does not
@@ -2349,7 +2358,11 @@ typedef struct {
   wg_payload_t *head;
   wg_payload_t *tail;
   size_t size;
+  // Set this to 1 to request that the consumer thread do a flush.
   int request_flush;
+  // The consumer thread sets this to 1 when the last requested flush is
+  // complete and there is no additional outstanding flush request.
+  int flush_complete;
   _Bool request_terminate;
   pthread_t consumer_thread;
   _Bool consumer_thread_created;
@@ -2559,6 +2572,7 @@ static wg_queue_t *wg_queue_create() {
   queue->tail = NULL;
   queue->size = 0;
   queue->request_flush = 0;
+  queue->flush_complete = 0;
   queue->request_terminate = 0;
   queue->consumer_thread_created = 0;
   return queue;
@@ -3124,6 +3138,7 @@ static void *wg_process_queue(void *arg) {
     if (wg_transmit_unique_segments(ctx, payloads) != 0) {
       // Not fatal. Connectivity problems? Server went away for a while?
       // Just drop the payloads on the floor and make a note of it.
+      wg_some_error_occured_g = 1;
       WARNING("write_gcm: wg_transmit_unique_segments failed. Flushing.");
     }
     payloads = NULL;
@@ -3502,6 +3517,10 @@ static int wait_next_queue_event(wg_queue_t *queue, cdtime_t last_flush_time,
     _Bool *want_terminate, wg_payload_t **payloads) {
   cdtime_t next_flush_time = last_flush_time + plugin_get_interval();
   pthread_mutex_lock(&queue->mutex);
+  if (!queue->flush_complete && !queue->request_flush) {
+    queue->flush_complete = 1;
+    pthread_cond_signal(&queue->cond);
+  }
   while (1) {
     cdtime_t now = cdtime();
     if (queue->request_flush ||
@@ -3604,7 +3623,17 @@ static int wg_flush(cdtime_t timeout,
   wg_queue_t *queue = ctx->queue;
   pthread_mutex_lock(&queue->mutex);
   queue->request_flush = 1;
+  queue->flush_complete = 0;
   pthread_cond_signal(&queue->cond);
+
+  // If collectd is in the end-to-end test mode (command line option -T), then
+  // wait for the flush to complete.
+  if (wg_end_to_end_test_mode()) {
+    while (!queue->flush_complete) {
+      pthread_cond_wait(&queue->cond, &queue->mutex);
+    }
+  }
+
   pthread_mutex_unlock(&queue->mutex);
   return 0;
 }
@@ -3665,6 +3694,19 @@ static int wg_init(void) {
   return result;
 }
 
+// In end-to-end test mode (-T from the command line), we return an error if
+// this plugin has seen any errors during its operation (e.g. PERMISSION DENIED
+// from the server).
+static int wg_shutdown(void) {
+  if (!wg_end_to_end_test_mode()) {
+    return 0;
+  }
+  if (wg_some_error_occured_g) {
+    return -1;
+  }
+  return 0;
+}
+
 //==============================================================================
 //==============================================================================
 //==============================================================================
@@ -3675,4 +3717,5 @@ static int wg_init(void) {
 void module_register(void) {
   plugin_register_complex_config(this_plugin_name, &wg_config);
   plugin_register_init(this_plugin_name, &wg_init);
+  plugin_register_shutdown(this_plugin_name, &wg_shutdown);
 }
