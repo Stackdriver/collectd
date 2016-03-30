@@ -2327,8 +2327,7 @@ static char *wg_get_from_metadata_server(const char *base, const char *resource,
   char buffer[2048];
   if (wg_curl_get_or_post(buffer, sizeof(buffer), url, NULL, headers,
       num_headers) != 0) {
-    ERROR("write_gcm: wg_configbuilder_get_from_gcp_metadata_server failed "
-        "while fetching %s", url);
+    INFO("write_gcm: wg_get_from_metadata_server failed fetching %s", url);
     return NULL;
   }
   return sstrdup(buffer);
