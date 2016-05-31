@@ -22,7 +22,6 @@
  *   Florian Forster <octo at collectd.org>
  *   John (J5) Palmieri <j5 at stackdriver.com>
  *   Corey Kosak <kosak at google.com>
- *
  **/
 
 #include "collectd.h"
