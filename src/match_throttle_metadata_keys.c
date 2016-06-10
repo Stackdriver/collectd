@@ -66,18 +66,21 @@ typedef struct
   c_avl_tree_t *hash_counts;
 
   // Certain diagnostic counters.
-  uint32_t num_key_history_entries;
-  uint32_t num_distinct_keys;
+  unsigned int num_key_history_entries;
+  unsigned int num_distinct_keys;
 
   // Configuration parameters:
 
-  // When 'server_memory_in_use' is less than this value, throttling is turned
-  // off.
+  // When 'server_memory_in_use' is less than 'low_water_mark_bytes' AND
+  // 'num_distinct_keys' is less than 'low_water_mark_keys', then throttling is
+  // turned off.
+  // When 'server_memory_in_use' is greater than 'high_water_mark_bytes' OR
+  // 'num_distinct_keys' is greater than 'high_water_mark_keys', then throttling
+  // is turned on.
   int low_water_mark_bytes;
-
-  // When 'server_memory_in_use' is greater than this value, throttling is
-  // turned on.
   int high_water_mark_bytes;
+  int low_water_mark_keys;
+  int high_water_mark_keys;
 
   // How long to keep adding hashes to the same chunk before making a new chunk
   // (typically 1/2 hour).
@@ -159,6 +162,8 @@ static mtg_context_t *mtg_context_create (int num_metadata_keys) {
     {
         .low_water_mark_bytes = 800000000,  // 800M
         .high_water_mark_bytes = 950000000,  // 950M
+        .low_water_mark_keys = 4000,
+        .high_water_mark_keys = 5000,
         .chunk_interval_secs = 30 * 60,  // 30 minutes
         .purge_interval_secs = 24 * 60 * 60  // 24 hours
     };
@@ -263,6 +268,8 @@ static int mtg_create (const oconfig_item_t *ci, void **user_data)
             {
                 "LowWaterMark",
                 "HighWaterMark",
+                "KeysLowWaterMark",
+                "KeysHighWaterMark",
                 "ChunkInterval",
                 "PurgeInterval",
             };
@@ -270,6 +277,8 @@ static int mtg_create (const oconfig_item_t *ci, void **user_data)
             {
                 &kt->low_water_mark_bytes,
                 &kt->high_water_mark_bytes,
+                &kt->low_water_mark_keys,
+                &kt->high_water_mark_keys,
                 &kt->chunk_interval_secs,
                 &kt->purge_interval_secs,
             };
@@ -642,19 +651,23 @@ static int mtg_match_helper (const value_list_t *vl, mtg_context_t *context)
 
     if (tracker->is_throttling)
     {
-        if (tracker->server_memory_in_use < tracker->low_water_mark_bytes)
+        if (tracker->server_memory_in_use < tracker->low_water_mark_bytes &&
+                tracker->num_distinct_keys < tracker->low_water_mark_keys)
         {
-            WARNING("%s: Throttling OFF (estimated server memory %zd).",
-                    this_plugin_name, tracker->server_memory_in_use);
+            WARNING("%s: Throttling OFF (estimated server memory %zd, keys %u)",
+                    this_plugin_name, tracker->server_memory_in_use,
+                    tracker->num_distinct_keys);
             tracker->is_throttling = 0;
         }
     }
     else
     {
-        if (tracker->server_memory_in_use > tracker->high_water_mark_bytes)
+        if (tracker->server_memory_in_use > tracker->high_water_mark_bytes ||
+                tracker->num_distinct_keys > tracker->high_water_mark_keys)
         {
-            WARNING("%s: Throttling ON (estimated server memory %zd).",
-                    this_plugin_name, tracker->server_memory_in_use);
+            WARNING("%s: Throttling ON (estimated server memory %zd, keys %u)",
+                    this_plugin_name, tracker->server_memory_in_use,
+                    tracker->num_distinct_keys);
             tracker->is_throttling = 1;
         }
     }
