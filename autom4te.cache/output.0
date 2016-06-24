@@ -766,9 +766,9 @@ CPPFLAGS
 LDFLAGS
 CFLAGS
 CC
-subdirs
 LIBLTDL
 LTDLINCL
+subdirs
 target_alias
 host_alias
 build_alias
@@ -914,6 +914,7 @@ enable_match_hashed
 enable_match_regex
 enable_match_timediff
 enable_match_value
+enable_match_throttle_metadata_keys
 enable_mbmon
 enable_md
 enable_memcachec
@@ -1016,7 +1017,8 @@ KERNEL_DIR
 LIBNETAPP_CPPFLAGS
 LIBNETAPP_LDFLAGS
 LIBNETAPP_LIBS'
-ac_subdirs_all='libltdl'
+ac_subdirs_all='src/libmongoc
+libltdl'
 
 # Initialize some variables set by options.
 ac_init_help=
@@ -1689,6 +1691,8 @@ collectd plugins:
   --enable-match_regex    The regex match
   --enable-match_timediff The timediff match
   --enable-match_value    The value match
+  --enable-match_throttle_metadata_keys 
+                          Metadata key throttling plugin
   --enable-mbmon          Query mbmond
   --enable-md             md (Linux software RAID) devices
   --enable-memcachec      memcachec statistics
@@ -2906,15 +2910,17 @@ ac_configure="$SHELL $ac_aux_dir/configure"  # Please don't use this var.
 
 
 
+
+subdirs="$subdirs src/libmongoc"
+
+
 # libtool <= 1.5
 	
 	 AC_LIBLTDL_CONVENIENCE
 	 
 	 
 	 AC_LIBTOOL_DLOPEN
-	 
-
-subdirs="$subdirs libltdl"
+	 subdirs="$subdirs libltdl"
 
 	 
 $as_echo "@%:@define LIBTOOL_VERSION 1" >>confdefs.h
@@ -3748,7 +3754,7 @@ else
     We can't simply define LARGE_OFF_T to be 9223372036854775807,
     since some C++ compilers masquerading as C compilers
     incorrectly reject 9223372036854775807.  */
-@%:@define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
+@%:@define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
 		       && LARGE_OFF_T % 2147483647 == 1)
 		      ? 1 : -1];
@@ -3794,7 +3800,7 @@ else
     We can't simply define LARGE_OFF_T to be 9223372036854775807,
     since some C++ compilers masquerading as C compilers
     incorrectly reject 9223372036854775807.  */
-@%:@define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
+@%:@define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
 		       && LARGE_OFF_T % 2147483647 == 1)
 		      ? 1 : -1];
@@ -3818,7 +3824,7 @@ rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
     We can't simply define LARGE_OFF_T to be 9223372036854775807,
     since some C++ compilers masquerading as C compilers
     incorrectly reject 9223372036854775807.  */
-@%:@define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
+@%:@define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
 		       && LARGE_OFF_T % 2147483647 == 1)
 		      ? 1 : -1];
@@ -3863,7 +3869,7 @@ else
     We can't simply define LARGE_OFF_T to be 9223372036854775807,
     since some C++ compilers masquerading as C compilers
     incorrectly reject 9223372036854775807.  */
-@%:@define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
+@%:@define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
 		       && LARGE_OFF_T % 2147483647 == 1)
 		      ? 1 : -1];
@@ -3887,7 +3893,7 @@ rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
     We can't simply define LARGE_OFF_T to be 9223372036854775807,
     since some C++ compilers masquerading as C compilers
     incorrectly reject 9223372036854775807.  */
-@%:@define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
+@%:@define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
 		       && LARGE_OFF_T % 2147483647 == 1)
 		      ? 1 : -1];
@@ -5337,7 +5343,38 @@ $as_echo "@%:@define _POSIX_PTHREAD_SEMANTICS 1" >>confdefs.h
 	
 $as_echo "@%:@define _REENTRANT 1" >>confdefs.h
 
+
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether compiler builds 64bit binaries" >&5
+$as_echo_n "checking whether compiler builds 64bit binaries... " >&6; }
+	cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+			   #ifndef _LP64
+			   # error "Compiler not in 64bit mode."
+			   #endif
+			   
+int
+main ()
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_cpp "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+else
+  
+			    { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+			    { $as_echo "$as_me:${as_lineno-$LINENO}: Solaris detected. Please consider building a 64-bit binary." >&5
+$as_echo "$as_me: Solaris detected. Please consider building a 64-bit binary." >&6;}
+			   
 fi
+rm -f conftest.err conftest.i conftest.$ac_ext
+fi
+
 if test "x$ac_system" = "xAIX"
 then
 	
@@ -6033,6 +6070,33 @@ fi
 done
 
 
+ac_fn_c_check_type "$LINENO" "struct ip6_ext" "ac_cv_type_struct_ip6_ext" "#if HAVE_STDINT_H
+# include <stdint.h>
+#endif
+#if HAVE_SYS_TYPES_H
+# include <sys/types.h>
+#endif
+#if HAVE_NETINET_IN_SYSTM_H
+# include <netinet/in_systm.h>
+#endif
+#if HAVE_NETINET_IN_H
+# include <netinet/in.h>
+#endif
+#if HAVE_NETINET_IP6_H
+# include <netinet/ip6.h>
+#endif
+
+"
+if test "x$ac_cv_type_struct_ip6_ext" = xyes; then :
+  
+cat >>confdefs.h <<_ACEOF
+@%:@define HAVE_STRUCT_IP6_EXT 1
+_ACEOF
+
+
+fi
+
+
 # For cpu modules
 for ac_header in sys/dkstat.h
 do :
@@ -6232,19 +6296,6 @@ fi
 
 done
 
-
-if test "x$have_sys_swap_h$ac_system" = "xnoSolaris"
-then
-	hint_64=""
-	if test "x$GCC" = "xyes"
-	then
-		hint_64="CFLAGS='-m64'"
-	else
-		hint_64="CFLAGS='-xarch=v9'"
-	fi
-	{ $as_echo "$as_me:${as_lineno-$LINENO}: Solaris detected and sys/swap.h not usable. Try building a 64-bit binary ($hint_64 ./configure)." >&5
-$as_echo "$as_me: Solaris detected and sys/swap.h not usable. Try building a 64-bit binary ($hint_64 ./configure)." >&6;}
-fi
 
 # For load module
 # For the processes plugin
@@ -16955,6 +17006,7 @@ fi
 if test "x$with_libcurl" = "xyes" && test "x$with_libyajl" = "xyes"
 then
 	plugin_write_gcm="yes"
+        match_throttle_metadata_keys="yes"
 fi
 
 if test "x$have_getutent" = "xyes"
@@ -19748,6 +19800,59 @@ $as_echo "@%:@define HAVE_PLUGIN_MATCH_VALUE 1" >>confdefs.h
     fi
     AM_CONDITIONAL(BUILD_PLUGIN_MATCH_VALUE, test "x$enable_plugin" = "xyes")
     enable_match_value="$enable_plugin"
+  
+
+
+    enable_plugin="no"
+    force="no"
+    @%:@ Check whether --enable-match_throttle_metadata_keys was given.
+if test "${enable_match_throttle_metadata_keys+set}" = set; then :
+  enableval=$enable_match_throttle_metadata_keys; 
+     if test "x$enableval" = "xyes"
+     then
+	     enable_plugin="yes"
+     else if test "x$enableval" = "xforce"
+     then
+	     enable_plugin="yes"
+	     force="yes"
+     else
+	     enable_plugin="no (disabled on command line)"
+     fi; fi
+    
+else
+  
+	 if test "x$enable_all_plugins" = "xauto"
+	 then
+	     if test "x$match_throttle_metadata_keys" = "xyes"
+	     then
+		     enable_plugin="yes"
+	     else
+		     enable_plugin="no"
+	     fi
+	 else
+	     enable_plugin="$enable_all_plugins"
+	 fi
+    
+fi
+
+    if test "x$enable_plugin" = "xyes"
+    then
+	    if test "x$match_throttle_metadata_keys" = "xyes" || test "x$force" = "xyes"
+	    then
+		    
+$as_echo "@%:@define HAVE_PLUGIN_MATCH_THROTTLE_METADATA_KEYS 1" >>confdefs.h
+
+		    if test "x$match_throttle_metadata_keys" != "xyes"
+		    then
+			    dependency_warning="yes"
+		    fi
+	    else # User passed "yes" but dependency checking yielded "no" => Dependency problem.
+		    dependency_error="yes"
+		    enable_plugin="no (dependency error)"
+	    fi
+    fi
+    AM_CONDITIONAL(BUILD_PLUGIN_MATCH_THROTTLE_METADATA_KEYS, test "x$enable_plugin" = "xyes")
+    enable_match_throttle_metadata_keys="$enable_plugin"
   
 
 
@@ -25990,6 +26095,7 @@ Configuration:
     match_regex . . . . . $enable_match_regex
     match_timediff  . . . $enable_match_timediff
     match_value . . . . . $enable_match_value
+    match_throttle_metadata_keys $enable_match_throttle_metadata_keys
     mbmon . . . . . . . . $enable_mbmon
     md  . . . . . . . . . $enable_md
     memcachec . . . . . . $enable_memcachec

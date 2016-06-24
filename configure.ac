@@ -3,6 +3,7 @@ AC_INIT([collectd],[m4_esyscmd(./version-gen.sh)])
 AC_CONFIG_SRCDIR(src/)
 AC_CONFIG_HEADERS(src/config.h)
 AC_CONFIG_AUX_DIR([libltdl/config])
+AC_CONFIG_SUBDIRS([src/libmongoc])
 
 m4_ifdef([LT_PACKAGE_VERSION],
 	# libtool >= 2.2

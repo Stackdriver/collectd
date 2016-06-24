@@ -1,6 +1,6 @@
 ACLOCAL_AMFLAGS = -I libltdl/m4
 
-SUBDIRS = libltdl src bindings .
+SUBDIRS = libltdl src/libmongoc src bindings .
 
 AM_CPPFLAGS = $(LTDLINCL)
 
