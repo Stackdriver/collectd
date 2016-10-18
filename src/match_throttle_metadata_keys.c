@@ -640,7 +640,7 @@ static int mtg_add_new_entries(const mtg_context_t *ctx, cdtime_t now,
         tail = new;  // Keep our alias up to date.
         ++tracker->num_key_history_entries;
 
-        INFO("%s: %u history entries, %u distinct keys,"
+        DEBUG("%s: %u history entries, %u distinct keys,"
              " %zd bytes server memory.",
              this_plugin_name, tracker->num_key_history_entries,
              tracker->num_distinct_keys, tracker->server_memory_in_use);
