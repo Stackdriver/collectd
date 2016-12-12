@@ -1,0 +1,3 @@
+[submodule "src/libmongoc"]
+	path = src/libmongoc
+	url = https://github.com/mongodb/mongo-c-driver.git
