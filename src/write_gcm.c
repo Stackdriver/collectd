@@ -3568,7 +3568,7 @@ static void *wg_process_queue(wg_context_t *ctx, wg_queue_t *queue,
     }
     if (wg_update_stats(stats) != 0) {
       wg_some_error_occured_g = 1;
-      WARNING("%s: wg_update_stats failed.", this_plugin_name);
+      ERROR("%s: wg_update_stats failed.", this_plugin_name);
       break;
     }
     payloads = NULL;
@@ -3576,7 +3576,12 @@ static void *wg_process_queue(wg_context_t *ctx, wg_queue_t *queue,
 
  leave:
   wg_deriv_tree_destroy(deriv_tree);
-  WARNING("write_gcm: Consumer thread is exiting.");
+  if (queue->request_terminate == 0) {
+    queue->consumer_thread_created = 0;
+    ERROR("write_gcm: Consumer thread is exiting.");
+  } else {
+    WARNING("write_gcm: Consumer thread is exiting.");
+  }
   return NULL;
 }
 
