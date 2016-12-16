@@ -4194,7 +4194,7 @@ static int wg_write(const data_set_t *ds, const value_list_t *vl,
     wg_payload_destroy(to_remove);
   }
   if (drop_count != 0) {
-    WARNING("Queue recovered successfully after dropping %d datapoints", 
+    WARNING("Queue recovered successfully after dropping %d metric points", 
             drop_count);
   }
 
