@@ -109,6 +109,10 @@ static _Bool wg_some_error_occured_g = 0;
 // this many items in our queue.
 #define QUEUE_DROP_SIZE 100000
 
+// The number of metrics that need to be dropped from the queue to trigger
+// a warning being logged. 
+#define QUEUE_DROP_REPORT_LIMIT 1000
+
 // Size of the JSON buffer sent to the server. At flush time we format a JSON
 // message to send to the server.  We would like it to be no more than a certain
 // number of bytes in size. We make this a 'soft' limit so that when the target
@@ -4155,13 +4159,19 @@ static int wg_write(const data_set_t *ds, const value_list_t *vl,
   // Backpressure. If queue is backed up then something has gone horribly wrong.
   // Maybe the queue processor died. If this happens we drop the item at the
   // head of the queue.
+  int drop_count = 0;
   if (queue->size >= QUEUE_DROP_SIZE) {
+    WARNING("Queue starting to drop metrics due dispatch backlog.");
     wg_payload_t *to_remove = queue->head;
     queue->head = queue->head->next;
     if (queue->head == NULL) {
       queue->tail = NULL;
     }
     --queue->size;
+    drop_count++;
+    if ((drop_count % QUEUE_DROP_REPORT_LIMIT) == 0) {
+      WARNING("Queue dropped %d metric points", QUEUE_DROP_REPORT_LIMIT);
+    }
     to_remove->next = NULL;
     char metadata[8192];
     char *meta_ptr = metadata;
@@ -4182,6 +4192,10 @@ static int wg_write(const data_set_t *ds, const value_list_t *vl,
           to_remove->key.type_instance,
           metadata);
     wg_payload_destroy(to_remove);
+  }
+  if (drop_count != 0) {
+    WARNING("Queue recovered successfully after dropping %d datapoints", 
+            drop_count);
   }
 
   // Append to queue.
