@@ -3576,11 +3576,11 @@ static void *wg_process_queue(wg_context_t *ctx, wg_queue_t *queue,
 
  leave:
   wg_deriv_tree_destroy(deriv_tree);
-  if (queue->request_terminate == 0) {
+  if (!queue->request_terminate) {
     queue->consumer_thread_created = 0;
-    ERROR("write_gcm: Consumer thread is exiting.");
+    ERROR("write_gcm: Consumer thread unexpectedly exiting.");
   } else {
-    WARNING("write_gcm: Consumer thread is exiting.");
+      WARNING("write_gcm: Consumer thread is exiting due to agent shutdown.");
   }
   return NULL;
 }
