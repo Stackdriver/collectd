@@ -4161,7 +4161,9 @@ static int wg_write(const data_set_t *ds, const value_list_t *vl,
   // head of the queue.
   int drop_count = 0;
   if (queue->size >= QUEUE_DROP_SIZE) {
-    WARNING("Queue starting to drop metrics due dispatch backlog.");
+    if (drop_count) {
+      WARNING("Queue starting to drop metrics due to dispatch backlog.");
+    }
     wg_payload_t *to_remove = queue->head;
     queue->head = queue->head->next;
     if (queue->head == NULL) {
@@ -4170,7 +4172,7 @@ static int wg_write(const data_set_t *ds, const value_list_t *vl,
     --queue->size;
     drop_count++;
     if ((drop_count % QUEUE_DROP_REPORT_LIMIT) == 0) {
-      WARNING("Queue dropped %d metric points", QUEUE_DROP_REPORT_LIMIT);
+      WARNING("Queue dropped %d metric points.", QUEUE_DROP_REPORT_LIMIT);
     }
     to_remove->next = NULL;
     char metadata[8192];
@@ -4194,7 +4196,7 @@ static int wg_write(const data_set_t *ds, const value_list_t *vl,
     wg_payload_destroy(to_remove);
   }
   if (drop_count != 0) {
-    WARNING("Queue recovered successfully after dropping %d metric points", 
+    WARNING("Queue dropped a total of %d metric points in this dispatch cycle.",
             drop_count);
   }
 
