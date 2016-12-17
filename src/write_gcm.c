@@ -4161,7 +4161,7 @@ static int wg_write(const data_set_t *ds, const value_list_t *vl,
   // head of the queue.
   int drop_count = 0;
   if (queue->size >= QUEUE_DROP_SIZE) {
-    if (drop_count) {
+    if (drop_count == 0) {
       WARNING("Queue starting to drop metrics due to dispatch backlog.");
     }
     wg_payload_t *to_remove = queue->head;
