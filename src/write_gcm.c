@@ -3580,7 +3580,7 @@ static void *wg_process_queue(wg_context_t *ctx, wg_queue_t *queue,
     queue->consumer_thread_created = 0;
     ERROR("write_gcm: Consumer thread unexpectedly exiting.");
   } else {
-      WARNING("write_gcm: Consumer thread is exiting due to agent shutdown.");
+      WARNING("write_gcm: Consumer thread is shutting down.");
   }
   return NULL;
 }
