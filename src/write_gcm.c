@@ -3555,21 +3555,20 @@ static void *wg_process_queue(wg_context_t *ctx, wg_queue_t *queue,
     }
     last_flush_time = cdtime();
     if (wg_rebase_cumulative_values(deriv_tree, &payloads) != 0) {
-      // Also fatal.
-      ERROR("write_gcm: wg_rebase_cumulative_values failed.");
+      // Should be reported as an error due to inconsistent counters but not
+      // fatal. Destroy current payload and proceed to process the following.
+      ERROR("write_gcm: wg_rebase_cumulative_values failed. Flushing.");
       wg_payload_destroy(payloads);
-      break;
+      continue;
     }
     if (wg_transmit_unique_segments(ctx, queue, payloads) != 0) {
       // Not fatal. Connectivity problems? Server went away for a while?
       // Just drop the payloads on the floor and make a note of it.
-      wg_some_error_occured_g = 1;
       WARNING("write_gcm: wg_transmit_unique_segments failed. Flushing.");
     }
     if (wg_update_stats(stats) != 0) {
-      wg_some_error_occured_g = 1;
-      ERROR("%s: wg_update_stats failed.", this_plugin_name);
-      break;
+      WARNING("%s: wg_update_stats failed.", this_plugin_name);
+      continue;
     }
     payloads = NULL;
   }
