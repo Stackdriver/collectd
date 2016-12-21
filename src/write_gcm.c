@@ -2422,6 +2422,8 @@ typedef struct {
   wg_payload_t *head;
   wg_payload_t *tail;
   size_t size;
+  // A running counter of the number of metrics dropped from the agent queue.
+  size_t drop_count;
   // Set this to 1 to request that the consumer thread do a flush.
   int request_flush;
   // The consumer thread sets this to 1 when the last requested flush is
@@ -2690,6 +2692,7 @@ static wg_queue_t *wg_queue_create() {
   queue->head = NULL;
   queue->tail = NULL;
   queue->size = 0;
+  queue->drop_count = 0;
   queue->request_flush = 0;
   queue->flush_complete = 0;
   queue->request_terminate = 0;
@@ -4159,19 +4162,15 @@ static int wg_write(const data_set_t *ds, const value_list_t *vl,
   // Backpressure. If queue is backed up then something has gone horribly wrong.
   // Maybe the queue processor died. If this happens we drop the item at the
   // head of the queue.
-  int drop_count = 0;
   if (queue->size >= QUEUE_DROP_SIZE) {
-    if (drop_count == 0) {
-      WARNING("Queue starting to drop metrics due to dispatch backlog.");
-    }
     wg_payload_t *to_remove = queue->head;
     queue->head = queue->head->next;
     if (queue->head == NULL) {
       queue->tail = NULL;
     }
     --queue->size;
-    drop_count++;
-    if ((drop_count % QUEUE_DROP_REPORT_LIMIT) == 0) {
+    ++queue->drop_count++;
+    if ((queue->drop_count % QUEUE_DROP_REPORT_LIMIT) == 0) {
       WARNING("Queue dropped %d metric points.", QUEUE_DROP_REPORT_LIMIT);
     }
     to_remove->next = NULL;
@@ -4195,11 +4194,6 @@ static int wg_write(const data_set_t *ds, const value_list_t *vl,
           metadata);
     wg_payload_destroy(to_remove);
   }
-  if (drop_count != 0) {
-    WARNING("Queue dropped a total of %d metric points in this dispatch cycle.",
-            drop_count);
-  }
-
   // Append to queue.
   if (queue->head == NULL) {
     queue->head = payload;
