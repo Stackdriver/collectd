@@ -4169,7 +4169,7 @@ static int wg_write(const data_set_t *ds, const value_list_t *vl,
       queue->tail = NULL;
     }
     --queue->size;
-    ++queue->drop_count++;
+    ++queue->drop_count;
     if ((queue->drop_count % QUEUE_DROP_REPORT_LIMIT) == 0) {
       WARNING("Queue dropped %d metric points.", QUEUE_DROP_REPORT_LIMIT);
     }
