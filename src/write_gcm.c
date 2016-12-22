@@ -97,7 +97,7 @@ static const char json_content_type_header[] = "Content-Type: application/json";
 // Used when we are in end-to-end test mode (-T from the command line) to
 // indicate that some important error occurred during processing so that we can
 // bubble it back up to the exit status of collectd.
-static _Bool wg_some_error_occured_g = 0;
+static _Bool wg_some_error_occurred_g = 0;
 
 // The maximum number of entries we keep in our processing queue before flushing
 // it. Ordinarily a flush happens every minute or so, but we also flush if the
@@ -3555,8 +3555,8 @@ static void *wg_process_queue(wg_context_t *ctx, wg_queue_t *queue,
     }
     last_flush_time = cdtime();
     if (wg_rebase_cumulative_values(deriv_tree, &payloads) != 0) {
-      // Should be reported as an error due to inconsistent counters but not
-      // fatal. Destroy current payload and proceed to process the following.
+      // Couldn't update the counters — an error but not fatal.
+      // Drop the payloads on the floor and make a note of it.
       ERROR("write_gcm: wg_rebase_cumulative_values failed. Flushing.");
       wg_payload_destroy(payloads);
       continue;
@@ -3564,9 +3564,11 @@ static void *wg_process_queue(wg_context_t *ctx, wg_queue_t *queue,
     if (wg_transmit_unique_segments(ctx, queue, payloads) != 0) {
       // Not fatal. Connectivity problems? Server went away for a while?
       // Just drop the payloads on the floor and make a note of it.
+      wg_some_error_occurred_g = 1;
       WARNING("write_gcm: wg_transmit_unique_segments failed. Flushing.");
     }
     if (wg_update_stats(stats) != 0) {
+      wg_some_error_occurred_g = 1;
       WARNING("%s: wg_update_stats failed.", this_plugin_name);
       continue;
     }
@@ -4300,7 +4302,7 @@ static int wg_shutdown(void) {
   if (!wg_end_to_end_test_mode()) {
     return 0;
   }
-  if (wg_some_error_occured_g) {
+  if (wg_some_error_occurred_g) {
     return -1;
   }
   return 0;
