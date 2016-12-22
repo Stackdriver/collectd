@@ -4171,8 +4171,9 @@ static int wg_write(const data_set_t *ds, const value_list_t *vl,
     --queue->size;
     ++queue->drop_count;
     if ((queue->drop_count % QUEUE_DROP_REPORT_LIMIT) == 0) {
-      WARNING("write_gcm: %s Queue dropped %d metric points due to dispatch 
-              backlog.", queue->queue_name, QUEUE_DROP_REPORT_LIMIT);
+      WARNING("write_gcm: %s queue dropped %d metric points due to dispatch"
+              " backlog.",
+              queue_name, QUEUE_DROP_REPORT_LIMIT);
     }
     to_remove->next = NULL;
     char metadata[8192];
