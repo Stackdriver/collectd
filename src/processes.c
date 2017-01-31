@@ -1529,8 +1529,13 @@ static char *ps_get_owner(pid_t pid)
         uid = atoi (line + 5);
         getpwuid_r (uid, &passwd, passwd_buffer, sizeof(passwd_buffer),
                 &passwd_result);
-        if (passwd_result)
+        if (passwd_result) {
             result = sstrdup (passwd_result->pw_name);
+        } else {
+	    char temp_str[6];  // 5 digits plus string terminator.
+	    snprintf(temp_str, sizeof(temp_str), "%d", uid);
+	    result = sstrdup (temp_str);
+        }
         break;
     }
 
