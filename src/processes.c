@@ -40,6 +40,7 @@
 #include "plugin.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 
 /* Include header files for the mach system, if they exist.. */
 #if HAVE_THREAD_INFO
@@ -1526,7 +1527,7 @@ static char *ps_get_owner(pid_t pid)
         if (strncmp (line, "Uid:", 4) != 0)
             continue;
 
-        uid = atoi (line + 5);
+        uid = strtoul (line + 5);
         getpwuid_r (uid, &passwd, passwd_buffer, sizeof(passwd_buffer),
                 &passwd_result);
         if (passwd_result) {
