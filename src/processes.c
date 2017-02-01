@@ -1533,8 +1533,8 @@ static char *ps_get_owner(pid_t pid)
         if (passwd_result) {
             result = sstrdup (passwd_result->pw_name);
         } else {
-	    // Send the numeric id if name is not available.
-	    *uid_end = '\0';
+            // Send the numeric uid if name is not available.
+            *uid_end = '\0';
             result = sstrdup (line + 5);
         }
         break;
