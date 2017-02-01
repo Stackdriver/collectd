@@ -1526,7 +1526,7 @@ static char *ps_get_owner(pid_t pid)
         if (strncmp (line, "Uid:", 4) != 0)
             continue;
 
-        uid = strtoul (line + 5, /* endptr*/ NULL, /* base */ 10);
+        uid = atoi (line + 5);
         getpwuid_r (uid, &passwd, passwd_buffer, sizeof(passwd_buffer),
                 &passwd_result);
         if (passwd_result) {
@@ -1534,7 +1534,7 @@ static char *ps_get_owner(pid_t pid)
         } else {
 	    // Send the numeric uid if name is not available.
             char uid_str[21];  // Worst case is 20 digits plus string terminator.
-            snprintf(uid_str, sizeof(uid_str), "%lu", uid);
+            snprintf(uid_str, sizeof(uid_str), "%u", uid);
             result = sstrdup (uid_str);
         }
         break;
