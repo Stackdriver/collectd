@@ -40,7 +40,6 @@
 #include "plugin.h"
 
 #include <stdio.h>
-#include <stdlib.h>
 
 /* Include header files for the mach system, if they exist.. */
 #if HAVE_THREAD_INFO
