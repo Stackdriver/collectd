@@ -1517,7 +1517,7 @@ static char *ps_get_owner(pid_t pid)
         struct passwd *passwd_result;
         char line_buffer[1024];
         char passwd_buffer[16384];
-        int uid;
+        uid_t uid;
         char *line = fgets(line_buffer, sizeof(line_buffer), f);
 
         if (line == NULL)
@@ -1533,8 +1533,8 @@ static char *ps_get_owner(pid_t pid)
             result = sstrdup (passwd_result->pw_name);
         } else {
 	    // Send the numeric uid if name is not available.
-            char uid_str[6];  // 5 digits plus string terminator.
-            snprintf(uid_str, sizeof(uid_str), "%u", uid);
+            char uid_str[21];  // Worst case is 20 digits plus string terminator.
+            snprintf(uid_str, sizeof(uid_str), "%llu", uid);
             result = sstrdup (uid_str);
         }
         break;
