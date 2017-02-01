@@ -1532,6 +1532,7 @@ static char *ps_get_owner(pid_t pid)
         if (passwd_result) {
             result = sstrdup (passwd_result->pw_name);
         } else {
+	    // Send the numeric uid if name is not available.
             char uid_str[6];  // 5 digits plus string terminator.
             snprintf(uid_str, sizeof(uid_str), "%u", uid);
             result = sstrdup (uid_str);
