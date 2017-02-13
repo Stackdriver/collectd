@@ -2147,19 +2147,49 @@ static monitored_resource_t *wg_monitored_resource_create(
   return NULL;
 }
 
-static monitored_resource_t *monitored_resource_create_from_fields(
-    const char *type, const char *project_id, ...) {
+typedef struct {
+  const char *key;
+  const char *value;
+} label_t;
+
+static monitored_resource_t *monitored_resource_create_from_array(
+    const char *type, const char *project_id, const label_t *labels,
+    size_t num_labels) {
   monitored_resource_t *result = calloc(1, sizeof(*result));
   if (result == NULL) {
-    ERROR("write_gcm: monitored_resource_create_from_fields: calloc failed.");
+    ERROR("write_gcm: monitored_resource_create_from_array: calloc failed.");
     return NULL;
   }
   result->type = sstrdup(type);
   result->project_id = sstrdup(project_id);
+  result->num_labels = num_labels;
+  result->keys = calloc(num_labels, sizeof(result->keys[0]));
+  result->values = calloc(num_labels, sizeof(result->values[0]));
+  if (result->keys == NULL || result->values == NULL) {
+    ERROR("write_gcm: monitored_resource_create_from_array: calloc failed.");
+    goto error;
+  }
+  for (int i = 0; i < num_labels; ++i) {
+    result->keys[i] = sstrdup(labels[i].key);
+    result->values[i] = sstrdup(labels[i].value);
+    if (result->keys[i] == NULL || result->values[i] == NULL) {
+      ERROR("write_gcm: monitored_resource_create_from_array: calloc failed.");
+      goto error;
+    }
+  }
+  return result;
+
+ error:
+  wg_monitored_resource_destroy(result);
+  return NULL;
+}
+
+static monitored_resource_t *monitored_resource_create_from_fields(
+    const char *type, const char *project_id, ...) {
   // count keys/values
   va_list ap;
   va_start(ap, project_id);
-  int num_labels = 0;
+  size_t num_labels = 0;
   while (1) {
     const char *nextKey = va_arg(ap, const char*);
     if (nextKey == NULL) {
@@ -2171,33 +2201,16 @@ static monitored_resource_t *monitored_resource_create_from_fields(
   }
   va_end(ap);
 
-  result->num_labels = num_labels;
-  result->keys = calloc(num_labels, sizeof(result->keys[0]));
-  result->values = calloc(num_labels, sizeof(result->values[0]));
-  if (result->keys == NULL || result->values == NULL) {
-    ERROR("write_gcm: monitored_resource_create_from_fields: calloc failed.");
-    goto error;
-  }
-
+  label_t labels[num_labels];
+  // Changes va_list into label_t array
   va_start(ap, project_id);
-  int i;
-  for (i = 0; i < num_labels; ++i) {
-    const char *nextKey = va_arg(ap, const char*);
-    const char *nextValue = va_arg(ap, const char*);
-    result->keys[i] = sstrdup(nextKey);
-    result->values[i] = sstrdup(nextValue);
-    if (result->keys[i] == NULL || result->values[i] == NULL) {
-      ERROR("write_gcm: monitored_resource_create_from_fields: calloc failed.");
-      va_end(ap);
-      goto error;
-    }
+  for (int i = 0; i < num_labels; i++) {
+    labels[i].key = va_arg(ap, const char*);
+    labels[i].value = va_arg(ap, const char*);
   }
   va_end(ap);
-  return result;
-
- error:
-  wg_monitored_resource_destroy(result);
-  return NULL;
+  return monitored_resource_create_from_array(type, project_id, labels,
+                                              num_labels);
 }
 
 static void wg_monitored_resource_destroy(monitored_resource_t *resource) {
