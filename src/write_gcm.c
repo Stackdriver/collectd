@@ -51,6 +51,7 @@
 
 #include <yajl/yajl_gen.h>
 #include <yajl/yajl_parse.h>
+#include <yajl/yajl_tree.h>
 #if HAVE_YAJL_YAJL_VERSION_H
 # include <yajl/yajl_version.h>
 #endif
@@ -94,6 +95,9 @@ static const char custom_metrics_default_format_string[] =
 // The application/JSON content header.
 static const char json_content_type_header[] = "Content-Type: application/json";
 
+static const char metadata_agent_default_url[] =
+  "http://local-metadata-agent.stackdriver.com:8000";
+
 // Used when we are in end-to-end test mode (-T from the command line) to
 // indicate that some important error occurred during processing so that we can
 // bubble it back up to the exit status of collectd.
@@ -131,6 +135,9 @@ static _Bool wg_some_error_occurred_g = 0;
 
 // The size of the URL buffer.
 #define URL_BUFFER_SIZE ((size_t) 512)
+
+// The size of the Metadata Agent response buffer (16 kb).
+#define METADATA_RESPONSE_BUFFER_SIZE ((size_t) 16400)
 
 //==============================================================================
 //==============================================================================
@@ -280,7 +287,7 @@ static char *wg_read_all_bytes(const char *filename, const char *mode) {
   rewind(f);
   buffer = malloc(size + 1);
   if (buffer == NULL) {
-    ERROR("write_gcm: wg_read_all_bytes: malloc failed");
+    ERROR("write_gcm: wg_read_all_bytes: Memory allocation failed");
     goto leave;
   }
 
@@ -1840,6 +1847,8 @@ typedef struct {
   char *json_log_file;
   char *agent_translation_service_format_string;
   char *custom_metrics_format_string;
+  _Bool enable_metadata_agent;
+  char *metadata_agent_url;
   int throttling_low_water_mark;
   int throttling_high_water_mark;
   int throttling_chunk_interval_secs;
@@ -1880,6 +1889,7 @@ static wg_configbuilder_t *wg_configbuilder_create(int children_num,
       "JSONLogFile",
       "AgentTranslationServiceFormatString",
       "CustomMetricsDefaultFormatString",
+      "MetadataAgentURL",
   };
   char **string_locations[] = {
       &cb->cloud_provider,
@@ -1895,6 +1905,7 @@ static wg_configbuilder_t *wg_configbuilder_create(int children_num,
       &cb->json_log_file,
       &cb->agent_translation_service_format_string,
       &cb->custom_metrics_format_string,
+      &cb->metadata_agent_url,
   };
   static size_t string_limits[] = {  /* -1 means effectively unlimited */
       (size_t) -1,
@@ -1910,6 +1921,7 @@ static wg_configbuilder_t *wg_configbuilder_create(int children_num,
       (size_t) -1,
       URL_BUFFER_SIZE - MAX_PROJECT_ID_SIZE,
       URL_BUFFER_SIZE - MAX_PROJECT_ID_SIZE,
+      URL_BUFFER_SIZE,
   };
   static const char *int_keys[] = {
       "ThrottlingLowWaterMark",
@@ -1924,10 +1936,12 @@ static wg_configbuilder_t *wg_configbuilder_create(int children_num,
       &cb->throttling_purge_interval_secs,
   };
   static const char *bool_keys[] = {
+      "EnableMetadataAgent",
       "PrettyPrintJSON",
   };
   _Bool *bool_locations[] = {
-      &cb->pretty_print_json
+      &cb->enable_metadata_agent,
+      &cb->pretty_print_json,
   };
 
   assert(STATIC_ARRAY_SIZE(string_keys) == STATIC_ARRAY_SIZE(string_locations));
@@ -2040,6 +2054,7 @@ static void wg_configbuilder_destroy(wg_configbuilder_t *cb) {
   if (cb == NULL) {
     return;
   }
+  sfree(cb->metadata_agent_url);
   sfree(cb->agent_translation_service_format_string);
   sfree(cb->custom_metrics_format_string);
   sfree(cb->json_log_file);
@@ -2092,6 +2107,9 @@ static void wg_monitored_resource_destroy(monitored_resource_t *resource);
 //------------------------------------------------------------------------------
 // Private implementation starts here.
 //------------------------------------------------------------------------------
+static monitored_resource_t *wg_monitored_resource_create_from_metadata_agent(
+    const char *metadata_agent_url, const char *project_id,
+    const char *resource_id);
 static monitored_resource_t *wg_monitored_resource_create_for_gcp(
     const wg_configbuilder_t *cb, const char *project_id);
 static monitored_resource_t *wg_monitored_resource_create_for_aws(
@@ -2107,6 +2125,10 @@ static char *wg_get_from_aws_metadata_server(const char *resource);
 // from an AWS or GCE metadata server and returns it. Returns NULL upon error.
 static char *wg_get_from_metadata_server(const char *base, const char *resource,
     const char **headers, int num_headers);
+
+static monitored_resource_t *parse_monitored_resource(char *metadata,
+                                                      int meta_size,
+                                                      const char *project_id);
 
 static char * detect_cloud_provider() {
   char * gcp_hostname = wg_get_from_gcp_metadata_server("instance/hostname");
@@ -2145,6 +2167,49 @@ static monitored_resource_t *wg_monitored_resource_create(
   ERROR("write_gcm: Cloud provider '%s' not recognized.",
         cloud_provider_to_use);
   return NULL;
+}
+
+static monitored_resource_t *wg_monitored_resource_create_from_metadata_agent(
+    const char *metadata_agent_url, const char *project_id,
+    const char *resource_id) {
+  if (resource_id == NULL) {
+    WARNING("write_gcm: wg_monitored_resource_create_from_metadata_agent: "
+            "Expected Resource ID in the Hostname but the Hostname is not set. "
+            "Cannot query the Metadata Agent.");
+    return NULL;
+  }
+  const char *url = metadata_agent_url != NULL ?
+      metadata_agent_url : metadata_agent_default_url;
+  char *response_buffer = (char *)
+      calloc(METADATA_RESPONSE_BUFFER_SIZE, sizeof(char));
+  if (response_buffer == NULL) {
+    ERROR("write_gcm: wg_monitored_resource_create_from_metadata_agent:"
+          "calloc failed.");
+    return NULL;
+  }
+  size_t url_size = strlen(url) + strlen(resource_id) +
+      strlen("/monitoredResource/") + 1;
+  char query[url_size];
+  int written = ssnprintf(query, url_size, "%s/monitoredResource/%s", url,
+                    resource_id);
+  DEBUG("write_gcm: wg_monitored_resource_create_from_metadata_agent: "
+        "Written: %d, Size: %zu, URL: %s", written, url_size, query);
+
+  // ssnprintf returns number of characters written excluding the \0 character
+  // but the size argument it takes requires \0 to be accounted for.
+  if (url_size - written != 1) {
+    ERROR("write_gcm: wg_monitored_resource_create_from_metadata_agent: "
+          "Could not create Metadata Agent URL.");
+    sfree(response_buffer);
+    return NULL;
+  }
+
+  wg_curl_get_or_post(response_buffer, METADATA_RESPONSE_BUFFER_SIZE, query,
+                      NULL, NULL, 0);
+  monitored_resource_t *resource = parse_monitored_resource(response_buffer,
+      METADATA_RESPONSE_BUFFER_SIZE, project_id);
+   sfree(response_buffer);
+   return resource;
 }
 
 typedef struct {
@@ -2211,6 +2276,54 @@ static monitored_resource_t *monitored_resource_create_from_fields(
   va_end(ap);
   return monitored_resource_create_from_array(type, project_id, labels,
                                               num_labels);
+}
+
+static monitored_resource_t *parse_monitored_resource(char *metadata,
+    int metadata_size, const char *project_id) {
+  char errbuf[1024];
+  monitored_resource_t *response = NULL;
+  yajl_val node = yajl_tree_parse(metadata, errbuf, sizeof(errbuf));
+  if (node == NULL) {
+    if (strlen(errbuf)) {
+      DEBUG("write_gcm: parse_monitored_resource %s", errbuf);
+    } else {
+      DEBUG("write_gcm: parse_monitored_resource: Invalid JSON response.");
+    }
+    goto finish;
+  }
+  {
+    const char * type_path[] = {"type", (const char *) 0};
+    const char * labels_path[] = {"labels", (const char *) 0};
+    char *type;
+    yajl_val type_v = yajl_tree_get(node, type_path, yajl_t_string);
+    yajl_val labels_v = yajl_tree_get(node, labels_path, yajl_t_object);
+    if (type_v && YAJL_IS_STRING(type_v)) {
+      type = YAJL_GET_STRING(type_v);
+    } else {
+      ERROR("write_gcm: wg_parse_monitored_resource: %s not correctly defined.",
+            type_path[0]);
+      goto finish;
+    }
+    size_t num_values;
+    if (labels_v && YAJL_IS_OBJECT(labels_v)) {
+      num_values = labels_v->u.object.len;
+    } else {
+      ERROR("write_gcm: wg_parse_monitored_resource: No such node %s.\n",
+            labels_path[0]);
+      goto finish;
+    }
+    label_t labels[num_values];
+    for (int i = 0; i < num_values; i++) {
+      labels[i].key = *(labels_v->u.object.keys + i);
+      labels[i].value = YAJL_GET_STRING(*(labels_v->u.object.values + i));
+    }
+    response = monitored_resource_create_from_array(type, project_id, labels,
+                   num_values);
+  }
+
+ finish:
+  yajl_tree_free(node);
+  return response;
 }
 
 static void wg_monitored_resource_destroy(monitored_resource_t *resource) {
@@ -2347,7 +2460,7 @@ static monitored_resource_t *wg_monitored_resource_create_for_aws(
     // The '5' is to hold space for "aws:" plus terminating NUL.
     region_to_use = malloc(strlen(aws_region) + 5);
     if (region_to_use == NULL) {
-      ERROR("write_gcm: malloc region_to_use failed.");
+      ERROR("write_gcm: Memory allocation region_to_use failed.");
       goto leave;
     }
     snprintf(region_to_use, strlen(aws_region) + 5, "aws:%s", aws_region);
@@ -2455,10 +2568,12 @@ typedef struct {
 
 typedef struct {
   _Bool pretty_print_json;
+  _Bool enable_metadata_agent;
   FILE *json_log_file;
   monitored_resource_t *resource;
   char *agent_translation_service_url;
   char *custom_metrics_url;
+  char *metadata_agent_url;
   credential_ctx_t *cred_ctx;
   oauth2_ctx_t *oauth2_ctx;
   wg_queue_t *ats_queue;  // Agent translation service (deprecated)
@@ -2493,7 +2608,7 @@ static char * find_application_default_creds_path() {
     size_t bytes_needed = strlen(home_path) + sizeof(suffix);
     char *home_config_path = malloc(bytes_needed);
     if (home_config_path == NULL) {
-      ERROR("write_gcm: find_application_default_creds_path: malloc failed");
+      ERROR("write_gcm: find_application_default_creds_path: Memory allocation failed");
       return NULL;
     }
     int result = snprintf(home_config_path, bytes_needed,
@@ -2587,6 +2702,10 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
     goto leave;
   }
 
+  if (cb->metadata_agent_url != NULL) {
+    build->metadata_agent_url = sstrdup(cb->metadata_agent_url);
+  }
+
   assert(sizeof(agent_translation_service_default_format_string)
          <= URL_BUFFER_SIZE - MAX_PROJECT_ID_SIZE);
   const char *ats_format_string_to_use =
@@ -2651,6 +2770,7 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
   }
 
   build->pretty_print_json = cb->pretty_print_json;
+  build->enable_metadata_agent = cb->enable_metadata_agent;
 
   // Success!
   result = build;
@@ -2673,6 +2793,7 @@ static void wg_context_destroy(wg_context_t *ctx) {
   wg_stats_destroy(ctx->gsd_stats);
   wg_oauth2_ctx_destroy(ctx->oauth2_ctx);
   wg_credential_ctx_destroy(ctx->cred_ctx);
+  sfree(ctx->metadata_agent_url);
   sfree(ctx->agent_translation_service_url);
   sfree(ctx->custom_metrics_url);
   wg_monitored_resource_destroy(ctx->resource);
@@ -2854,7 +2975,7 @@ static int wg_json_CreateCollectdTimeseriesRequest(_Bool pretty,
 
   char *json_result = malloc(buffer_length + 1);
   if (json_result == NULL) {
-    ERROR("write_gcm: malloc failed");
+    ERROR("write_gcm: Memory allocation failed");
     wg_json_ctx_destroy(jc);
     return (-ENOMEM);
   }
@@ -3113,7 +3234,7 @@ static int wg_json_CreateTimeSeriesRequest(_Bool pretty,
 
   char *json_result = malloc(buffer_length + 1);
   if (json_result == NULL) {
-    ERROR("write_gcm: malloc failed");
+    ERROR("write_gcm: Memory allocation failed");
     wg_json_ctx_destroy(jc);
     return (-ENOMEM);
   }
@@ -3546,8 +3667,14 @@ static int wg_lookup_or_create_tracker_value(c_avl_tree_t *tree,
     const wg_payload_t *payload, wg_deriv_tracker_value_t **tracker,
     _Bool *created);
 
+// Data structure used to manage payload in AVL tree to avoid having to append
+// values to the end of the list.
+typedef struct {
+  wg_payload_t *payload;
+} wg_payload_hook_t;
+
 static void *wg_process_queue(wg_context_t *ctx, wg_queue_t *queue,
-                              wg_stats_t *stats) {
+    wg_stats_t *stats) {
 
   // Keeping track of the base values for derivative values.
   c_avl_tree_t *deriv_tree = wg_deriv_tree_create();
@@ -3737,12 +3864,60 @@ static int wg_rebase_item(c_avl_tree_t *deriv_tree, wg_payload_t *payload,
   return 0;
 }
 
+static c_avl_tree_t *wg_group_payloads_by_host(wg_payload_t *head, int *count) {
+  c_avl_tree_t *host_tree = c_avl_create((
+      int (*)(const void*, const void*))&strcmp);
+  if (host_tree == NULL) return NULL;
+  int host_count = 0;
+  while (head != NULL) {
+    const char *host = head->key.host;
+    wg_payload_hook_t *hook;
+    wg_payload_hook_t *value;
+    if (c_avl_get(host_tree, (const void *) host, (void **) &value) != 0) {
+      hook = (wg_payload_hook_t *) calloc(1, sizeof(wg_payload_hook_t));
+      if (hook == NULL) {
+        ERROR("write_gcm: wg_group_by_host memory allocation failed");
+        goto leave;
+      }
+      hook->payload = head;
+      if (c_avl_insert(host_tree, (void *) host, (void *) hook) < 0) {
+        ERROR("write_gcm: wg_group_by_host tree insert failed");
+        goto leave;
+      }
+      wg_payload_t *next = head->next;
+      head->next = NULL;
+      head = next;
+      ++host_count;
+    } else {
+      if (value == NULL) {
+        ERROR("write_gcm: wg_group_by_host tree insert failed");
+        goto leave;
+      }
+      hook = value;
+      wg_payload_t *next = head->next;
+      head->next = hook->payload;
+      hook->payload = head;
+      head = next;
+    }
+  }
+  *count = host_count;
+  return host_tree;
+ leave:
+  *count = -1;
+  wg_payload_destroy(head);
+  c_avl_destroy(host_tree);
+  return NULL;
+}
+
 static int wg_transmit_unique_segments(const wg_context_t *ctx,
     wg_queue_t *queue, wg_payload_t *list) {
   while (list != NULL) {
     wg_payload_t *distinct_list;
     wg_payload_t *residual_list;
     int distinct_size;
+    const wg_payload_hook_t *hook;
+    int num_hosts = 0;
+    const char *resource_id;
     if (wg_extract_distinct_payloads(list, &distinct_list, &residual_list,
         &distinct_size) != 0) {
       ERROR("write_gcm: wg_extract_distinct_payloads failed");
@@ -3751,14 +3926,25 @@ static int wg_transmit_unique_segments(const wg_context_t *ctx,
       return -1;
     }
     DEBUG("write_gcm: next distinct segment has size %d", distinct_size);
-    int result = wg_transmit_unique_segment(ctx, queue, distinct_list);
-    if (result != 0) {
-      ERROR("write_gcm: wg_transmit_unique_segment failed.");
-      wg_payload_destroy(distinct_list);
+    c_avl_tree_t *host_tree = wg_group_payloads_by_host(
+        distinct_list, &num_hosts);
+    if (num_hosts == -1) {
+      ERROR("write_gcm: wg_group_payloads_by_host failed.");
       wg_payload_destroy(residual_list);
       return -1;
     }
-    wg_payload_destroy(distinct_list);
+    while (c_avl_pick(host_tree, (void **) &resource_id, (void **) &hook) == 0) {
+      DEBUG("write_gcm: Dispatching payloads for host %s", resource_id);
+      wg_payload_t *list = ((wg_payload_hook_t *) hook)->payload;
+      int result = wg_transmit_unique_segment(ctx, queue, list);
+      if (result == -2) {
+        WARNING("write_gcm: Dropped payload with hostname: %s", resource_id);
+      } else if (result != 0) {
+        ERROR("write_gcm: wg_transmit_unique_segment failed.");
+      }
+      wg_payload_destroy(list);
+    }
+    c_avl_destroy(host_tree);
     list = residual_list;
   }
   return 0;
@@ -3775,6 +3961,46 @@ static void wg_log_json_message(const wg_context_t *ctx, const char *fmt, ...) {
   fflush(ctx->json_log_file);
 }
 
+static char *wg_get_instance_id_from_monitored_resource(
+    monitored_resource_t *resource) {
+  if (resource == NULL) {
+    ERROR(
+        "write_gcm: wg_get_instance_id_from_monitored_resource resource empty");
+    return NULL;
+  }
+  for (int i = 0; i < resource->num_labels; i++) {
+    if (strcmp(resource->keys[i], "instance_id") == 0) {
+      return resource->values[i];
+    }
+  }
+  return NULL;
+}
+
+// Determines which Monitored Resource to use for the payload being dispatched.
+static int wg_determine_monitored_resource_for_payload(
+    const char *host, monitored_resource_t **response_ptr,
+    const wg_context_t *ctx) {
+  int result = -1;
+  monitored_resource_t *resource = NULL;
+  if (host != NULL && ctx->enable_metadata_agent) {
+    resource =
+        wg_monitored_resource_create_from_metadata_agent(
+            ctx->metadata_agent_url, ctx->resource->project_id, host);
+  }
+  if (resource != NULL) {
+    *response_ptr = resource;
+    result = 0;
+  } else {
+    char *instance_id =
+        wg_get_instance_id_from_monitored_resource(ctx->resource);
+    if (instance_id != NULL && strcmp(instance_id, host) == 0) {
+        *response_ptr = ctx->resource;
+        result = 0;
+    }
+  }
+  return result;
+}
+
 static int wg_transmit_unique_segment(const wg_context_t *ctx,
     wg_queue_t *queue, const wg_payload_t *list) {
   if (list == NULL) {
@@ -3789,6 +4015,12 @@ static int wg_transmit_unique_segment(const wg_context_t *ctx,
   if (wg_oauth2_get_auth_header(auth_header, sizeof(auth_header),
       ctx->oauth2_ctx, ctx->cred_ctx) != 0) {
     ERROR("write_gcm: wg_oauth2_get_auth_header failed.");
+    goto leave;
+  }
+  const char *host = list->key.host;
+  monitored_resource_t *resource = NULL;
+  if (wg_determine_monitored_resource_for_payload(host,&resource, ctx) != 0) {
+    result = -2;
     goto leave;
   }
 
@@ -3812,10 +4044,9 @@ static int wg_transmit_unique_segment(const wg_context_t *ctx,
 
     // Leave the remainder here to send in a new request next loop iteration.
     const wg_payload_t *new_list;
-
     if (queue == ctx->ats_queue) {
 
-      if (wg_format_some_of_list_ctr(ctx->resource, list, &new_list, &json,
+      if (wg_format_some_of_list_ctr(resource, list, &new_list, &json,
           ctx->pretty_print_json) != 0) {
         ERROR("write_gcm: Error formatting list as JSON");
         goto leave;
@@ -3854,7 +4085,7 @@ static int wg_transmit_unique_segment(const wg_context_t *ctx,
 
       assert(queue == ctx->gsd_queue);
 
-      if (wg_format_some_of_list_custom(ctx->resource, list, &new_list, &json,
+      if (wg_format_some_of_list_custom(resource, list, &new_list, &json,
           ctx->pretty_print_json) != 0) {
         ERROR("write_gcm: Error formatting list as CreateTimeSeries request");
         goto leave;
@@ -3893,6 +4124,7 @@ static int wg_transmit_unique_segment(const wg_context_t *ctx,
 
     }
 
+    if (resource != ctx->resource) sfree(resource);
     sfree(json);
     json = NULL;
 
