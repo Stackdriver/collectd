@@ -51,6 +51,7 @@
 
 #include <yajl/yajl_gen.h>
 #include <yajl/yajl_parse.h>
+#include <yajl/yajl_tree.h>
 #if HAVE_YAJL_YAJL_VERSION_H
 # include <yajl/yajl_version.h>
 #endif
@@ -94,6 +95,11 @@ static const char custom_metrics_default_format_string[] =
 // The application/JSON content header.
 static const char json_content_type_header[] = "Content-Type: application/json";
 
+static const char metadata_agent_endpoint_url[] =
+  "http://local-metadata-agent.stackdriver.com";
+
+static const char metadata_agent_endpoint_port[] = "20480";
+
 // Used when we are in end-to-end test mode (-T from the command line) to
 // indicate that some important error occurred during processing so that we can
 // bubble it back up to the exit status of collectd.
@@ -131,6 +137,9 @@ static _Bool wg_some_error_occurred_g = 0;
 
 // The size of the URL buffer.
 #define URL_BUFFER_SIZE ((size_t) 512)
+
+// The size of the Metadata Agent response buffer (16 kb).
+#define METADATA_RESPONSE_BUFFER_SIZE ((size_t) 16400)
 
 //==============================================================================
 //==============================================================================
@@ -1840,6 +1849,8 @@ typedef struct {
   char *json_log_file;
   char *agent_translation_service_format_string;
   char *custom_metrics_format_string;
+  char *metadata_agent_url;
+  char *metadata_agent_port;
   int throttling_low_water_mark;
   int throttling_high_water_mark;
   int throttling_chunk_interval_secs;
@@ -1880,6 +1891,8 @@ static wg_configbuilder_t *wg_configbuilder_create(int children_num,
       "JSONLogFile",
       "AgentTranslationServiceFormatString",
       "CustomMetricsDefaultFormatString",
+      "MetadataAgentEndPoint",
+      "MetadataAgentPort",
   };
   char **string_locations[] = {
       &cb->cloud_provider,
@@ -1895,6 +1908,9 @@ static wg_configbuilder_t *wg_configbuilder_create(int children_num,
       &cb->json_log_file,
       &cb->agent_translation_service_format_string,
       &cb->custom_metrics_format_string,
+      &cb->metadata_agent_url,
+      &cb->metadata_agent_port,
+
   };
   static size_t string_limits[] = {  /* -1 means effectively unlimited */
       (size_t) -1,
@@ -1910,6 +1926,8 @@ static wg_configbuilder_t *wg_configbuilder_create(int children_num,
       (size_t) -1,
       URL_BUFFER_SIZE - MAX_PROJECT_ID_SIZE,
       URL_BUFFER_SIZE - MAX_PROJECT_ID_SIZE,
+      URL_BUFFER_SIZE,
+      (size_t) 5,
   };
   static const char *int_keys[] = {
       "ThrottlingLowWaterMark",
@@ -1995,6 +2013,13 @@ static wg_configbuilder_t *wg_configbuilder_create(int children_num,
     ++parse_errors;
   }
 
+  if (strlen(cb->metadata_agent_url)) {
+    cb->metadata_agent_url = sstrdup(metadata_agent_endpoint_url);
+  }
+  if (strlen(cb->metadata_agent_port)) {
+    cb->metadata_agent_port = sstrdup(metadata_agent_endpoint_port);
+  }
+
   if (parse_errors > 0) {
     ERROR("write_gcm: There were %d parse errors reading config file.",
           parse_errors);
@@ -2040,6 +2065,8 @@ static void wg_configbuilder_destroy(wg_configbuilder_t *cb) {
   if (cb == NULL) {
     return;
   }
+  sfree(cb->metadata_agent_url);
+  sfree(cb->metadata_agent_port);
   sfree(cb->agent_translation_service_format_string);
   sfree(cb->custom_metrics_format_string);
   sfree(cb->json_log_file);
@@ -2086,12 +2113,14 @@ typedef struct {
 } monitored_resource_t;
 
 static monitored_resource_t *wg_monitored_resource_create(
-    const wg_configbuilder_t *cb, const char *project_id);
+    const wg_configbuilder_t *cb, const char *project_id, const char *host);
 static void wg_monitored_resource_destroy(monitored_resource_t *resource);
 
 //------------------------------------------------------------------------------
 // Private implementation starts here.
 //------------------------------------------------------------------------------
+static monitored_resource_t *wg_monitored_resource_create_from_metadata(
+    const wg_configbuilder_t *cb, const char *project_id, const char *host);
 static monitored_resource_t *wg_monitored_resource_create_for_gcp(
     const wg_configbuilder_t *cb, const char *project_id);
 static monitored_resource_t *wg_monitored_resource_create_for_aws(
@@ -2107,6 +2136,10 @@ static char *wg_get_from_aws_metadata_server(const char *resource);
 // from an AWS or GCE metadata server and returns it. Returns NULL upon error.
 static char *wg_get_from_metadata_server(const char *base, const char *resource,
     const char **headers, int num_headers);
+
+static monitored_resource_t *parse_monitored_resource(char *metadata,
+                                                      int meta_size,
+                                                      const char *project_id);
 
 static char * detect_cloud_provider() {
   char * gcp_hostname = wg_get_from_gcp_metadata_server("instance/hostname");
@@ -2125,7 +2158,16 @@ static char * detect_cloud_provider() {
 }
 
 static monitored_resource_t *wg_monitored_resource_create(
-    const wg_configbuilder_t *cb, const char *project_id) {
+    const wg_configbuilder_t *cb, const char *project_id, const char *host) {
+  monitored_resource_t *response = wg_monitored_resource_create_from_metadata(
+      cb, project_id, host);
+  if (response != NULL) {
+    return response;
+  } else {
+    WARNING(
+        "write_gcm: Metadata Agent unavailable. Constucting Monitored Resource");
+  }
+
   char *cloud_provider_to_use;
   if (cb->cloud_provider != NULL) {
     cloud_provider_to_use = cb->cloud_provider;
@@ -2145,6 +2187,28 @@ static monitored_resource_t *wg_monitored_resource_create(
   ERROR("write_gcm: Cloud provider '%s' not recognized.",
         cloud_provider_to_use);
   return NULL;
+}
+
+static monitored_resource_t *wg_monitored_resource_create_from_metadata(
+    const wg_configbuilder_t *cb, const char *project_id, const char *host) {
+  char *response_buffer = calloc(METADATA_RESPONSE_BUFFER_SIZE, sizeof(char));
+  char *body = NULL;
+  const char **headers = NULL;
+  int num_headers = 0;
+  size_t url_size = strlen(cb->metadata_agent_url) +
+      strlen(cb->metadata_agent_port) + strlen(host) + 3;
+  char url[url_size];
+  int written = ssnprintf(url, url_size, "%s:%s", cb->metadata_agent_url,
+                        cb->metadata_agent_port);
+  if (written != url_size) {
+    ERROR("write_gcm: wg_monitored_resource_create_from_metadata: %s",
+          "Could not create Metadata URL.");
+    return NULL;
+  }
+  wg_curl_get_or_post(response_buffer, METADATA_RESPONSE_BUFFER_SIZE, url, body,
+                      headers, num_headers);
+  return parse_monitored_resource(response_buffer,
+                                  METADATA_RESPONSE_BUFFER_SIZE, cb->project_id);
 }
 
 typedef struct {
@@ -2211,6 +2275,60 @@ static monitored_resource_t *monitored_resource_create_from_fields(
   va_end(ap);
   return monitored_resource_create_from_array(type, project_id, labels,
                                               num_labels);
+}
+
+static monitored_resource_t *parse_monitored_resource(char *metadata,
+                                                      int metadata_size,
+                                                      const char *project_id) {
+  yajl_val node;
+  char errbuf[1024];
+  node = yajl_tree_parse(metadata, errbuf, sizeof(errbuf));
+  if (node == NULL) {
+    if (strlen(errbuf)) {
+      ERROR("write_gcm: parse_monitored_resource: parse_error: %s.\n", errbuf);
+    } else {
+      ERROR("write_gcm: parse_monitored_resource: parse_error.");
+    }
+    goto error;
+  }
+  {
+    const char * type_path[] = {"type", (const char *) 0};
+    const char * labels_path[] = {"labels", (const char *) 0};
+    char *type;
+    yajl_val type_v = yajl_tree_get(node, type_path, yajl_t_string);
+    yajl_val labels_v = yajl_tree_get(node, labels_path, yajl_t_object);
+    if (type_v && YAJL_IS_STRING(type_v)) {
+      type = YAJL_GET_STRING(type_v);
+    } else {
+      ERROR("write_gcm: wg_parse_monitored_resource: %s not correctly defined.",
+            type_path[0]);
+      goto error;
+    }
+    size_t num_values;
+    if(labels_v && YAJL_IS_OBJECT(labels_v)) {
+      num_values = labels_v->u.object.len;
+    } else {
+      ERROR("write_gcm: wg_parse_monitored_resource: No such node %s.\n",
+            labels_path[0]);
+      goto error;
+    }
+    label_t labels[num_values];
+    for (int i = 0; i < num_values; i++) {
+      labels[i].key = *(labels_v->u.object.keys + i);
+      labels[i].value = YAJL_GET_STRING(*(labels_v->u.object.values + i));
+    }
+    monitored_resource_t *response =
+        monitored_resource_create_from_array(type, project_id, labels,
+                                             num_values);
+    yajl_tree_free(node);
+    sfree(metadata);
+    return response;
+  }
+
+ error:
+  yajl_tree_free(node);
+  sfree(metadata);
+  return NULL;
 }
 
 static void wg_monitored_resource_destroy(monitored_resource_t *resource) {
@@ -2580,13 +2698,6 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
     project_id = NULL;
   }
 
-  // Create the subcontext holding various pieces of server information.
-  build->resource = wg_monitored_resource_create(cb, project_id);
-  if (build->resource == NULL) {
-    ERROR("write_gcm: wg_monitored_resource_create failed.");
-    goto leave;
-  }
-
   assert(sizeof(agent_translation_service_default_format_string)
          <= URL_BUFFER_SIZE - MAX_PROJECT_ID_SIZE);
   const char *ats_format_string_to_use =
@@ -2649,6 +2760,15 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
     ERROR("%s: wg_stats_create failed.", this_plugin_name);
     goto leave;
   }
+
+  // Create the subcontext holding various pieces of server information.
+  build->resource = wg_monitored_resource_create(
+      cb, project_id, build->gsd_queue->head->key.host);
+  if (build->resource == NULL) {
+    ERROR("write_gcm: wg_monitored_resource_create failed.");
+    goto leave;
+  }
+
 
   build->pretty_print_json = cb->pretty_print_json;
 
