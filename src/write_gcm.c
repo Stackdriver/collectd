@@ -2967,7 +2967,6 @@ static int wg_json_CreateTimeSeries(
 
   wg_json_array_open(jc);
 
-  next_payload:
   for (; head != NULL && jc->error == 0; head = head->next) {
     // Also exit the loop if the message size has reached our target.
     const unsigned char *buffer_address;
@@ -3020,7 +3019,7 @@ static int wg_json_CreateTimeSeries(
                 "type_instance: %s metric type must be string.",
                 head->key.plugin, head->key.plugin_instance, head->key.type,
                 head->key.type_instance);
-          continue next_payload;
+          goto next_payload;
         }
       }
       const char *key_pref = custom_metric_label_prefix;
@@ -3064,6 +3063,8 @@ static int wg_json_CreateTimeSeries(
 
     wg_json_map_close(jc);
     ++count;
+
+  next_payload:
   }
 
   *new_head = head;
