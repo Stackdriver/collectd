@@ -3064,7 +3064,7 @@ static int wg_json_CreateTimeSeries(
     wg_json_map_close(jc);
     ++count;
 
-  next_payload:
+  next_payload:;
   }
 
   *new_head = head;
