@@ -30,6 +30,14 @@
 
 static const char this_plugin_name[] = "stackdriver_agent";
 
+static const char *hostname = NULL;
+
+static const char *config_keys[] = {
+  "Hostname",
+};
+
+static int config_keys_num = STATIC_ARRAY_SIZE(config_keys);
+
 typedef struct {
     cdtime_t start_time;
 } context_t;
@@ -64,7 +72,7 @@ static int sagt_submit_helper(const char *type, const char *type_instance,
         .interval = interval,
         .meta = meta_data
     };
-    sstrncpy(vl.host, hostname_g, sizeof(vl.host));
+    sstrncpy(vl.host, hostname != NULL ? hostname : hostname_g, sizeof(vl.host));
     sstrncpy(vl.plugin, "agent", sizeof(vl.plugin));
     sstrncpy(vl.type, type, sizeof(vl.type));
     sstrncpy(vl.type_instance, type_instance, sizeof(vl.type_instance));
@@ -206,9 +214,25 @@ static int sagt_init()
     return result;
 }
 
+static int sagt_config(const char *key, const char *value) {
+  if (strcmp(key, "Hostname") == 0) {
+    hostname = (const char *) sstrdup(value);
+    if (hostname == NULL) {
+      ERROR("%s: sagt_config sstrdup failed.", this_plugin_name);
+      return -1;
+    }
+    return 0;
+  }
+  WARNING("%s: Unknwon config option found. Key: %s, Value: %s",
+          this_plugin_name, key, value);
+  return -1;
+}
+
 /* Register this module with collectd */
 void module_register(void)
 {
+    plugin_register_config(this_plugin_name, sagt_config, config_keys,
+        config_keys_num);
     if (plugin_register_init(this_plugin_name, &sagt_init) != 0)
     {
         ERROR("%s: plugin_register_init failed.", this_plugin_name);
