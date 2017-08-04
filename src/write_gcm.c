@@ -75,8 +75,6 @@ static const char this_plugin_name[] = "write_gcm";
 // sent to the GCMv3 API instead of the Agent Translation Service.
 static const char custom_metric_key[] = "stackdriver_metric_type";
 
-static const char custom_metric_prefix[] = "custom.googleapis.com/";
-
 static const char custom_metric_label_prefix[] = "label:";
 
 // The special HTTP header that needs to be added to any call to the GCP
