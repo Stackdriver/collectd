@@ -2027,6 +2027,7 @@ static wg_configbuilder_t *wg_configbuilder_create(int children_num,
     ERROR("write_gcm: Error reading configuration. "
           "It is an error to set both CredentialsJSON and "
           "Email/PrivateKeyFile/PrivateKeyPass.");
+    goto error;
   }
 
   // Success!
@@ -2534,6 +2535,10 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
     if (build->json_log_file == NULL) {
       WARNING("write_gcm: Can't open log file %s. errno is %d. Continuing.",
           cb->json_log_file, errno);
+      if (cb->log_partial_errors) {
+        WARNING("write_gcm: LogPartialErrors is enabled, but can't open log "
+                "file, so the error messages will be lost. Continuing.");
+      }
     }
   }
 
