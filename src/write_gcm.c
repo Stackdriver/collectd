@@ -1927,8 +1927,8 @@ static wg_configbuilder_t *wg_configbuilder_create(int children_num,
       "LogPartialErrors",
   };
   _Bool *bool_locations[] = {
-    &cb->pretty_print_json,
-    &cb->log_partial_errors,
+      &cb->pretty_print_json,
+      &cb->log_partial_errors,
   };
 
   assert(STATIC_ARRAY_SIZE(string_keys) == STATIC_ARRAY_SIZE(string_locations));
