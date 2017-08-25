@@ -462,6 +462,10 @@ Features
       needed. Please read collectd-unixsock(5) for a description on how that's
       done.
 
+    - write_gcm
+      Sends data to Stackdriver Monitoring. Google Stackdriver provides
+      monitoring, logging, and diagnostics for applications in the cloud.
+
     - write_graphite
       Sends data to Carbon, the storage layer of Graphite using TCP or UDP. It
       can be configured to avoid logging send errors (especially useful when

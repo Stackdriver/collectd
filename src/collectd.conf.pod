@@ -7699,12 +7699,13 @@ iptables to feed data for the guest IPs into the iptables plugin.
 
 =head2 Plugin C<write_gcm>
 
-The C<write_gcm> plugin writes metrics to the I<Google Cloud Monitoring> (GCM)
-service.
+The C<write_gcm> plugin writes metrics to I<Stackdriver Monitoring>. I<Google
+Stackdriver> provides monitoring, logging, and diagnostics for applications in
+the cloud. GCM stands for I<Google Cloud Monitoring>.
 
 This plugin supports two authentication methods: When running on
 I<Google Compute Engine> (GCE), an I<OAuth> token is retrieved from the
-I<metadata server> and used to authenticate to GCM.
+I<metadata server> and used to authenticate to Stackdriver.
 Alternatively, you can specify the B<Email>, B<PrivateKeyFile> and
 B<PrivateKeyPass> options which are then used to sign an authentication token.
 
