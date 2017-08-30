@@ -34,7 +34,7 @@
  * MONGOC_ENABLE_SASL is set from configure to determine if we are
  * compiled with SASL support.
  */
-#define MONGOC_ENABLE_SASL 0
+#define MONGOC_ENABLE_SASL 1
 
 #if MONGOC_ENABLE_SASL != 1
 #  undef MONGOC_ENABLE_SASL
@@ -46,7 +46,7 @@
  * have SASL and its version is new enough to use sasl_client_done (),
  * which supersedes sasl_done ().
  */
-#define MONGOC_HAVE_SASL_CLIENT_DONE 0
+#define MONGOC_HAVE_SASL_CLIENT_DONE 1
 
 #if MONGOC_HAVE_SASL_CLIENT_DONE != 1
 #  undef MONGOC_HAVE_SASL_CLIENT_DONE

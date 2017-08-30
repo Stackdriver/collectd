@@ -109,9 +109,9 @@ DIST_COMMON = $(srcdir)/doc/Makefile.am $(srcdir)/src/Makefile.am \
 	$(top_srcdir)/build/autotools/missing
 am__append_1 = $(top_builddir)/src/libmongoc-ssl-1.0.pc
 #am__append_2 = -D_REENTRANT
-#am__append_3 = \
-#	-DBSON_DISABLE_ASSERT \
-#	-DBSON_DISABLE_CHECKS
+am__append_3 = \
+	-DBSON_DISABLE_ASSERT \
+	-DBSON_DISABLE_CHECKS
 
 am__append_4 = -Wl,--version-script=$(srcdir)/build/autotools/versions.ldscript
 #am__append_5 = -export-symbols-regex "^mongoc_"
@@ -128,7 +128,7 @@ am__append_8 = \
 	src/mongoc/mongoc-stream-tls.c \
 	src/mongoc/mongoc-ssl.c
 
-#am__append_9 = src/mongoc/mongoc-sasl.c
+am__append_9 = src/mongoc/mongoc-sasl.c
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps =  \
@@ -322,8 +322,8 @@ am__objects_3 =  \
 	src/mongoc/libmongoc_1_0_la-mongoc-scram.lo \
 	src/mongoc/libmongoc_1_0_la-mongoc-stream-tls.lo \
 	src/mongoc/libmongoc_1_0_la-mongoc-ssl.lo
-#am__objects_4 =  \
-#	src/mongoc/libmongoc_1_0_la-mongoc-sasl.lo
+am__objects_4 =  \
+	src/mongoc/libmongoc_1_0_la-mongoc-sasl.lo
 am__objects_5 = $(am__objects_2) \
 	src/mongoc/libmongoc_1_0_la-mongoc-array.lo \
 	src/mongoc/libmongoc_1_0_la-mongoc-async.lo \
@@ -498,8 +498,8 @@ am__objects_6 =  \
 	src/mongoc/libmongoc_priv_la-mongoc-scram.lo \
 	src/mongoc/libmongoc_priv_la-mongoc-stream-tls.lo \
 	src/mongoc/libmongoc_priv_la-mongoc-ssl.lo
-#am__objects_7 =  \
-#	src/mongoc/libmongoc_priv_la-mongoc-sasl.lo
+am__objects_7 =  \
+	src/mongoc/libmongoc_priv_la-mongoc-sasl.lo
 am__objects_8 = $(am__objects_2) \
 	src/mongoc/libmongoc_priv_la-mongoc-array.lo \
 	src/mongoc/libmongoc_priv_la-mongoc-async.lo \
@@ -689,7 +689,7 @@ distuninstallcheck_listfiles = find . -type f -print
 am__distuninstallcheck_listfiles = $(distuninstallcheck_listfiles) \
   | sed 's|^\./|$(prefix)/|' | grep -v '$(infodir)/dir$$'
 distcleancheck_listfiles = find . -type f -print
-ACLOCAL = ${SHELL} /home/kosak/build/src/libmongoc/build/autotools/missing aclocal-1.14
+ACLOCAL = ${SHELL} /usr/local/google/home/jkohen/src/collectd/src/libmongoc/build/autotools/missing aclocal-1.14
 
 # if ENABLE_MAN_PAGES
 # include doc/man/Makefile.am
@@ -712,16 +712,16 @@ AMTAR = $${TAR-tar}
 AM_DEFAULT_VERBOSITY = 0
 AR = ar
 AS = as
-AUTOCONF = ${SHELL} /home/kosak/build/src/libmongoc/build/autotools/missing autoconf
-AUTOHEADER = ${SHELL} /home/kosak/build/src/libmongoc/build/autotools/missing autoheader
-AUTOMAKE = ${SHELL} /home/kosak/build/src/libmongoc/build/autotools/missing automake-1.14
-AWK = mawk
+AUTOCONF = ${SHELL} /usr/local/google/home/jkohen/src/collectd/src/libmongoc/build/autotools/missing autoconf
+AUTOHEADER = ${SHELL} /usr/local/google/home/jkohen/src/collectd/src/libmongoc/build/autotools/missing autoheader
+AUTOMAKE = ${SHELL} /usr/local/google/home/jkohen/src/collectd/src/libmongoc/build/autotools/missing automake-1.14
+AWK = gawk
 BSON_CFLAGS = -I./src/libbson/src/bson -Isrc/libbson/src/bson
 BSON_LIBS = src/libbson/libbson-1.0.la
 BSON_OS = 1
 CC = gcc
 CCDEPMODE = depmode=gcc3
-CFLAGS =  -g
+CFLAGS =  -O2
 COVERAGE_CFLAGS = 
 COVERAGE_LDFLAGS = 
 CPP = gcc -E
@@ -760,13 +760,13 @@ LIPO =
 LN_S = ln -s
 LTLIBOBJS = 
 MAINT = 
-MAKEINFO = ${SHELL} /home/kosak/build/src/libmongoc/build/autotools/missing makeinfo
+MAKEINFO = ${SHELL} /usr/local/google/home/jkohen/src/collectd/src/libmongoc/build/autotools/missing makeinfo
 MANIFEST_TOOL = :
 MKDIR_P = /bin/mkdir -p
 MONGOC_API_VERSION = 1.0
-MONGOC_ENABLE_SASL = 0
+MONGOC_ENABLE_SASL = 1
 MONGOC_ENABLE_SSL = 1
-MONGOC_HAVE_SASL_CLIENT_DONE = 0
+MONGOC_HAVE_SASL_CLIENT_DONE = 1
 MONGOC_HAVE_WEAK_SYMBOLS = 1
 MONGOC_MAJOR_VERSION = 1
 MONGOC_MICRO_VERSION = 5
@@ -785,7 +785,7 @@ NMEDIT =
 OBJDUMP = objdump
 OBJEXT = o
 OPTIMIZE_CFLAGS = 
-OPTIMIZE_LDFLAGS = 
+OPTIMIZE_LDFLAGS =  -Wl,-Bsymbolic
 OTOOL = 
 OTOOL64 = 
 PACKAGE = mongo-c-driver
@@ -805,20 +805,20 @@ PTHREAD_CFLAGS = -pthread
 PTHREAD_LIBS = 
 RANLIB = ranlib
 SASL_CFLAGS = 
-SASL_LIBS = 
+SASL_LIBS = -lsasl2
 SED = /bin/sed
 SET_MAKE = 
-SHELL = /bin/bash
+SHELL = /bin/sh
 SHM_LIB = -lrt
-SSL_CFLAGS = 
-SSL_LIBS = -lssl -lcrypto 
+SSL_CFLAGS =  
+SSL_LIBS = -lssl -lcrypto  
 STRIP = strip
 VERSION = 1.3.5
 YELP_BUILD = 
-abs_builddir = /home/kosak/build/src/libmongoc
-abs_srcdir = /home/kosak/build/src/libmongoc
-abs_top_builddir = /home/kosak/build/src/libmongoc
-abs_top_srcdir = /home/kosak/build/src/libmongoc
+abs_builddir = /usr/local/google/home/jkohen/src/collectd/src/libmongoc
+abs_srcdir = /usr/local/google/home/jkohen/src/collectd/src/libmongoc
+abs_top_builddir = /usr/local/google/home/jkohen/src/collectd/src/libmongoc
+abs_top_srcdir = /usr/local/google/home/jkohen/src/collectd/src/libmongoc
 ac_ct_AR = ar
 ac_ct_CC = gcc
 ac_ct_CXX = g++
@@ -849,7 +849,7 @@ host_vendor = unknown
 htmldir = ${docdir}
 includedir = ${prefix}/include
 infodir = ${datarootdir}/info
-install_sh = ${SHELL} /home/kosak/build/src/libmongoc/build/autotools/install-sh
+install_sh = ${SHELL} /usr/local/google/home/jkohen/src/collectd/src/libmongoc/build/autotools/install-sh
 libdir = ${exec_prefix}/lib
 libexecdir = ${exec_prefix}/libexec
 localedir = ${datarootdir}/locale
@@ -858,8 +858,8 @@ mandir = ${datarootdir}/man
 mkdir_p = $(MKDIR_P)
 oldincludedir = /usr/include
 pdfdir = ${docdir}
-prefix = /opt/stackdriver/collectd
-program_transform_name = s&^&stackdriver-&
+prefix = /opt/collectd
+program_transform_name = s,x,x,
 psdir = ${docdir}
 sbindir = ${exec_prefix}/sbin
 sharedstatedir = ${prefix}/com

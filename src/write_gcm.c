@@ -1819,7 +1819,7 @@ static int wg_payload_key_compare(const wg_payload_key_t *l,
 //==============================================================================
 //==============================================================================
 // "Configbuilder" submodule. This holds the info extracted from the config
-// file.
+// file. Its memory contents will be initialized to zeros on allocation.
 //==============================================================================
 //==============================================================================
 //==============================================================================
@@ -1847,6 +1847,7 @@ typedef struct {
   int throttling_chunk_interval_secs;
   int throttling_purge_interval_secs;
   _Bool pretty_print_json;
+  _Bool log_partial_errors;
 } wg_configbuilder_t;
 
 // Builds a wg_configbuilder_t out of a config node.
@@ -1927,9 +1928,11 @@ static wg_configbuilder_t *wg_configbuilder_create(int children_num,
   };
   static const char *bool_keys[] = {
       "PrettyPrintJSON",
+      "LogPartialErrors",
   };
   _Bool *bool_locations[] = {
-      &cb->pretty_print_json
+      &cb->pretty_print_json,
+      &cb->log_partial_errors,
   };
 
   assert(STATIC_ARRAY_SIZE(string_keys) == STATIC_ARRAY_SIZE(string_locations));
@@ -2028,6 +2031,7 @@ static wg_configbuilder_t *wg_configbuilder_create(int children_num,
     ERROR("write_gcm: Error reading configuration. "
           "It is an error to set both CredentialsJSON and "
           "Email/PrivateKeyFile/PrivateKeyPass.");
+    goto error;
   }
 
   // Success!
@@ -2457,6 +2461,7 @@ typedef struct {
 
 typedef struct {
   _Bool pretty_print_json;
+  _Bool log_partial_errors;
   FILE *json_log_file;
   monitored_resource_t *resource;
   char *agent_translation_service_url;
@@ -2535,6 +2540,10 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
       WARNING("write_gcm: Can't open log file %s. errno is %d. Continuing.",
           cb->json_log_file, errno);
     }
+  }
+  if (build->json_log_file == NULL && cb->log_partial_errors) {
+    WARNING("write_gcm: LogPartialErrors is enabled, but there is no JSON log "
+            "file available, so the error messages will be lost. Continuing.");
   }
 
   // Optionally create the subcontext holding the service account credentials.
@@ -2653,6 +2662,7 @@ static wg_context_t *wg_context_create(const wg_configbuilder_t *cb) {
   }
 
   build->pretty_print_json = cb->pretty_print_json;
+  build->log_partial_errors = cb->log_partial_errors;
 
   // Success!
   result = build;
@@ -2778,7 +2788,8 @@ typedef struct {
 // fresh CreateCollectdTimeseriesRequest requests each time) until the list is
 // exhausted. Upon success, the json argument is set to a json string (memory
 // owned by caller), and 0 is returned.
-static int wg_json_CreateCollectdTimeseriesRequest(_Bool pretty,
+static int wg_json_CreateCollectdTimeseriesRequest(
+    _Bool pretty, _Bool log_partial_errors,
     const const monitored_resource_t *monitored_resource,
     const wg_payload_t *head, const wg_payload_t **new_head,
     char **json);
@@ -2817,7 +2828,8 @@ static void wg_json_RFC3339Timestamp(json_ctx_t *jc, cdtime_t time_stamp);
 //   string collectd_version = 3;
 //   repeated CollectdPayload collectd_payloads = 4;
 // }
-static int wg_json_CreateCollectdTimeseriesRequest(_Bool pretty,
+static int wg_json_CreateCollectdTimeseriesRequest(
+    _Bool pretty, _Bool log_partial_errors,
     const monitored_resource_t *monitored_resource,
     const wg_payload_t *head, const wg_payload_t **new_head,
     char **json) {
@@ -2839,6 +2851,10 @@ static int wg_json_CreateCollectdTimeseriesRequest(_Bool pretty,
   wg_json_map_open(jc);
   wg_json_string(jc, "name");
   wg_json_string(jc, name);
+
+  // Request partial errors from the server, so we can log them.
+  wg_json_string(jc, "return_partial_errors");
+  wg_json_bool(jc, log_partial_errors);
 
   wg_json_string(jc, "resource");
   wg_json_MonitoredResource(jc, monitored_resource);
@@ -3539,7 +3555,8 @@ static int wg_extract_distinct_payloads(wg_payload_t *src,
 // Returns 0 on success, <0 on error.
 static int wg_format_some_of_list_ctr(
     const monitored_resource_t *monitored_resource, const wg_payload_t *list,
-    const wg_payload_t **new_list, char **json, _Bool pretty);
+    const wg_payload_t **new_list, char **json, _Bool pretty,
+    _Bool log_partial_errors);
 
 static int wg_format_some_of_list_custom(
     const monitored_resource_t *monitored_resource, const wg_payload_t *list,
@@ -3822,8 +3839,9 @@ static int wg_transmit_unique_segment(const wg_context_t *ctx,
 
     if (queue == ctx->ats_queue) {
 
-      if (wg_format_some_of_list_ctr(ctx->resource, list, &new_list, &json,
-          ctx->pretty_print_json) != 0) {
+      if (wg_format_some_of_list_ctr(
+              ctx->resource, list, &new_list, &json, ctx->pretty_print_json,
+              ctx->log_partial_errors) != 0) {
         ERROR("write_gcm: Error formatting list as JSON");
         goto leave;
       }
@@ -3915,10 +3933,12 @@ static int wg_transmit_unique_segment(const wg_context_t *ctx,
 
 static int wg_format_some_of_list_ctr(
     const monitored_resource_t *monitored_resource, const wg_payload_t *list,
-    const wg_payload_t **new_list, char **json, _Bool pretty) {
+    const wg_payload_t **new_list, char **json, _Bool pretty,
+    _Bool log_partial_errors) {
   char *result;
   if (wg_json_CreateCollectdTimeseriesRequest(
-          pretty, monitored_resource, list, new_list, &result) != 0) {
+          pretty, log_partial_errors, monitored_resource, list, new_list,
+          &result) != 0) {
     ERROR("write_gcm: wg_json_CreateCollectdTimeseriesRequest failed.");
     return -1;
   }
