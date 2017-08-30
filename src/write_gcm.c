@@ -132,7 +132,7 @@ static _Bool wg_some_error_occurred_g = 0;
 
 // The maximum number of time series elements that can be sent in a single
 // CreateTimeSeries request.
-#define MAX_TIME_SERIES 200
+#define MAX_TIME_SERIES_PER_REQUEST 200
 
 //==============================================================================
 //==============================================================================
@@ -2965,14 +2965,16 @@ static void wg_json_Points(json_ctx_t *jc, const wg_payload_t *element) {
 static int wg_json_CreateTimeSeries(
     json_ctx_t *jc, const monitored_resource_t *resource,
     const wg_payload_t *head, const wg_payload_t **new_head) {
-  // Count tracks the number of payloads. This is the same as the number of time
-  // series because we enforce one value per payload below.
   int count = 0;
 
   wg_json_array_open(jc);
 
-  for (; head != NULL && jc->error == 0 && count < MAX_TIME_SERIES;
-       head = head->next) {
+  for (; head != NULL && jc->error == 0; head = head->next) {
+    // Count tracks the number of payloads. This is the same as the number of
+    // time series because we enforce one value per payload below.
+    if (count >= MAX_TIME_SERIES_PER_REQUEST) {
+      break;
+    }
     // Also exit the loop if the message size has reached our target.
     const unsigned char *buffer_address;
     wg_yajl_callback_size_t buffer_length;
