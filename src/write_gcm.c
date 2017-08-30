@@ -130,6 +130,10 @@ static _Bool wg_some_error_occurred_g = 0;
 // The size of the URL buffer.
 #define URL_BUFFER_SIZE ((size_t) 512)
 
+// The maximum number of time series elements that can be sent in a single
+// CreateTimeSeries request.
+#define MAX_TIME_SERIES_PER_REQUEST 200
+
 //==============================================================================
 //==============================================================================
 //==============================================================================
@@ -2966,6 +2970,11 @@ static int wg_json_CreateTimeSeries(
   wg_json_array_open(jc);
 
   for (; head != NULL && jc->error == 0; head = head->next) {
+    // Count tracks the number of payloads. This is the same as the number of
+    // time series because we enforce one value per payload below.
+    if (count >= MAX_TIME_SERIES_PER_REQUEST) {
+      break;
+    }
     // Also exit the loop if the message size has reached our target.
     const unsigned char *buffer_address;
     wg_yajl_callback_size_t buffer_length;
