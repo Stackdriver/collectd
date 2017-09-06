@@ -2396,16 +2396,16 @@ static char *wg_get_from_gcp_metadata_server(const char *resource) {
   const char *headers[] = { gcp_metadata_header };
   return wg_get_from_metadata_server(
       "http://169.254.169.254/computeMetadata/v1beta1/", resource,
-      headers, STATIC_ARRAY_SIZE(headers));
+      headers, STATIC_ARRAY_SIZE(headers), "GCP");
 }
 
 static char *wg_get_from_aws_metadata_server(const char *resource) {
   return wg_get_from_metadata_server(
-      "http://169.254.169.254/latest/", resource, NULL, 0);
+      "http://169.254.169.254/latest/", resource, NULL, 0, "AWS");
 }
 
 static char *wg_get_from_metadata_server(const char *base, const char *resource,
-    const char **headers, int num_headers) {
+    const char **headers, int num_headers, const char *provider) {
   char url[256];
   int result = snprintf(url, sizeof(url), "%s%s", base, resource);
   if (result < 0 || result >= sizeof(url)) {
@@ -2416,10 +2416,14 @@ static char *wg_get_from_metadata_server(const char *base, const char *resource,
   char buffer[2048];
   if (wg_curl_get_or_post(buffer, sizeof(buffer), url, NULL, headers,
       num_headers) != 0) {
-    INFO("write_gcm: wg_get_from_metadata_server failed fetching %s", url);
+    INFO("write_gcm: wg_get_from_metadata_server failed to fetch %s metadata "
+         "from %s", provider, url);
     return NULL;
+  } else {
+    INFO("write_gcm: wg_get_from_metadata_server received response from %s "
+         "metadata server.", provider);
+    return sstrdup(buffer);
   }
-  return sstrdup(buffer);
 }
 
 //==============================================================================
