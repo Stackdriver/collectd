@@ -2108,7 +2108,7 @@ static char *wg_get_from_aws_metadata_server(const char *resource);
 // Fetches a resource (defined by the concatenation of 'base' and 'resource')
 // from an AWS or GCE metadata server and returns it. Returns NULL upon error.
 static char *wg_get_from_metadata_server(const char *base, const char *resource,
-    const char **headers, int num_headers);
+    const char **headers, int num_headers, const char *provider);
 
 static char * detect_cloud_provider() {
   char * gcp_hostname = wg_get_from_gcp_metadata_server("instance/hostname");
