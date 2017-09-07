@@ -2426,7 +2426,6 @@ static char *wg_get_from_metadata_server(const char *base, const char *resource,
     }
     return NULL;
   }
-
   return sstrdup(buffer);
 }
 
