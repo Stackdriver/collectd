@@ -2100,24 +2100,26 @@ static monitored_resource_t *wg_monitored_resource_create_for_aws(
     const wg_configbuilder_t *cb, const char *project_id);
 
 // Fetch 'resource' from the GCP metadata server.
-static char *wg_get_from_gcp_metadata_server(const char *resource);
+static char *wg_get_from_gcp_metadata_server(const char *resource,
+    _Bool ignore_failure);
 
 // Fetch 'resource' from the AWS metadata server.
-static char *wg_get_from_aws_metadata_server(const char *resource);
+static char *wg_get_from_aws_metadata_server(const char *resource,
+    _Bool ignore_failure);
 
 // Fetches a resource (defined by the concatenation of 'base' and 'resource')
 // from an AWS or GCE metadata server and returns it. Returns NULL upon error.
 static char *wg_get_from_metadata_server(const char *base, const char *resource,
-    const char **headers, int num_headers, const char *provider);
+    const char **headers, int num_headers, _Bool ignore_failure);
 
 static char * detect_cloud_provider() {
-  char * gcp_hostname = wg_get_from_gcp_metadata_server("instance/hostname");
+  char * gcp_hostname = wg_get_from_gcp_metadata_server("instance/hostname", 1);
   if (gcp_hostname != NULL) {
     sfree(gcp_hostname);
     return "gcp";
   }
 
-  char * aws_hostname = wg_get_from_aws_metadata_server("meta-data/hostname");
+  char * aws_hostname = wg_get_from_aws_metadata_server("meta-data/hostname", 1);
   if (aws_hostname != NULL) {
     sfree(aws_hostname);
     return "aws";
@@ -2392,20 +2394,22 @@ static monitored_resource_t *wg_monitored_resource_create_for_aws(
   return result;
 }
 
-static char *wg_get_from_gcp_metadata_server(const char *resource) {
+static char *wg_get_from_gcp_metadata_server(const char *resource,
+    _Bool ignore_failure) {
   const char *headers[] = { gcp_metadata_header };
   return wg_get_from_metadata_server(
       "http://169.254.169.254/computeMetadata/v1beta1/", resource,
-      headers, STATIC_ARRAY_SIZE(headers), "GCP");
+      headers, STATIC_ARRAY_SIZE(headers), ignore_failure);
 }
 
-static char *wg_get_from_aws_metadata_server(const char *resource) {
+static char *wg_get_from_aws_metadata_server(const char *resource,
+    _Bool ignore_failure) {
   return wg_get_from_metadata_server(
-      "http://169.254.169.254/latest/", resource, NULL, 0, "AWS");
+      "http://169.254.169.254/latest/", resource, NULL, 0, ignore_failure);
 }
 
 static char *wg_get_from_metadata_server(const char *base, const char *resource,
-    const char **headers, int num_headers, const char *provider) {
+    const char **headers, int num_headers, _Bool ignore_failure) {
   char url[256];
   int result = snprintf(url, sizeof(url), "%s%s", base, resource);
   if (result < 0 || result >= sizeof(url)) {
@@ -2416,14 +2420,14 @@ static char *wg_get_from_metadata_server(const char *base, const char *resource,
   char buffer[2048];
   if (wg_curl_get_or_post(buffer, sizeof(buffer), url, NULL, headers,
       num_headers) != 0) {
-    INFO("write_gcm: wg_get_from_metadata_server failed to fetch %s metadata "
+    if (!ignore_failure) {
+      INFO("write_gcm: wg_get_from_metadata_server failed to fetch %s metadata "
          "from %s", provider, url);
+    }
     return NULL;
-  } else {
-    INFO("write_gcm: wg_get_from_metadata_server received response from %s "
-         "metadata server.", provider);
-    return sstrdup(buffer);
   }
+
+  return sstrdup(buffer);
 }
 
 //==============================================================================
