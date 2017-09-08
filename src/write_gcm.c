@@ -3852,6 +3852,8 @@ static int wg_transmit_unique_segment(const wg_context_t *ctx,
       // Since the response is expected to be valid JSON, we don't
       // look at the characters beyond the closing brace.
       if (strncmp(response, "{}", 2) != 0) {
+        ERROR("%s: Server response (CollectdTimeseriesRequest) contains errors:\n%s",
+              this_plugin_name, response);
         ++ctx->ats_stats->api_errors;
         goto leave;
       }
@@ -3887,7 +3889,7 @@ static int wg_transmit_unique_segment(const wg_context_t *ctx,
         // Since the response is expected to be valid JSON, we don't
         // look at the characters beyond the closing brace.
         if (strncmp(response, "{}", 2) != 0) {
-          ERROR("%s: Expected non-empty JSON response: %s",
+          ERROR("%s: Server response (TimeseriesRequest) contains errors:\n%s",
                 this_plugin_name, response);
           ++ctx->gsd_stats->api_errors;
           goto leave;
