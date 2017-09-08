@@ -2251,7 +2251,7 @@ static monitored_resource_t *wg_monitored_resource_create_for_gcp(
   // metadata server.
   if (project_id_to_use == NULL) {
     // This gets the string id of the project (not the numeric id).
-    project_id_to_use = wg_get_from_gcp_metadata_server("project/project-id");
+    project_id_to_use = wg_get_from_gcp_metadata_server("project/project-id", 0);
     if (project_id_to_use == NULL) {
       ERROR("write_gcm: Can't get project ID from GCP metadata server "
           " (and 'Project' not specified in the config file).");
@@ -2261,7 +2261,7 @@ static monitored_resource_t *wg_monitored_resource_create_for_gcp(
 
   if (instance_id_to_use == NULL) {
     // This gets the numeric instance id.
-    instance_id_to_use = wg_get_from_gcp_metadata_server("instance/id");
+    instance_id_to_use = wg_get_from_gcp_metadata_server("instance/id", 0);
     if (instance_id_to_use == NULL) {
       ERROR("write_gcm: Can't get instance ID from GCP metadata server "
           " (and 'Instance' not specified in the config file).");
@@ -2272,7 +2272,7 @@ static monitored_resource_t *wg_monitored_resource_create_for_gcp(
   if (zone_to_use == NULL) {
     // This gets the zone.
     char *verbose_zone =
-        wg_get_from_gcp_metadata_server("instance/zone");
+        wg_get_from_gcp_metadata_server("instance/zone", 0);
     if (verbose_zone == NULL) {
       ERROR("write_gcm: Can't get zone ID from GCP metadata server "
           " (and 'Zone' not specified in the config file).");
@@ -2334,7 +2334,7 @@ static monitored_resource_t *wg_monitored_resource_create_for_aws(
   if (region_to_use == NULL || instance_id_to_use == NULL ||
       account_id_to_use == NULL) {
     iid_document = wg_get_from_aws_metadata_server(
-        "dynamic/instance-identity/document");
+        "dynamic/instance-identity/document", 0);
     if (iid_document == NULL) {
       ERROR("write_gcm: Can't get dynamic data from metadata server");
       goto leave;
@@ -2421,8 +2421,8 @@ static char *wg_get_from_metadata_server(const char *base, const char *resource,
   if (wg_curl_get_or_post(buffer, sizeof(buffer), url, NULL, headers,
       num_headers) != 0) {
     if (!ignore_failure) {
-      INFO("write_gcm: wg_get_from_metadata_server failed to fetch %s metadata "
-         "from %s", provider, url);
+      ERROR("write_gcm: wg_get_from_metadata_server failed to fetch metadata"
+            "from %s", url);
     }
     return NULL;
   }
