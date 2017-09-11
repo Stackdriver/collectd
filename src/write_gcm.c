@@ -2103,16 +2103,16 @@ static monitored_resource_t *wg_monitored_resource_create_for_aws(
 
 // Fetch 'resource' from the GCP metadata server.
 static char *wg_get_from_gcp_metadata_server(const char *resource,
-    _Bool expect_faiilure);
+    _Bool expect_failure);
 
 // Fetch 'resource' from the AWS metadata server.
 static char *wg_get_from_aws_metadata_server(const char *resource,
-    _Bool expect_faiilure);
+    _Bool expect_failure);
 
 // Fetches a resource (defined by the concatenation of 'base' and 'resource')
 // from an AWS or GCE metadata server and returns it. Returns NULL upon error.
 static char *wg_get_from_metadata_server(const char *base, const char *resource,
-    const char **headers, int num_headers, _Bool expect_faiilure);
+    const char **headers, int num_headers, _Bool expect_failure);
 
 static char * detect_cloud_provider() {
   char * gcp_hostname = wg_get_from_gcp_metadata_server("instance/hostname", 1);
@@ -2397,21 +2397,21 @@ static monitored_resource_t *wg_monitored_resource_create_for_aws(
 }
 
 static char *wg_get_from_gcp_metadata_server(const char *resource,
-    _Bool expect_faiilure) {
+    _Bool expect_failure) {
   const char *headers[] = { gcp_metadata_header };
   return wg_get_from_metadata_server(
       "http://169.254.169.254/computeMetadata/v1beta1/", resource,
-      headers, STATIC_ARRAY_SIZE(headers), expect_faiilure);
+      headers, STATIC_ARRAY_SIZE(headers), expect_failure);
 }
 
 static char *wg_get_from_aws_metadata_server(const char *resource,
-    _Bool expect_faiilure) {
+    _Bool expect_failure) {
   return wg_get_from_metadata_server(
-      "http://169.254.169.254/latest/", resource, NULL, 0, expect_faiilure);
+      "http://169.254.169.254/latest/", resource, NULL, 0, expect_failure);
 }
 
 static char *wg_get_from_metadata_server(const char *base, const char *resource,
-    const char **headers, int num_headers, _Bool expect_faiilure) {
+    const char **headers, int num_headers, _Bool expect_failure) {
   char url[256];
   int result = snprintf(url, sizeof(url), "%s%s", base, resource);
   if (result < 0 || result >= sizeof(url)) {
@@ -2421,8 +2421,8 @@ static char *wg_get_from_metadata_server(const char *base, const char *resource,
 
   char buffer[2048];
   if (wg_curl_get_or_post(buffer, sizeof(buffer), url, NULL, headers,
-      num_headers, expect_faiilure) != 0) {
-    if (!expect_faiilure) {
+      num_headers, expect_failure) != 0) {
+    if (!expect_failure) {
       ERROR("write_gcm: wg_get_from_metadata_server failed to fetch metadata"
             "from %s", url);
     }
