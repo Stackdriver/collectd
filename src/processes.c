@@ -187,6 +187,8 @@ typedef struct procstat_entry_s
 	derive_t io_wchar;
 	derive_t io_syscr;
 	derive_t io_syscw;
+	derive_t io_diskr;
+	derive_t io_diskw;
 
 	derive_t cswitch_vol;
 	derive_t cswitch_invol;
@@ -221,6 +223,8 @@ typedef struct procstat
 	derive_t io_wchar;
 	derive_t io_syscr;
 	derive_t io_syscw;
+	derive_t io_diskr;
+	derive_t io_diskw;
 
 	derive_t cswitch_vol;
 	derive_t cswitch_invol;
@@ -455,6 +459,8 @@ static void ps_list_add (const char *name, const char *cmdline, procstat_entry_t
 		pse->io_wchar   = entry->io_wchar;
 		pse->io_syscr   = entry->io_syscr;
 		pse->io_syscw   = entry->io_syscw;
+		pse->io_diskr   = entry->io_diskr;
+		pse->io_diskw   = entry->io_diskw;
 		pse->cswitch_vol   = entry->cswitch_vol;
 		pse->cswitch_invol = entry->cswitch_invol;
 
@@ -470,6 +476,8 @@ static void ps_list_add (const char *name, const char *cmdline, procstat_entry_t
 		ps->io_wchar   += ((pse->io_wchar == -1)?0:pse->io_wchar);
 		ps->io_syscr   += ((pse->io_syscr == -1)?0:pse->io_syscr);
 		ps->io_syscw   += ((pse->io_syscw == -1)?0:pse->io_syscw);
+		ps->io_diskr   += ((pse->io_diskr == -1)?0:pse->io_diskr);
+		ps->io_diskw   += ((pse->io_diskw == -1)?0:pse->io_diskw);
 
 		ps->cswitch_vol   += ((pse->cswitch_vol == -1)?0:pse->cswitch_vol);
 		ps->cswitch_invol += ((pse->cswitch_invol == -1)?0:pse->cswitch_invol);
@@ -516,6 +524,8 @@ static void ps_list_reset (void)
 		ps->io_wchar = -1;
 		ps->io_syscr = -1;
 		ps->io_syscw = -1;
+		ps->io_diskr = -1;
+		ps->io_diskw = -1;
 		ps->cswitch_vol   = -1;
 		ps->cswitch_invol = -1;
 
@@ -801,6 +811,8 @@ static void ps_submit_proc_stats (
         derive_t io_wchar,
         derive_t io_syscr,
         derive_t io_syscw,
+        derive_t io_diskr,
+        derive_t io_diskw,
 	derive_t cswitch_vol,
         derive_t cswitch_invol)
 {
@@ -866,7 +878,7 @@ static void ps_submit_proc_stats (
     {
         vl.values[0].derive = io_rchar;
         vl.values[1].derive = io_wchar;
-        dispatch_value_helper(&vl, "ps_disk_octets", NULL, 2, doing_detail,
+        dispatch_value_helper(&vl, "io_octets", NULL, 2, doing_detail,
                 config->ps_disk_octets);
     }
 
@@ -874,8 +886,16 @@ static void ps_submit_proc_stats (
     {
         vl.values[0].derive = io_syscr;
         vl.values[1].derive = io_syscw;
-        dispatch_value_helper(&vl, "ps_disk_ops", NULL, 2, doing_detail,
+        dispatch_value_helper(&vl, "io_ops", NULL, 2, doing_detail,
                               config->ps_disk_ops);
+    }
+
+    if ( (io_diskr != -1) && (io_diskw != -1) )
+    {
+        vl.values[0].derive = io_diskr;
+        vl.values[1].derive = io_diskw;
+        dispatch_value_helper(&vl, "disk_octets", NULL, 2, doing_detail,
+                              config->ps_disk_octets);
     }
 
     if ( report_ctx_switch )
@@ -897,6 +917,7 @@ static void ps_submit_proc_stats (
             "cpu_user_counter = %"PRIi64"; cpu_system_counter = %"PRIi64"; "
             "io_rchar = %"PRIi64"; io_wchar = %"PRIi64"; "
             "io_syscr = %"PRIi64"; io_syscw = %"PRIi64";"
+            "io_diskr = %"PRIi64"; io_diskw = %"PRIi64";"
             "cswitch_vol = %"PRIi64"; cswitch_invol = %"PRIi64";",
             instance_name, num_proc, num_lwp,
             vmem_size, vmem_rss,
@@ -904,6 +925,7 @@ static void ps_submit_proc_stats (
             vmem_minflt_counter, vmem_majflt_counter,
             cpu_user_counter, cpu_system_counter,
             io_rchar, io_wchar, io_syscr, io_syscw,
+            io_diskr, io_diskw,
             cswitch_vol, cswitch_invol);
 } /* void ps_submit_proc_list */
 
@@ -951,6 +973,8 @@ static void ps_submit_procstat_entry (const char *instance_name,
             entry->io_wchar,
             entry->io_syscr,
             entry->io_syscw,
+            entry->io_diskr,
+            entry->io_diskw,
 	    entry->cswitch_vol,
 	    entry->cswitch_invol);
 
@@ -982,6 +1006,8 @@ static void ps_submit_proc_list (procstat_t *ps)
             ps->io_wchar,
             ps->io_syscr,
             ps->io_syscw,
+            ps->io_diskr,
+            ps->io_diskw,
 	    ps->cswitch_vol,
 	    ps->cswitch_invol);
 
@@ -1197,6 +1223,10 @@ static procstat_t *ps_read_io (long pid, procstat_t *ps)
 			val = &(ps->io_syscr);
 		else if (strncasecmp (buffer, "syscw:", 6) == 0)
 			val = &(ps->io_syscw);
+		else if (strncasecmp (buffer, "read_bytes:", 11) == 0)
+			val = &(ps->io_diskr);
+		else if (strncasecmp (buffer, "write_bytes:", 12) == 0)
+			val = &(ps->io_diskw);
 		else
 			continue;
 
@@ -1363,6 +1393,8 @@ static int ps_read_process (long pid, procstat_t *ps, char *state)
 		ps->io_wchar = -1;
 		ps->io_syscr = -1;
 		ps->io_syscw = -1;
+		ps->io_diskr = -1;
+		ps->io_diskw = -1;
 
 		DEBUG("ps_read_process: not get io data for pid %li", pid);
 	}
@@ -1702,6 +1734,8 @@ static int ps_read_process(long pid, procstat_t *ps, char *state)
 	ps->io_wchar = myUsage->pr_oublk * chars_per_block;
 	ps->io_syscr = myUsage->pr_sysc;
 	ps->io_syscw = myUsage->pr_sysc;
+	ps->io_diskr = -1;
+	ps->io_diskw = -1;
 
 	/*
 	 * TODO: context switch counters for Solaris
@@ -2148,6 +2182,8 @@ static int ps_read (void)
 		pse.io_wchar = ps.io_wchar;
 		pse.io_syscr = ps.io_syscr;
 		pse.io_syscw = ps.io_syscw;
+		pse.io_diskr = ps.io_diskr;
+		pse.io_diskw = ps.io_diskw;
 
 		pse.cswitch_vol = ps.cswitch_vol;
 		pse.cswitch_invol = ps.cswitch_invol;
@@ -2294,6 +2330,8 @@ static int ps_read (void)
 			pse.io_wchar = -1;
 			pse.io_syscr = -1;
 			pse.io_syscw = -1;
+			pse.io_diskr = -1;
+			pse.io_diskw = -1;
 
 			/* context switch counters not implemented */
 			pse.cswitch_vol   = -1;
@@ -2429,6 +2467,8 @@ static int ps_read (void)
 			pse.io_wchar = -1;
 			pse.io_syscr = -1;
 			pse.io_syscw = -1;
+			pse.io_diskr = -1;
+			pse.io_diskw = -1;
 
 			/* context switch counters not implemented */
 			pse.cswitch_vol   = -1;
@@ -2576,6 +2616,8 @@ static int ps_read (void)
 			pse.io_wchar = -1;
 			pse.io_syscr = -1;
 			pse.io_syscw = -1;
+			pse.io_diskr = -1;
+			pse.io_diskw = -1;
 
 			pse.cswitch_vol   = -1;
 			pse.cswitch_invol = -1;
@@ -2674,6 +2716,8 @@ static int ps_read (void)
 		pse.io_wchar = ps.io_wchar;
 		pse.io_syscr = ps.io_syscr;
 		pse.io_syscw = ps.io_syscw;
+		pse.io_diskr = ps.io_diskr;
+		pse.io_diskw = ps.io_diskw;
 
 		pse.cswitch_vol = -1;
 		pse.cswitch_invol = -1;
