@@ -1510,3 +1510,6 @@ test_plugin_ceph_LDADD = daemon/libplugin_mock.la $(BUILD_WITH_LIBYAJL_LIBS)
 check_PROGRAMS += test_plugin_ceph
 TESTS += test_plugin_ceph
 endif
+
+bin_SCRIPTS = read_agent_logging
+CLEANFILES += $(bin_SCRIPTS)

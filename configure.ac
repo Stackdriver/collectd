@@ -6518,6 +6518,7 @@ AC_SUBST([AM_CFLAGS])
 AC_SUBST([AM_CXXFLAGS])
 
 AC_CONFIG_FILES([Makefile proto/Makefile src/Makefile src/daemon/Makefile src/collectd.conf src/libcollectdclient/Makefile src/libcollectdclient/libcollectdclient.pc src/liboconfig/Makefile bindings/Makefile bindings/java/Makefile])
+AC_CONFIG_FILES([src/read_agent_logging], [chmod +x src/read_agent_logging])
 AC_OUTPUT
 
 if test "x$with_librrd" = "xyes" \

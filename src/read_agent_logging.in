@@ -1,0 +1,37 @@
+#!/bin/sh
+# Read metrics from the Stackdriver Logging agent. This expects the Prometheus
+# text format. It currently only supports what's needed for the Logging agent.
+#
+# This script handles the input line by line, and keeps running until EOF. This
+# is the recommended behavior for long-running collectd plugins, to reduce
+# start-up cost.
+
+# Read first arg, with a safe default for testing.
+URL="${1:-http://localhost:24231/metrics}"
+
+# Default to 10s if unset, as a fail-safe mechanism.
+INTERVAL=${COLLECTD_INTERVAL:-10}
+
+# The part of the input that sed looks at looks like:
+#   stackdriver_successful_requests_count{grpc="false"} 255
+#   stackdriver_failed_requests_count{grpc="false",code="400"} 14
+#   stackdriver_failed_requests_count{grpc="false",code="404"} 18
+#   stackdriver_failed_requests_count{grpc="false",code="503"} 8
+#   stackdriver_ingested_entries_count 7050
+#   stackdriver_dropped_entries_count 25
+# Output format is as follows, with the slashes and hyphens being required::
+#   PUTVAL myhost/agent-failed_requests_count/derive-400 N:14
+while :; do
+  curl --silent "${URL}" \
+    # Only pass to sed the stackdriver metrics.
+    | grep -E '^stackdriver_' \
+    # Combine successful and failed submetrics into one with response code (200
+    # for successful), in order to fit the schema that Stackdriver expects.
+    | sed -E \
+      -e "s/^stackdriver_((ingested|failed|dropped|successful)_)?([a-zA-Z0-9_]*)(\{(.*code=\"([0-9]*)\")?.*\})? ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-\3\/derive-\6 N:\7/" \
+      -e "s/requests_count/request_count/" \
+      # Successful metrics don't have a response code in the input, so set it
+      # here.
+      -e "s/derive- /derive-200 /"
+  sleep "${INTERVAL}"
+done
