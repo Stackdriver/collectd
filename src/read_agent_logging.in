@@ -28,9 +28,14 @@ while :; do
   # - Make all nouns singular.
   # - Successful metrics don't have a response code in the input, so set it
   #   here.
+  # - The first two lines handle ingested/dropped entries as a corner case until
+  #   the agent starts exporting the partial errors for dropped entries, then
+  #   the rest of the sed expression should handle them generically.
   curl --silent "${URL}" \
     | grep -E '^stackdriver_' \
     | sed -E \
+      -e "s/^stackdriver_ingested_entries_count ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-log_entry_count\/derive-200 N:\1/" \
+      -e "s/^stackdriver_dropped_entries_count ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-log_entry_count\/derive-500 N:\1/" \
       -e "s/^stackdriver_((ingested|failed|dropped|successful)_)?([a-zA-Z0-9_]*)(\{(.*code=\"([0-9]*)\")?.*\})? ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-\3\/derive-\6 N:\7/" \
       -e "s/requests_count/request_count/" \
       -e "s/entries_count/log_entry_count/" \
