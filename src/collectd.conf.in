@@ -1604,3 +1604,10 @@
 #    </Type>
 #  </Host>
 #</Plugin>
+
+# Monitor the Stackdriver Logging agent. This should fail gracefully if for any
+# reason the metrics endpoint for the Logging agent isn't reachable.
+#<Plugin "exec">
+#  # The script doesn't need any privileges, so run as 'nobody'.
+#  Exec "nobody" "/opt/stackdriver/collectd/bin/read_agent_logging" "http://localhost:24231/metrics"
+#</Plugin>
