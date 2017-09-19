@@ -19,8 +19,15 @@ INTERVAL=${COLLECTD_INTERVAL:-10}
 #   stackdriver_failed_requests_count{grpc="false",code="503"} 8
 #   stackdriver_ingested_entries_count 7050
 #   stackdriver_dropped_entries_count 25
-# Output format is as follows, with the slashes and hyphens being required::
-#   PUTVAL myhost/agent-failed_requests_count/derive-400 N:14
+#
+# The expected output follows:
+#   PUTVAL /agent-request_count/derive-200 N:255
+#   PUTVAL /agent-request_count/derive-400 N:14
+#   PUTVAL /agent-request_count/derive-404 N:18
+#   PUTVAL /agent-request_count/derive-503 N:8
+#   PUTVAL /agent-log_entry_count/derive-200 N:7050
+#   PUTVAL /agent-entries_retry_count/derive-200 N:73
+#   PUTVAL /agent-log_entry_count/derive-500 N:25
 while :; do
   # - Only pass to sed the Stackdriver metrics.
   # - Combine successful and failed submetrics into one with response code (200
