@@ -22,16 +22,18 @@ INTERVAL=${COLLECTD_INTERVAL:-10}
 # Output format is as follows, with the slashes and hyphens being required::
 #   PUTVAL myhost/agent-failed_requests_count/derive-400 N:14
 while :; do
+  # - Only pass to sed the Stackdriver metrics.
+  # - Combine successful and failed submetrics into one with response code (200
+  #   for successful), in order to fit the schema that Stackdriver expects.
+  # - Make all nouns singular.
+  # - Successful metrics don't have a response code in the input, so set it
+  #   here.
   curl --silent "${URL}" \
-    # Only pass to sed the stackdriver metrics.
     | grep -E '^stackdriver_' \
-    # Combine successful and failed submetrics into one with response code (200
-    # for successful), in order to fit the schema that Stackdriver expects.
     | sed -E \
       -e "s/^stackdriver_((ingested|failed|dropped|successful)_)?([a-zA-Z0-9_]*)(\{(.*code=\"([0-9]*)\")?.*\})? ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-\3\/derive-\6 N:\7/" \
       -e "s/requests_count/request_count/" \
-      # Successful metrics don't have a response code in the input, so set it
-      # here.
+      -e "s/entries_count/log_entry_count/" \
       -e "s/derive- /derive-200 /"
   sleep "${INTERVAL}"
 done
