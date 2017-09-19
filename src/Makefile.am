@@ -1511,5 +1511,7 @@ check_PROGRAMS += test_plugin_ceph
 TESTS += test_plugin_ceph
 endif
 
+if BUILD_PLUGIN_LOGGING_METRICS
 bin_SCRIPTS = read_agent_logging
 CLEANFILES += $(bin_SCRIPTS)
+endif
