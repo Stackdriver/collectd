@@ -6,6 +6,12 @@
 # This script handles the input line by line, and keeps running until EOF. This
 # is the recommended behavior for long-running collectd plugins, to reduce
 # start-up cost.
+#
+# Sample configuration stanza:
+# <Plugin "exec">
+#   # The script doesn't need any privileges, so run as 'nobody'.
+#   Exec "nobody" "/opt/stackdriver/collectd/bin/read_agent_logging" "http://localhost:24231/metrics"
+# </Plugin>
 
 # Read first arg, with a safe default for testing.
 URL="${1:-http://localhost:24231/metrics}"
