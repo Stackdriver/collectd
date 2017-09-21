@@ -25,6 +25,8 @@ INTERVAL=${COLLECTD_INTERVAL:-10}
 #   stackdriver_failed_requests_count{grpc="false",code="404"} 18
 #   stackdriver_ingested_entries_count 7050
 #   stackdriver_dropped_entries_count 25
+#   stackdriver_retried_entries_count{code="500"} 2
+#   stackdriver_retried_entries_count{code="501"} 3
 #
 # The expected output follows:
 #   PUTVAL /agent-request_count/derive-200 N:255
@@ -32,6 +34,8 @@ INTERVAL=${COLLECTD_INTERVAL:-10}
 #   PUTVAL /agent-request_count/derive-404 N:18
 #   PUTVAL /agent-log_entry_count/derive-200 N:7050
 #   PUTVAL /agent-log_entry_count/derive-418 N:25
+#   PUTVAL /agent-log_entry_retry_count/derive-500 N:2
+#   PUTVAL /agent-log_entry_retry_count/derive-501 N:3
 while :; do
   # - Only pass to sed the Stackdriver metrics.
   # - Combine successful and failed submetrics into one with response code (200
@@ -47,9 +51,10 @@ while :; do
     | sed -E \
       -e "s/^stackdriver_ingested_entries_count ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-log_entry_count\/derive-200 N:\1/" \
       -e "s/^stackdriver_dropped_entries_count ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-log_entry_count\/derive-418 N:\1/" \
-      -e "s/^stackdriver_((ingested|failed|dropped|successful)_)?([a-zA-Z0-9_]*)(\{(.*code=\"([0-9]*)\")?.*\})? ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-\3\/derive-\6 N:\7/" \
-      -e "s/requests_count/request_count/" \
-      -e "s/entries_count/log_entry_count/" \
+      -e "s/^stackdriver_([a-zA-Z0-9_]*)(\{(.*code=\"([0-9]*)\")?.*\})? ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-\1\/derive-\4 N:\5/" \
+      -e "s/(successful|failed)_requests_count/request_count/" \
+      -e "s/(ingested|dropped)_entries_count/log_entry_count/" \
+      -e "s/retried_entries_count/log_entry_retry_count/" \
       -e "s/derive- /derive-200 /"
   sleep "${INTERVAL}"
 done
