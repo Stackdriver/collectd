@@ -85,8 +85,8 @@ DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	AUTHORS COPYING ChangeLog README libltdl/config/compile \
 	libltdl/config/config.guess libltdl/config/config.sub \
 	libltdl/config/depcomp libltdl/config/install-sh \
-	libltdl/config/missing libltdl/config/ylwrap \
-	libltdl/config/ltmain.sh $(top_srcdir)/libltdl/config/compile \
+	libltdl/config/missing libltdl/config/ltmain.sh \
+	$(top_srcdir)/libltdl/config/compile \
 	$(top_srcdir)/libltdl/config/config.guess \
 	$(top_srcdir)/libltdl/config/config.sub \
 	$(top_srcdir)/libltdl/config/install-sh \
