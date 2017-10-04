@@ -1,4 +1,4 @@
-#! /bin/sh
+#! /bin/bash
 
 GLOBAL_ERROR_INDICATOR=0
 
