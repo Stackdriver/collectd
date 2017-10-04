@@ -29,13 +29,13 @@ INTERVAL=${COLLECTD_INTERVAL:-10}
 #   stackdriver_retried_entries_count{code="501"} 3
 #
 # The expected output follows:
-#   PUTVAL /agent-request_count/derive-200 N:255
-#   PUTVAL /agent-request_count/derive-400 N:14
-#   PUTVAL /agent-request_count/derive-404 N:18
-#   PUTVAL /agent-log_entry_count/derive-200 N:7050
-#   PUTVAL /agent-log_entry_count/derive-418 N:25
-#   PUTVAL /agent-log_entry_retry_count/derive-500 N:2
-#   PUTVAL /agent-log_entry_retry_count/derive-501 N:3
+#   PUTVAL /agent-200/derive-request_count N:255
+#   PUTVAL /agent-400/derive-request_count N:14
+#   PUTVAL /agent-404/derive-request_count N:18
+#   PUTVAL /agent-200/derive-log_entry_count N:7050
+#   PUTVAL /agent-418/derive-log_entry_count N:25
+#   PUTVAL /agent-500/derive-log_entry_retry_count N:2
+#   PUTVAL /agent-501/derive-log_entry_retry_count N:3
 while :; do
   # - Only pass to sed the Stackdriver metrics.
   # - Combine successful and failed submetrics into one with response code (200
@@ -49,12 +49,12 @@ while :; do
   curl --silent "${URL}" \
     | grep -E '^stackdriver_' \
     | sed -E \
-      -e "s/^stackdriver_ingested_entries_count ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-log_entry_count\/derive-200 N:\1/" \
-      -e "s/^stackdriver_dropped_entries_count ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-log_entry_count\/derive-418 N:\1/" \
-      -e "s/^stackdriver_([a-zA-Z0-9_]*)(\{(.*code=\"([0-9]*)\")?.*\})? ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-\1\/derive-\4 N:\5/" \
+      -e "s/^stackdriver_ingested_entries_count ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-200\/derive-log_entry_count N:\1/" \
+      -e "s/^stackdriver_dropped_entries_count ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-418\/derive-log_entry_count N:\1/" \
+      -e "s/^stackdriver_([a-zA-Z0-9_]*)(\{(.*code=\"([0-9]*)\")?.*\})? ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-\4\/derive-\1 N:\5/" \
       -e "s/(successful|failed)_requests_count/request_count/" \
       -e "s/(ingested|dropped)_entries_count/log_entry_count/" \
       -e "s/retried_entries_count/log_entry_retry_count/" \
-      -e "s/derive- /derive-200 /"
+      -e "s/agent-\//agent-200\//"
   sleep "${INTERVAL}"
 done
