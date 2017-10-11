@@ -3869,13 +3869,13 @@ static int wg_transmit_unique_segment(const wg_context_t *ctx,
 
       wg_log_json_message(
           ctx, "Server response (CollectdTimeseriesRequest):\n%s\n", response);
-      // Since the response is expected to be valid JSON, we don't
-      // look at the characters beyond the closing brace.
+      // The response is expected to be valid JSON. In case the response
+      // isn't empty, a potential partial success case may have occured. In
+      // this case we increment the API error count but don't flush the
+      // payload.
       if (strncmp(response, "{}", 2) != 0) {
         ERROR("%s: Server response (CollectdTimeseriesRequest) contains errors:\n%s",
               this_plugin_name, response);
-        ++ctx->ats_stats->api_errors;
-        goto leave;
       }
       ++ctx->ats_stats->api_successes;
 
@@ -3905,13 +3905,13 @@ static int wg_transmit_unique_segment(const wg_context_t *ctx,
         // TODO: Validate API response properly.
         wg_log_json_message(
             ctx, "Server response (TimeseriesRequest):\n%s\n", response);
-        // Since the response is expected to be valid JSON, we don't
-        // look at the characters beyond the closing brace.
+        // The response is expected to be valid JSON. In case the response
+        // isn't empty, a potential partial success case may have occured. In
+        // this case we increment the API error count but don't flush the
+        // payload.
         if (strncmp(response, "{}", 2) != 0) {
           ERROR("%s: Server response (TimeseriesRequest) contains errors:\n%s",
                 this_plugin_name, response);
-          ++ctx->gsd_stats->api_errors;
-          goto leave;
         }
       } else {
         wg_log_json_message(
