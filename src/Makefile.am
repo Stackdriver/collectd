@@ -390,6 +390,18 @@ dns_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 dns_la_LIBADD = -lpcap
 endif
 
+if BUILD_PLUGIN_DOCKER
+pkglib_LTLIBRARIES += docker.la
+docker_la_SOURCES = docker.c
+docker_la_LDFLAGS = -module -avoid-version $(BUILD_WITH_LIBYAJL_LDFLAGS)
+docker_la_CFLAGS = $(AM_CFLAGS) $(BUILD_WITH_LIBYAJL_CPPFLAGS)
+docker_la_LIBADD = $(BUILD_WITH_LIBYAJL_LIBS)
+if BUILD_WITH_LIBCURL
+docker_la_CFLAGS += $(BUILD_WITH_LIBCURL_CFLAGS)
+docker_la_LIBADD += $(BUILD_WITH_LIBCURL_LIBS)
+endif
+endif
+
 if BUILD_PLUGIN_DRBD
 pkglib_LTLIBRARIES += drbd.la
 drbd_la_SOURCES = drbd.c

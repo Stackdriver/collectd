@@ -5766,6 +5766,7 @@ plugin_curl_json="no"
 plugin_curl_xml="no"
 plugin_df="no"
 plugin_disk="no"
+plugin_docker="no"
 plugin_drbd="no"
 plugin_entropy="no"
 plugin_ethstat="no"
@@ -5817,6 +5818,7 @@ then
 	plugin_cpu="yes"
 	plugin_cpufreq="yes"
 	plugin_disk="yes"
+	plugin_docker="yes"
 	plugin_drbd="yes"
 	plugin_entropy="yes"
 	plugin_fhcount="yes"
@@ -6155,6 +6157,7 @@ then
 	plugin_write_gcm="yes"
         match_throttle_metadata_keys="yes"
         plugin_stackdriver_agent="yes"
+	plugin_docker="yes"
 fi
 
 if test "x$have_getutent" = "xyes"
@@ -6222,6 +6225,7 @@ AC_PLUGIN([dbi],                 [$with_libdbi],            [General database st
 AC_PLUGIN([df],                  [$plugin_df],              [Filesystem usage statistics])
 AC_PLUGIN([disk],                [$plugin_disk],            [Disk usage statistics])
 AC_PLUGIN([dns],                 [$with_libpcap],           [DNS traffic analysis])
+AC_PLUGIN([docker],              [$plugin_docker],          [Docker statistics])
 AC_PLUGIN([drbd],                [$plugin_drbd],            [DRBD statistics])
 AC_PLUGIN([email],               [yes],                     [EMail statistics])
 AC_PLUGIN([entropy],             [$plugin_entropy],         [Entropy statistics])
@@ -6663,6 +6667,7 @@ AC_MSG_RESULT([    curl_xml  . . . . . . $enable_curl_xml])
 AC_MSG_RESULT([    dbi . . . . . . . . . $enable_dbi])
 AC_MSG_RESULT([    df  . . . . . . . . . $enable_df])
 AC_MSG_RESULT([    disk  . . . . . . . . $enable_disk])
+AC_MSG_RESULT([    docker  . . . . . . . $enable_docker])
 AC_MSG_RESULT([    dns . . . . . . . . . $enable_dns])
 AC_MSG_RESULT([    drbd  . . . . . . . . $enable_drbd])
 AC_MSG_RESULT([    email . . . . . . . . $enable_email])

@@ -33,6 +33,7 @@
 
 #include <curl/curl.h>
 
+static char *host        = NULL;
 static char *url         = NULL;
 static char *user        = NULL;
 static char *pass        = NULL;
@@ -49,6 +50,7 @@ static char   nginx_curl_error[CURL_ERROR_SIZE];
 
 static const char *config_keys[] =
 {
+  "Host",
   "URL",
   "User",
   "Password",
@@ -97,7 +99,9 @@ static int config_set (char **var, const char *value)
 
 static int config (const char *key, const char *value)
 {
-  if (strcasecmp (key, "url") == 0)
+  if (strcasecmp (key, "host") == 0)
+    return (config_set (&host, value));
+  else if (strcasecmp (key, "url") == 0)
     return (config_set (&url, value));
   else if (strcasecmp (key, "user") == 0)
     return (config_set (&user, value));
@@ -211,7 +215,7 @@ static void submit (const char *type, const char *inst, long long value)
 
   vl.values = values;
   vl.values_len = 1;
-  sstrncpy (vl.host, hostname_g, sizeof (vl.host));
+  sstrncpy (vl.host, host != NULL ? host : hostname_g, sizeof (vl.host));
   sstrncpy (vl.plugin, "nginx", sizeof (vl.plugin));
   sstrncpy (vl.plugin_instance, "", sizeof (vl.plugin_instance));
   sstrncpy (vl.type, type, sizeof (vl.type));

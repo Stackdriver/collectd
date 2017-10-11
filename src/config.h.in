@@ -791,6 +791,9 @@
 /* Define to 1 if the dns plugin is enabled. */
 #undef HAVE_PLUGIN_DNS
 
+/* Define to 1 if the docker plugin is enabled. */
+#undef HAVE_PLUGIN_DOCKER
+
 /* Define to 1 if the drbd plugin is enabled. */
 #undef HAVE_PLUGIN_DRBD
 
@@ -853,6 +856,9 @@
 
 /* Define to 1 if the logfile plugin is enabled. */
 #undef HAVE_PLUGIN_LOGFILE
+
+/* Define to 1 if the logging_metrics plugin is enabled. */
+#undef HAVE_PLUGIN_LOGGING_METRICS
 
 /* Define to 1 if the log_logstash plugin is enabled. */
 #undef HAVE_PLUGIN_LOG_LOGSTASH
