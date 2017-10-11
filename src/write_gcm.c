@@ -3869,9 +3869,10 @@ static int wg_transmit_unique_segment(const wg_context_t *ctx,
 
       wg_log_json_message(
           ctx, "Server response (CollectdTimeseriesRequest):\n%s\n", response);
-      // The response is expected to be valid JSON. In case the response
-      // isn't empty, a potential partial success case may have occured. In
-      // this case we don't flush the payload.
+      // Since the response is expected to be valid JSON, we don't look at the
+      // characters beyond the closing brace. When the response isn't empty, it
+      // represents a partial success case. Because some points were accepted
+      // in that case, we treat it as a successful API call.
       if (strncmp(response, "{}", 2) != 0) {
         ERROR("%s: Server response (CollectdTimeseriesRequest) contains errors:\n%s",
               this_plugin_name, response);
@@ -3904,9 +3905,10 @@ static int wg_transmit_unique_segment(const wg_context_t *ctx,
         // TODO: Validate API response properly.
         wg_log_json_message(
             ctx, "Server response (TimeseriesRequest):\n%s\n", response);
-        // The response is expected to be valid JSON. In case the response
-        // isn't empty, a potential partial success case may have occured. In
-        // this case we don't flush the payload.
+        // Since the response is expected to be valid JSON, we don't look at the
+        // characters beyond the closing brace. When the response isn't empty, it
+        // represents a partial success case. Because some points were accepted
+        // in that case, we treat it as a successful API call.
         if (strncmp(response, "{}", 2) != 0) {
           ERROR("%s: Server response (TimeseriesRequest) contains errors:\n%s",
                 this_plugin_name, response);
