@@ -2214,7 +2214,8 @@ static monitored_resource_t *wg_monitored_resource_create_from_metadata_agent(
   if (wg_curl_get_or_post(&response, query, body, headers, num_headers, 0)
       != 0) {
     ERROR("write_gcm: wg_monitored_resource_create_from_metadata_agent: "
-          "Failed to get monitored resource.");
+          "Failed to get monitored resource from local metadata agent "
+          "service.");
     return NULL;
   }
 
