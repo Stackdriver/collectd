@@ -239,9 +239,7 @@ static int interface_read(void) {
   int numfields;
 
   if ((fh = fopen("/proc/net/dev", "r")) == NULL) {
-    char errbuf[1024];
-    WARNING("interface plugin: fopen: %s",
-            sstrerror(errno, errbuf, sizeof(errbuf)));
+    WARNING("interface plugin: fopen: %s", STRERRNO);
     return -1;
   }
 
@@ -355,9 +353,7 @@ static int interface_read(void) {
 
   if ((nif = perfstat_netinterface(NULL, NULL, sizeof(perfstat_netinterface_t),
                                    0)) < 0) {
-    char errbuf[1024];
-    WARNING("interface plugin: perfstat_netinterface: %s",
-            sstrerror(errno, errbuf, sizeof(errbuf)));
+    WARNING("interface plugin: perfstat_netinterface: %s", STRERRNO);
     return -1;
   }
 
@@ -370,9 +366,8 @@ static int interface_read(void) {
   id.name[0] = '\0';
   if ((ifs = perfstat_netinterface(&id, ifstat, sizeof(perfstat_netinterface_t),
                                    nif)) < 0) {
-    char errbuf[1024];
     WARNING("interface plugin: perfstat_netinterface (interfaces=%d): %s", nif,
-            sstrerror(errno, errbuf, sizeof(errbuf)));
+            STRERRNO);
     return -1;
   }
 

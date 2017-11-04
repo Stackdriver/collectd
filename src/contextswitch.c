@@ -82,8 +82,7 @@ static int cs_read(void) {
 
   fh = fopen("/proc/stat", "r");
   if (fh == NULL) {
-    ERROR("contextswitch plugin: unable to open /proc/stat: %s",
-          sstrerror(errno, buffer, sizeof(buffer)));
+    ERROR("contextswitch plugin: unable to open /proc/stat: %s", STRERRNO);
     return -1;
   }
 
@@ -123,9 +122,7 @@ static int cs_read(void) {
   status =
       perfstat_cpu_total(NULL, &perfcputotal, sizeof(perfstat_cpu_total_t), 1);
   if (status < 0) {
-    char errbuf[1024];
-    ERROR("contextswitch plugin: perfstat_cpu_total: %s",
-          sstrerror(errno, errbuf, sizeof(errbuf)));
+    ERROR("contextswitch plugin: perfstat_cpu_total: %s", STRERRNO);
     return -1;
   }
 

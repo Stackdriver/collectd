@@ -280,8 +280,7 @@ static int memory_read_internal(value_list_t *vl) {
   gauge_t mem_slab_total = 0;
 
   if ((fh = fopen("/proc/meminfo", "r")) == NULL) {
-    char errbuf[1024];
-    WARNING("memory: fopen: %s", sstrerror(errno, errbuf, sizeof(errbuf)));
+    WARNING("memory: fopen: %s", STRERRNO);
     return -1;
   }
 
@@ -309,8 +308,7 @@ static int memory_read_internal(value_list_t *vl) {
   }
 
   if (fclose(fh)) {
-    char errbuf[1024];
-    WARNING("memory: fclose: %s", sstrerror(errno, errbuf, sizeof(errbuf)));
+    WARNING("memory: fclose: %s", STRERRNO);
   }
 
   if (mem_total < (mem_free + mem_buffered + mem_cached + mem_slab_total))
@@ -407,9 +405,7 @@ static int memory_read_internal(value_list_t *vl) {
   size = sizeof(vmtotal);
 
   if (sysctl(mib, 2, &vmtotal, &size, NULL, 0) < 0) {
-    char errbuf[1024];
-    WARNING("memory plugin: sysctl failed: %s",
-            sstrerror(errno, errbuf, sizeof(errbuf)));
+    WARNING("memory plugin: sysctl failed: %s", STRERRNO);
     return -1;
   }
 
@@ -437,9 +433,7 @@ static int memory_read_internal(value_list_t *vl) {
   perfstat_memory_total_t pmemory = {0};
 
   if (perfstat_memory_total(NULL, &pmemory, sizeof(pmemory), 1) < 0) {
-    char errbuf[1024];
-    WARNING("memory plugin: perfstat_memory_total failed: %s",
-            sstrerror(errno, errbuf, sizeof(errbuf)));
+    WARNING("memory plugin: perfstat_memory_total failed: %s", STRERRNO);
     return -1;
   }
 
