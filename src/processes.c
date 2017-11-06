@@ -266,6 +266,31 @@ int     getthrds64( pid_t, void *, int, tid64_t *, int );
 int getargs (void *processBuffer, int bufferLen, char *argsBuffer, int argsLen);
 #endif /* HAVE_PROCINFO_H */
 
+static void ps_copy_procstat_data (procstat_data_t *dst, procstat_data_t *src)
+{
+	if (src == NULL || dst == NULL) {
+		return;
+	}
+
+	dst->num_proc   = src->num_proc;
+	dst->num_lwp    = src->num_lwp;
+	dst->vmem_size  = src->vmem_size;
+	dst->vmem_rss   = src->vmem_rss;
+	dst->vmem_data  = src->vmem_data;
+	dst->vmem_code  = src->vmem_code;
+	dst->stack_size = src->stack_size;
+	
+	dst->io_rchar = src->io_rchar;
+	dst->io_wchar = src->io_wchar;
+	dst->io_syscr = src->io_syscr;
+	dst->io_syscw = src->io_syscw;
+	dst->io_diskr = src->io_diskr;
+	dst->io_diskw = src->io_diskw;
+
+	dst->cswitch_vol = src->cswitch_vol;
+	dst->cswitch_invol = src->cswitch_invol;
+}
+
 /* put name of process from config to list_head_g tree
  * list_head_g is a list of 'procstat_t' structs with
  * processes names we want to watch */
@@ -431,21 +456,8 @@ static void ps_list_add (const char *name, const char *cmdline, procstat_entry_t
 		}
 
 		pse->age = 0;
-		pse->data.num_proc   = entry->data.num_proc;
-		pse->data.num_lwp    = entry->data.num_lwp;
-		pse->data.vmem_size  = entry->data.vmem_size;
-		pse->data.vmem_rss   = entry->data.vmem_rss;
-		pse->data.vmem_data  = entry->data.vmem_data;
-		pse->data.vmem_code  = entry->data.vmem_code;
-		pse->data.stack_size = entry->data.stack_size;
-		pse->data.io_rchar   = entry->data.io_rchar;
-		pse->data.io_wchar   = entry->data.io_wchar;
-		pse->data.io_syscr   = entry->data.io_syscr;
-		pse->data.io_syscw   = entry->data.io_syscw;
-		pse->data.io_diskr   = entry->data.io_diskr;
-		pse->data.io_diskw   = entry->data.io_diskw;
-		pse->data.cswitch_vol   = entry->data.cswitch_vol;
-		pse->data.cswitch_invol = entry->data.cswitch_invol;
+
+		ps_copy_procstat_data(&pse->data, &entry->data);
 
 		ps->data.num_proc   += pse->data.num_proc;
 		ps->data.num_lwp    += pse->data.num_lwp;
@@ -2089,13 +2101,7 @@ static int ps_read (void)
 		pse.id       = pid;
 		pse.age      = 0;
 
-		pse.data.num_proc   = ps.data.num_proc;
-		pse.data.num_lwp    = ps.data.num_lwp;
-		pse.data.vmem_size  = ps.data.vmem_size;
-		pse.data.vmem_rss   = ps.data.vmem_rss;
-		pse.data.vmem_data  = ps.data.vmem_data;
-		pse.data.vmem_code  = ps.data.vmem_code;
-		pse.data.stack_size = ps.data.stack_size;
+		ps_copy_procstat_data(&pse.data, &ps.data);
 
 		pse.vmem_minflt = 0;
 		pse.data.vmem_minflt_counter = ps.data.vmem_minflt_counter;
@@ -2106,16 +2112,6 @@ static int ps_read (void)
 		pse.data.cpu_user_counter = ps.data.cpu_user_counter;
 		pse.cpu_system = 0;
 		pse.data.cpu_system_counter = ps.data.cpu_system_counter;
-
-		pse.data.io_rchar = ps.data.io_rchar;
-		pse.data.io_wchar = ps.data.io_wchar;
-		pse.data.io_syscr = ps.data.io_syscr;
-		pse.data.io_syscw = ps.data.io_syscw;
-		pse.data.io_diskr = ps.data.io_diskr;
-		pse.data.io_diskw = ps.data.io_diskw;
-
-		pse.data.cswitch_vol = ps.data.cswitch_vol;
-		pse.data.cswitch_invol = ps.data.cswitch_invol;
 
 		switch (state)
 		{
