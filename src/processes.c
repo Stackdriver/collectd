@@ -1586,10 +1586,10 @@ static int ps_read_process(long pid, procstat_t *ps, char *state)
 	myUsage = (prusage_t *) buffer;
 
 	sstrncpy(ps->name, myInfo->pr_fname, sizeof (myInfo->pr_fname));
-	ps->num_lwp = myStatus->pr_nlwp;
+	ps->gauges.num_lwp = myStatus->pr_nlwp;
 	if (myInfo->pr_wstat != 0) {
-		ps->num_proc = 0;
-		ps->num_lwp = 0;
+		ps->gauges.num_proc = 0;
+		ps->gauges.num_lwp = 0;
 		*state = (char) 'Z';
 
 		sfree(myStatus);
@@ -1597,32 +1597,32 @@ static int ps_read_process(long pid, procstat_t *ps, char *state)
 		sfree(myUsage);
 		return (0);
 	} else {
-		ps->num_proc = 1;
-		ps->num_lwp = myInfo->pr_nlwp;
+		ps->gauges.num_proc = 1;
+		ps->gauges.num_lwp = myInfo->pr_nlwp;
 	}
 
 	/*
 	 * Convert system time and user time from nanoseconds to microseconds
 	 * for compatibility with the linux module
 	 */
-	ps->cpu_system_counter = myStatus -> pr_stime.tv_nsec / 1000;
-	ps->cpu_user_counter = myStatus -> pr_utime.tv_nsec / 1000;
+	ps->counters.cpu_system = myStatus -> pr_stime.tv_nsec / 1000;
+	ps->counters.cpu_user = myStatus -> pr_utime.tv_nsec / 1000;
 
 	/*
 	 * Convert rssize from KB to bytes to be consistent w/ the linux module
 	 */
-	ps->vmem_rss = myInfo->pr_rssize * 1024;
-	ps->vmem_size = myInfo->pr_size * 1024;
-	ps->vmem_minflt_counter = myUsage->pr_minf;
-	ps->vmem_majflt_counter = myUsage->pr_majf;
+	ps->gauges.vmem_rss = myInfo->pr_rssize * 1024;
+	ps->gauges.vmem_size = myInfo->pr_size * 1024;
+	ps->gauges.counters.vmem_minflt = myUsage->pr_minf;
+	ps->gauges.counters.vmem_majflt = myUsage->pr_majf;
 
 	/*
 	 * TODO: Data and code segment calculations for Solaris
 	 */
 
-	ps->vmem_data = -1;
-	ps->vmem_code = -1;
-	ps->stack_size = myStatus->pr_stksize;
+	ps->gauges.vmem_data = -1;
+	ps->gauges.vmem_code = -1;
+	ps->gauges.stack_size = myStatus->pr_stksize;
 
 	/*
 	 * Calculating input/ouput chars
@@ -1634,18 +1634,18 @@ static int ps_read_process(long pid, procstat_t *ps, char *state)
 	ulong_t chars_per_block = 1;
 	if (tot_blocks != 0)
 		chars_per_block = tot_chars / tot_blocks;
-	ps->io_rchar = myUsage->pr_inblk * chars_per_block;
-	ps->io_wchar = myUsage->pr_oublk * chars_per_block;
-	ps->io_syscr = myUsage->pr_sysc;
-	ps->io_syscw = myUsage->pr_sysc;
-	ps->io_diskr = -1;
-	ps->io_diskw = -1;
+	ps->gauges.io_rchar = myUsage->pr_inblk * chars_per_block;
+	ps->gauges.io_wchar = myUsage->pr_oublk * chars_per_block;
+	ps->gauges.io_syscr = myUsage->pr_sysc;
+	ps->gauges.io_syscw = myUsage->pr_sysc;
+	ps->gauges.io_diskr = -1;
+	ps->gauges.io_diskw = -1;
 
 	/*
 	 * TODO: context switch counters for Solaris
    */
-	ps->cswitch_vol   = -1;
-	ps->cswitch_invol = -1;
+	ps->gauges.cswitch_vol   = -1;
+	ps->gauges.cswitch_invol = -1;
 
 
 	/*
@@ -1868,22 +1868,22 @@ static int ps_read (void)
 					continue; /* with next thread_list */
 				}
 
-				pse.num_proc++;
-				pse.vmem_size = task_basic_info.virtual_size;
-				pse.vmem_rss = task_basic_info.resident_size;
+				pse.gauges.num_proc++;
+				pse.gauges.vmem_size = task_basic_info.virtual_size;
+				pse.gauges.vmem_rss = task_basic_info.resident_size;
 				/* Does not seem to be easily exposed */
-				pse.vmem_data = 0;
-				pse.vmem_code = 0;
+				pse.gauges.vmem_data = 0;
+				pse.gauges.vmem_code = 0;
 
-				pse.vmem_minflt_counter = task_events_info.cow_faults;
-				pse.vmem_majflt_counter = task_events_info.faults;
+				pse.counters.vmem_minflt = task_events_info.cow_faults;
+				pse.counters.vmem_majflt = task_events_info.faults;
 
-				pse.cpu_user_counter = task_absolutetime_info.total_user;
-				pse.cpu_system_counter = task_absolutetime_info.total_system;
+				pse.counters.cpu_user = task_absolutetime_info.total_user;
+				pse.counters.cpu_system = task_absolutetime_info.total_system;
 
 				/* context switch counters not implemented */
-				pse.cswitch_vol   = -1;
-				pse.cswitch_invol = -1;
+				pse.gauges.cswitch_vol   = -1;
+				pse.gauges.cswitch_invol = -1;
 			}
 
 			status = task_threads (task_list[task], &thread_list,
@@ -1921,7 +1921,7 @@ static int ps_read (void)
 				}
 
 				if (ps != NULL)
-					pse.num_lwp++;
+					pse.gauges.num_lwp++;
 
 				switch (thread_data.run_state)
 				{
@@ -2065,12 +2065,7 @@ static int ps_read (void)
 		pse.age      = 0;
 
 		pse.gauges = ps.gauges;
-
-		pse.counters.vmem_minflt = ps.counters.vmem_minflt;
-		pse.counters.vmem_majflt = ps.counters.vmem_majflt;
-
-		pse.counters.cpu_user = ps.counters.cpu_user;
-		pse.counters.cpu_system = ps.counters.cpu_system;
+		pse.counters = ps.counters;
 
 		switch (state)
 		{
@@ -2178,19 +2173,19 @@ static int ps_read (void)
 			pse.id       = procs[i].ki_pid;
 			pse.age      = 0;
 
-			pse.num_proc = 1;
-			pse.num_lwp  = procs[i].ki_numthreads;
+			pse.gauges.num_proc = 1;
+			pse.gauges.num_lwp  = procs[i].ki_numthreads;
 
-			pse.vmem_size = procs[i].ki_size;
-			pse.vmem_rss = procs[i].ki_rssize * pagesize;
-			pse.vmem_data = procs[i].ki_dsize * pagesize;
-			pse.vmem_code = procs[i].ki_tsize * pagesize;
-			pse.stack_size = procs[i].ki_ssize * pagesize;
-			pse.vmem_minflt_counter = procs[i].ki_rusage.ru_minflt;
-			pse.vmem_majflt_counter = procs[i].ki_rusage.ru_majflt;
+			pse.gauges.vmem_size = procs[i].ki_size;
+			pse.gauges.vmem_rss = procs[i].ki_rssize * pagesize;
+			pse.gauges.vmem_data = procs[i].ki_dsize * pagesize;
+			pse.gauges.vmem_code = procs[i].ki_tsize * pagesize;
+			pse.gauges.stack_size = procs[i].ki_ssize * pagesize;
+			pse.counters.vmem_minflt = procs[i].ki_rusage.ru_minflt;
+			pse.counters.vmem_majflt = procs[i].ki_rusage.ru_majflt;
 
-			pse.cpu_user_counter = 0;
-			pse.cpu_system_counter = 0;
+			pse.counters.cpu_user = 0;
+			pse.counters.cpu_system = 0;
 			/*
 			 * The u-area might be swapped out, and we can't get
 			 * at it because we have a crashdump and no swap.
@@ -2199,23 +2194,23 @@ static int ps_read (void)
 			 */
 			if (procs[i].ki_flag & P_INMEM)
 			{
-				pse.cpu_user_counter = procs[i].ki_rusage.ru_utime.tv_usec
+				pse.counters.cpu_user = procs[i].ki_rusage.ru_utime.tv_usec
 				       	+ (1000000lu * procs[i].ki_rusage.ru_utime.tv_sec);
-				pse.cpu_system_counter = procs[i].ki_rusage.ru_stime.tv_usec
+				pse.counters.cpu_system = procs[i].ki_rusage.ru_stime.tv_usec
 					+ (1000000lu * procs[i].ki_rusage.ru_stime.tv_sec);
 			}
 
 			/* no I/O data */
-			pse.io_rchar = -1;
-			pse.io_wchar = -1;
-			pse.io_syscr = -1;
-			pse.io_syscw = -1;
-			pse.io_diskr = -1;
-			pse.io_diskw = -1;
+			pse.gauges.io_rchar = -1;
+			pse.gauges.io_wchar = -1;
+			pse.gauges.io_syscr = -1;
+			pse.gauges.io_syscw = -1;
+			pse.gauges.io_diskr = -1;
+			pse.gauges.io_diskw = -1;
 
 			/* context switch counters not implemented */
-			pse.cswitch_vol   = -1;
-			pse.cswitch_invol = -1;
+			pse.gauges.cswitch_vol   = -1;
+			pse.gauges.cswitch_invol = -1;
 
 			ps_list_add (procs[i].ki_comm, have_cmdline ? cmdline : NULL, &pse);
 
@@ -2322,33 +2317,33 @@ static int ps_read (void)
 			pse.id       = procs[i].p_pid;
 			pse.age      = 0;
 
-			pse.num_proc = 1;
-			pse.num_lwp  = 1; /* XXX: accumulate p_tid values for a single p_pid ? */
+			pse.gauges.num_proc = 1;
+			pse.gauges.num_lwp  = 1; /* XXX: accumulate p_tid values for a single p_pid ? */
 
-			pse.vmem_rss = procs[i].p_vm_rssize * pagesize;
-			pse.vmem_data = procs[i].p_vm_dsize * pagesize;
-			pse.vmem_code = procs[i].p_vm_tsize * pagesize;
-			pse.stack_size = procs[i].p_vm_ssize * pagesize;
-			pse.vmem_size = pse.stack_size + pse.vmem_code + pse.vmem_data;
-			pse.vmem_minflt_counter = procs[i].p_uru_minflt;
-			pse.vmem_majflt_counter = procs[i].p_uru_majflt;
+			pse.gauges.vmem_rss = procs[i].p_vm_rssize * pagesize;
+			pse.gauges.vmem_data = procs[i].p_vm_dsize * pagesize;
+			pse.gauges.vmem_code = procs[i].p_vm_tsize * pagesize;
+			pse.gauges.stack_size = procs[i].p_vm_ssize * pagesize;
+			pse.gauges.vmem_size = pse.gauges.stack_size + pse.gauges.vmem_code + pse.gauges.vmem_data;
+			pse.counters.vmem_minflt = procs[i].p_uru_minflt;
+			pse.counters.vmem_majflt = procs[i].p_uru_majflt;
 
-			pse.cpu_user_counter = procs[i].p_uutime_usec +
+			pse.counters.cpu_user = procs[i].p_uutime_usec +
 						(1000000lu * procs[i].p_uutime_sec);
-			pse.cpu_system_counter = procs[i].p_ustime_usec +
+			pse.counters.cpu_system = procs[i].p_ustime_usec +
 						(1000000lu * procs[i].p_ustime_sec);
 
 			/* no I/O data */
-			pse.io_rchar = -1;
-			pse.io_wchar = -1;
-			pse.io_syscr = -1;
-			pse.io_syscw = -1;
-			pse.io_diskr = -1;
-			pse.io_diskw = -1;
+			pse.gauges.io_rchar = -1;
+			pse.gauges.io_wchar = -1;
+			pse.gauges.io_syscr = -1;
+			pse.gauges.io_syscw = -1;
+			pse.gauges.io_diskr = -1;
+			pse.gauges.io_diskw = -1;
 
 			/* context switch counters not implemented */
-			pse.cswitch_vol   = -1;
-			pse.cswitch_invol = -1;
+			pse.gauges.cswitch_vol   = -1;
+			pse.gauges.cswitch_invol = -1;
 
 			ps_list_add (procs[i].p_comm, have_cmdline ? cmdline : NULL, &pse);
 
@@ -2439,8 +2434,8 @@ static int ps_read (void)
 
 			pse.id       = procentry[i].pi_pid;
 			pse.age      = 0;
-			pse.num_lwp  = procentry[i].pi_thcount;
-			pse.num_proc = 1;
+			pse.gauges.num_lwp  = procentry[i].pi_thcount;
+			pse.gauges.num_proc = 1;
 
 			thindex=0;
 			while ((nthreads = getthrds64(procentry[i].pi_pid,
@@ -2467,34 +2462,32 @@ static int ps_read (void)
 			}
 
 			/* tv_usec is nanosec ??? */
-			pse.cpu_user_counter = procentry[i].pi_ru.ru_utime.tv_sec * 1000000 +
+			pse.counters.cpu_user = procentry[i].pi_ru.ru_utime.tv_sec * 1000000 +
 				procentry[i].pi_ru.ru_utime.tv_usec / 1000;
 
 			/* tv_usec is nanosec ??? */
-			pse.cpu_system_counter = procentry[i].pi_ru.ru_stime.tv_sec * 1000000 +
+			pse.counters.cpu_system = procentry[i].pi_ru.ru_stime.tv_sec * 1000000 +
 				procentry[i].pi_ru.ru_stime.tv_usec / 1000;
 
-			pse.vmem_minflt = 0;
-			pse.vmem_minflt_counter = procentry[i].pi_minflt;
-			pse.vmem_majflt = 0;
-			pse.vmem_majflt_counter = procentry[i].pi_majflt;
+			pse.counters.vmem_minflt = procentry[i].pi_minflt;
+			pse.counters.vmem_majflt = procentry[i].pi_majflt;
 
-			pse.vmem_size = procentry[i].pi_tsize + procentry[i].pi_dvm * pagesize;
-			pse.vmem_rss = (procentry[i].pi_drss + procentry[i].pi_trss) * pagesize;
+			pse.gauges.vmem_size = procentry[i].pi_tsize + procentry[i].pi_dvm * pagesize;
+			pse.gauges.vmem_rss = (procentry[i].pi_drss + procentry[i].pi_trss) * pagesize;
 			/* Not supported */
-			pse.vmem_data = 0;
-			pse.vmem_code = 0;
-			pse.stack_size =  0;
+			pse.gauges.vmem_data = 0;
+			pse.gauges.vmem_code = 0;
+			pse.gauges.stack_size =  0;
 
-			pse.io_rchar = -1;
-			pse.io_wchar = -1;
-			pse.io_syscr = -1;
-			pse.io_syscw = -1;
-			pse.io_diskr = -1;
-			pse.io_diskw = -1;
+			pse.gauges.io_rchar = -1;
+			pse.gauges.io_wchar = -1;
+			pse.gauges.io_syscr = -1;
+			pse.gauges.io_syscw = -1;
+			pse.gauges.io_diskr = -1;
+			pse.gauges.io_diskw = -1;
 
-			pse.cswitch_vol   = -1;
-			pse.cswitch_invol = -1;
+			pse.gauges.cswitch_vol   = -1;
+			pse.gauges.cswitch_invol = -1;
 
 			ps_list_add (cmdline, cargs, &pse);
 		} /* for (i = 0 .. nprocs) */
@@ -2568,29 +2561,11 @@ static int ps_read (void)
 		pse.id = pid;
 		pse.age = 0;
 
-		pse.num_proc   = ps.num_proc;
-		pse.num_lwp    = ps.num_lwp;
-		pse.vmem_size  = ps.vmem_size;
-		pse.vmem_rss   = ps.vmem_rss;
-		pse.vmem_data  = ps.vmem_data;
-		pse.vmem_code  = ps.vmem_code;
-		pse.stack_size = ps.stack_size;
+		pse.gauges = ps.gauges;
+		pse.counters = ps.counters;
 
-		pse.vmem_minflt_counter = ps.vmem_minflt_counter;
-		pse.vmem_majflt_counter = ps.vmem_majflt_counter;
-
-		pse.cpu_user_counter = ps.cpu_user_counter;
-		pse.cpu_system_counter = ps.cpu_system_counter;
-
-		pse.io_rchar = ps.io_rchar;
-		pse.io_wchar = ps.io_wchar;
-		pse.io_syscr = ps.io_syscr;
-		pse.io_syscw = ps.io_syscw;
-		pse.io_diskr = ps.io_diskr;
-		pse.io_diskw = ps.io_diskw;
-
-		pse.cswitch_vol = -1;
-		pse.cswitch_invol = -1;
+		pse.gauges.cswitch_vol = -1;
+		pse.gauges.cswitch_invol = -1;
 
 		switch (state)
 		{
