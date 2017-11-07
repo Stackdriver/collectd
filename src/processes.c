@@ -2182,6 +2182,10 @@ static int ps_read (void)
 			pse.id       = procs[i].ki_pid;
 			pse.age      = 0;
 
+			/* no I/O data */
+			/* context switch counters not implemented */
+			pse.gauges = procstat_gauges_init;
+
 			pse.gauges.num_proc = 1;
 			pse.gauges.num_lwp  = procs[i].ki_numthreads;
 
@@ -2208,18 +2212,6 @@ static int ps_read (void)
 				pse.counters.cpu_system = procs[i].ki_rusage.ru_stime.tv_usec
 					+ (1000000lu * procs[i].ki_rusage.ru_stime.tv_sec);
 			}
-
-			/* no I/O data */
-			pse.gauges.io_rchar = -1;
-			pse.gauges.io_wchar = -1;
-			pse.gauges.io_syscr = -1;
-			pse.gauges.io_syscw = -1;
-			pse.gauges.io_diskr = -1;
-			pse.gauges.io_diskw = -1;
-
-			/* context switch counters not implemented */
-			pse.gauges.cswitch_vol   = -1;
-			pse.gauges.cswitch_invol = -1;
 
 			ps_list_add (procs[i].ki_comm, have_cmdline ? cmdline : NULL, &pse);
 
@@ -2326,6 +2318,10 @@ static int ps_read (void)
 			pse.id       = procs[i].p_pid;
 			pse.age      = 0;
 
+			/* no I/O data */
+			/* context switch counters not implemented */
+			pse.gauges = procstat_gauges_init;
+
 			pse.gauges.num_proc = 1;
 			pse.gauges.num_lwp  = 1; /* XXX: accumulate p_tid values for a single p_pid ? */
 
@@ -2341,18 +2337,6 @@ static int ps_read (void)
 						(1000000lu * procs[i].p_uutime_sec);
 			pse.counters.cpu_system = procs[i].p_ustime_usec +
 						(1000000lu * procs[i].p_ustime_sec);
-
-			/* no I/O data */
-			pse.gauges.io_rchar = -1;
-			pse.gauges.io_wchar = -1;
-			pse.gauges.io_syscr = -1;
-			pse.gauges.io_syscw = -1;
-			pse.gauges.io_diskr = -1;
-			pse.gauges.io_diskw = -1;
-
-			/* context switch counters not implemented */
-			pse.gauges.cswitch_vol   = -1;
-			pse.gauges.cswitch_invol = -1;
 
 			ps_list_add (procs[i].p_comm, have_cmdline ? cmdline : NULL, &pse);
 
@@ -2443,6 +2427,12 @@ static int ps_read (void)
 
 			pse.id       = procentry[i].pi_pid;
 			pse.age      = 0;
+
+			/* vmem_data, vmem_code, and stack_size not supported */
+			/* no I/O data */
+			/* context switch counters not implemented */
+			pse.gauges = procstat_gauges_init;
+
 			pse.gauges.num_lwp  = procentry[i].pi_thcount;
 			pse.gauges.num_proc = 1;
 
@@ -2483,20 +2473,6 @@ static int ps_read (void)
 
 			pse.gauges.vmem_size = procentry[i].pi_tsize + procentry[i].pi_dvm * pagesize;
 			pse.gauges.vmem_rss = (procentry[i].pi_drss + procentry[i].pi_trss) * pagesize;
-			/* Not supported */
-			pse.gauges.vmem_data = 0;
-			pse.gauges.vmem_code = 0;
-			pse.gauges.stack_size =  0;
-
-			pse.gauges.io_rchar = -1;
-			pse.gauges.io_wchar = -1;
-			pse.gauges.io_syscr = -1;
-			pse.gauges.io_syscw = -1;
-			pse.gauges.io_diskr = -1;
-			pse.gauges.io_diskw = -1;
-
-			pse.gauges.cswitch_vol   = -1;
-			pse.gauges.cswitch_invol = -1;
 
 			ps_list_add (cmdline, cargs, &pse);
 		} /* for (i = 0 .. nprocs) */
