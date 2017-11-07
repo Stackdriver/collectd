@@ -302,8 +302,8 @@ static void ps_procstat_gauges_add (procstat_gauges_t *dst, procstat_gauges_t *s
 	dst->io_diskr   += ps_delta(src->io_diskr);
 	dst->io_diskw   += ps_delta(src->io_diskw);
 
-	dst->cswitch_vol   += ((src->cswitch_vol == -1)?0:src->cswitch_vol);
-	dst->cswitch_invol += ((src->cswitch_invol == -1)?0:src->cswitch_invol);
+	dst->cswitch_vol   += ps_delta(src->cswitch_vol);
+	dst->cswitch_invol += ps_delta(src->cswitch_invol);
 }
 
 /* put name of process from config to list_head_g tree
@@ -954,8 +954,7 @@ static void ps_submit_fork_rate (derive_t value)
 
 /* ------- additional functions for KERNEL_LINUX/HAVE_THREAD_INFO ------- */
 #if KERNEL_LINUX
-static procstat_gauges_t *ps_read_tasks_status (long pid,
-                                                procstat_gauges_t *gauges)
+static procstat_gauges_t *ps_read_tasks_status (long pid, procstat_gauges_t *g)
 {
 	char           dirname[64];
 	DIR           *dh;
@@ -1032,14 +1031,14 @@ static procstat_gauges_t *ps_read_tasks_status (long pid,
 	}
 	closedir (dh);
 
-	gauges->cswitch_vol = cswitch_vol;
-	gauges->cswitch_invol = cswitch_invol;
+	g->cswitch_vol = cswitch_vol;
+	g->cswitch_invol = cswitch_invol;
 
-	return (gauges);
+	return (g);
 } /* int *ps_read_tasks_status */
 
 /* Read data from /proc/pid/status */
-static procstat_gauges_t *ps_read_status (long pid, procstat_gauges_t *gauges)
+static procstat_gauges_t *ps_read_status (long pid, procstat_gauges_t *g)
 {
 	FILE *fh;
 	char buffer[1024];
@@ -1101,15 +1100,15 @@ static procstat_gauges_t *ps_read_status (long pid, procstat_gauges_t *gauges)
 				sstrerror (errno, errbuf, sizeof (errbuf)));
 	}
 
-	gauges->vmem_data = data * 1024;
-	gauges->vmem_code = (exe + lib) * 1024;
+	g->vmem_data = data * 1024;
+	g->vmem_code = (exe + lib) * 1024;
 	if (threads != 0)
-		gauges->num_lwp = threads;
+		g->num_lwp = threads;
 
-	return (gauges);
+	return (g);
 } /* procstat_t *ps_read_vmem */
 
-static procstat_gauges_t *ps_read_io (long pid, procstat_gauges_t *gauges)
+static procstat_gauges_t *ps_read_io (long pid, procstat_gauges_t *g)
 {
 	FILE *fh;
 	char buffer[1024];
@@ -1129,17 +1128,17 @@ static procstat_gauges_t *ps_read_io (long pid, procstat_gauges_t *gauges)
 		char *endptr;
 
 		if (strncasecmp (buffer, "rchar:", 6) == 0)
-			val = &(gauges->io_rchar);
+			val = &(g->io_rchar);
 		else if (strncasecmp (buffer, "wchar:", 6) == 0)
-			val = &(gauges->io_wchar);
+			val = &(g->io_wchar);
 		else if (strncasecmp (buffer, "syscr:", 6) == 0)
-			val = &(gauges->io_syscr);
+			val = &(g->io_syscr);
 		else if (strncasecmp (buffer, "syscw:", 6) == 0)
-			val = &(gauges->io_syscw);
+			val = &(g->io_syscw);
 		else if (strncasecmp (buffer, "read_bytes:", 11) == 0)
-			val = &(gauges->io_diskr);
+			val = &(g->io_diskr);
 		else if (strncasecmp (buffer, "write_bytes:", 12) == 0)
-			val = &(gauges->io_diskw);
+			val = &(g->io_diskw);
 		else
 			continue;
 
@@ -1165,7 +1164,7 @@ static procstat_gauges_t *ps_read_io (long pid, procstat_gauges_t *gauges)
 				sstrerror (errno, errbuf, sizeof (errbuf)));
 	}
 
-	return (gauges);
+	return (g);
 } /* procstat_t *ps_read_io */
 
 static int ps_read_process (long pid, procstat_t *ps, char *state)
@@ -2548,9 +2547,6 @@ static int ps_read (void)
 
 		pse.gauges = ps.gauges;
 		pse.counters = ps.counters;
-
-		pse.gauges.cswitch_vol = -1;
-		pse.gauges.cswitch_invol = -1;
 
 		switch (state)
 		{
