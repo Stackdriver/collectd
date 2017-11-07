@@ -282,6 +282,10 @@ int     getthrds64( pid_t, void *, int, tid64_t *, int );
 int getargs (void *processBuffer, int bufferLen, char *argsBuffer, int argsLen);
 #endif /* HAVE_PROCINFO_H */
 
+static derive_t ps_delta(derive_t value) {
+	return (value == -1) ? 0 : value;
+}
+
 static void ps_procstat_gauges_add (procstat_gauges_t *dst, procstat_gauges_t *src) {
 	dst->num_proc   += src->num_proc;
 	dst->num_lwp    += src->num_lwp;
@@ -291,12 +295,12 @@ static void ps_procstat_gauges_add (procstat_gauges_t *dst, procstat_gauges_t *s
 	dst->vmem_code  += src->vmem_code;
 	dst->stack_size += src->stack_size;
 
-	dst->io_rchar   += ((src->io_rchar == -1)?0:src->io_rchar);
-	dst->io_wchar   += ((src->io_wchar == -1)?0:src->io_wchar);
-	dst->io_syscr   += ((src->io_syscr == -1)?0:src->io_syscr);
-	dst->io_syscw   += ((src->io_syscw == -1)?0:src->io_syscw);
-	dst->io_diskr   += ((src->io_diskr == -1)?0:src->io_diskr);
-	dst->io_diskw   += ((src->io_diskw == -1)?0:src->io_diskw);
+	dst->io_rchar   += ps_delta(src->io_rchar);
+	dst->io_wchar   += ps_delta(src->io_wchar);
+	dst->io_syscr   += ps_delta(src->io_syscr);
+	dst->io_syscw   += ps_delta(src->io_syscw);
+	dst->io_diskr   += ps_delta(src->io_diskr);
+	dst->io_diskw   += ps_delta(src->io_diskw);
 
 	dst->cswitch_vol   += ((src->cswitch_vol == -1)?0:src->cswitch_vol);
 	dst->cswitch_invol += ((src->cswitch_invol == -1)?0:src->cswitch_invol);
