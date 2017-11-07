@@ -202,7 +202,6 @@ static procstat_gauges_t procstat_gauges_init = {
 typedef struct procstat_counters_s {
 	derive_t vmem_minflt;
 	derive_t vmem_majflt;
-
 	derive_t cpu_user;
 	derive_t cpu_system;
 } procstat_counters_t;
@@ -411,18 +410,19 @@ static int ps_list_match (const char *name, const char *cmdline, procstat_t *ps)
 } /* int ps_list_match */
 
 static void ps_update_counter (derive_t *group_counter, derive_t *curr_counter, 
-															 derive_t new_counter)
+                               derive_t new_counter)
 {
-
-	unsigned long curr_value;
+	// Determine whether or not the counter has overflowed and compensate
+	// accordingly.
+	unsigned long delta;
 
 	if (new_counter < *curr_counter)
-		curr_value = new_counter + (ULONG_MAX - *curr_counter);
+		delta = new_counter + (ULONG_MAX - *curr_counter);
 	else
-		curr_value = new_counter - *curr_counter;
+		delta = new_counter - *curr_counter;
 
 	*curr_counter = new_counter;
-	*group_counter += curr_value;
+	*group_counter += delta;
 }
 
 /* add process entry to 'instances' of process 'name' (or refresh it) */
@@ -465,11 +465,15 @@ static void ps_list_add (const char *name, const char *cmdline, procstat_entry_t
 
 		ps_procstat_gauges_add(&ps->gauges, &pse->gauges);
 
-		ps_update_counter (&ps->counters.vmem_minflt, &pse->counters.vmem_minflt, entry->counters.vmem_minflt);
-		ps_update_counter (&ps->counters.vmem_majflt, &pse->counters.vmem_majflt, entry->counters.vmem_majflt);
+		ps_update_counter (&ps->counters.vmem_minflt, &pse->counters.vmem_minflt,
+                       entry->counters.vmem_minflt);
+		ps_update_counter (&ps->counters.vmem_majflt, &pse->counters.vmem_majflt,
+                       entry->counters.vmem_majflt);
 
-		ps_update_counter (&ps->counters.cpu_user, &pse->counters.cpu_user, entry->counters.cpu_user);
-		ps_update_counter (&ps->counters.cpu_system, &pse->counters.cpu_system, entry->counters.cpu_system);
+		ps_update_counter (&ps->counters.cpu_user, &pse->counters.cpu_user,
+                       entry->counters.cpu_user);
+		ps_update_counter (&ps->counters.cpu_system, &pse->counters.cpu_system,
+                       entry->counters.cpu_system);
 	}
 }
 
@@ -946,7 +950,8 @@ static void ps_submit_fork_rate (derive_t value)
 
 /* ------- additional functions for KERNEL_LINUX/HAVE_THREAD_INFO ------- */
 #if KERNEL_LINUX
-static procstat_t *ps_read_tasks_status (long pid, procstat_t *ps)
+static procstat_gauges_t *ps_read_tasks_status (long pid,
+                                                procstat_gauges_t *gauges)
 {
 	char           dirname[64];
 	DIR           *dh;
@@ -1023,21 +1028,21 @@ static procstat_t *ps_read_tasks_status (long pid, procstat_t *ps)
 	}
 	closedir (dh);
 
-	ps->gauges.cswitch_vol = cswitch_vol;
-	ps->gauges.cswitch_invol = cswitch_invol;
+	gauges->cswitch_vol = cswitch_vol;
+	gauges->cswitch_invol = cswitch_invol;
 
-	return (ps);
+	return (gauges);
 } /* int *ps_read_tasks_status */
 
 /* Read data from /proc/pid/status */
-static procstat_t *ps_read_status (long pid, procstat_t *ps)
+static procstat_gauges_t *ps_read_status (long pid, procstat_gauges_t *gauges)
 {
 	FILE *fh;
 	char buffer[1024];
 	char filename[64];
 	unsigned long lib = 0;
 	unsigned long exe = 0;
-	unsigned long value = 0;
+	unsigned long data = 0;
 	unsigned long threads = 0;
 	char *fields[8];
 	int numfields;
@@ -1068,7 +1073,7 @@ static procstat_t *ps_read_status (long pid, procstat_t *ps)
 		{
 			if (strncmp (buffer, "VmData", 6) == 0)
 			{
-				value = tmp;
+				data = tmp;
 			}
 			else if (strncmp (buffer, "VmLib", 5) == 0)
 			{
@@ -1092,15 +1097,15 @@ static procstat_t *ps_read_status (long pid, procstat_t *ps)
 				sstrerror (errno, errbuf, sizeof (errbuf)));
 	}
 
-	ps->gauges.vmem_data = value * 1024;
-	ps->gauges.vmem_code = (exe + lib) * 1024;
+	gauges->vmem_data = data * 1024;
+	gauges->vmem_code = (exe + lib) * 1024;
 	if (threads != 0)
-		ps->gauges.num_lwp = threads;
+		gauges->num_lwp = threads;
 
-	return (ps);
+	return (gauges);
 } /* procstat_t *ps_read_vmem */
 
-static procstat_t *ps_read_io (long pid, procstat_t *ps)
+static procstat_gauges_t *ps_read_io (long pid, procstat_gauges_t *gauges)
 {
 	FILE *fh;
 	char buffer[1024];
@@ -1120,17 +1125,17 @@ static procstat_t *ps_read_io (long pid, procstat_t *ps)
 		char *endptr;
 
 		if (strncasecmp (buffer, "rchar:", 6) == 0)
-			val = &(ps->gauges.io_rchar);
+			val = &(gauges->io_rchar);
 		else if (strncasecmp (buffer, "wchar:", 6) == 0)
-			val = &(ps->gauges.io_wchar);
+			val = &(gauges->io_wchar);
 		else if (strncasecmp (buffer, "syscr:", 6) == 0)
-			val = &(ps->gauges.io_syscr);
+			val = &(gauges->io_syscr);
 		else if (strncasecmp (buffer, "syscw:", 6) == 0)
-			val = &(ps->gauges.io_syscw);
+			val = &(gauges->io_syscw);
 		else if (strncasecmp (buffer, "read_bytes:", 11) == 0)
-			val = &(ps->gauges.io_diskr);
+			val = &(gauges->io_diskr);
 		else if (strncasecmp (buffer, "write_bytes:", 12) == 0)
-			val = &(ps->gauges.io_diskw);
+			val = &(gauges->io_diskw);
 		else
 			continue;
 
@@ -1156,7 +1161,7 @@ static procstat_t *ps_read_io (long pid, procstat_t *ps)
 				sstrerror (errno, errbuf, sizeof (errbuf)));
 	}
 
-	return (ps);
+	return (gauges);
 } /* procstat_t *ps_read_io */
 
 static int ps_read_process (long pid, procstat_t *ps, char *state)
@@ -1243,7 +1248,7 @@ static int ps_read_process (long pid, procstat_t *ps, char *state)
 	else
 	{
 		ps->gauges.num_lwp = strtoul (fields[17], /* endptr = */ NULL, /* base = */ 10);
-		if ((ps_read_status(pid, ps)) == NULL)
+		if ((ps_read_status(pid, &ps->gauges)) == NULL)
 		{
 			/* No VMem data */
 			ps->gauges.vmem_data = -1;
@@ -1290,7 +1295,7 @@ static int ps_read_process (long pid, procstat_t *ps, char *state)
 	ps->gauges.vmem_rss = (unsigned long) vmem_rss;
 	ps->gauges.stack_size = (unsigned long) stack_size;
 
-	if ( (ps_read_io (pid, ps)) == NULL)
+	if ( (ps_read_io (pid, &ps->gauges)) == NULL)
 	{
 		/* no io data */
 		ps->gauges.io_rchar = -1;
@@ -1305,7 +1310,7 @@ static int ps_read_process (long pid, procstat_t *ps, char *state)
 
 	if ( report_ctx_switch )
 	{
-		if ( (ps_read_tasks_status(pid, ps)) == NULL)
+		if ( (ps_read_tasks_status(pid, &ps->gauges)) == NULL)
 		{
 			ps->gauges.cswitch_vol = -1;
 			ps->gauges.cswitch_invol = -1;
