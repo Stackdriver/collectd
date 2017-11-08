@@ -149,10 +149,9 @@ static int varnish_submit_derive (const char *plugin_instance, /* {{{ */
 static int varnish_monitor(void *priv,
                            const struct VSC_point *const pt) /* {{{ */
 {
-	uint64_t val;
-	const user_config_t *conf;
-	const char *class;
-	const char *name;
+  uint64_t val;
+  const user_config_t *conf;
+  const char *name;
 
 	if (pt == NULL)
 		return (0);
@@ -167,9 +166,9 @@ static int varnish_monitor(void *priv,
   strcpy(namebuff, c + 1);
   name = namebuff;
 
-  (void)class;
-
 #elif HAVE_VARNISH_V4
+  const char *class;
+
   class = pt->section->fantom->type;
   name = pt->desc->name;
 
@@ -177,8 +176,10 @@ static int varnish_monitor(void *priv,
 		return (0);
 
 #elif HAVE_VARNISH_V3
-	class = pt->class;
-	name  = pt->name;
+  const char *class;
+
+  class = pt->class;
+  name = pt->name;
 
 	if (strcmp(class, "") != 0)
 		return (0);
