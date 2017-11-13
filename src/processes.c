@@ -180,7 +180,6 @@ typedef struct procstat_gauges_s {
 	derive_t cswitch_invol;
 } procstat_gauges_t;
 
-
 static procstat_gauges_t procstat_gauges_init = {
 	.num_proc      = 0,
 	.num_lwp       = 0,
