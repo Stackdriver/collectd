@@ -22,33 +22,31 @@ INTERVAL=${COLLECTD_INTERVAL:-10}
 # 1. If the Logging Agent uses REST.
 # The part of the input that sed looks at looks like:
 #
-#   // OK.
 #   stackdriver_successful_requests_count{grpc="false",code="200"} 255
 #
-#   // Bad Request.
 #   stackdriver_failed_requests_count{grpc="false",code="400"} 18
-#   // Unauthorized.
 #   stackdriver_failed_requests_count{grpc="false",code="401"} 25
-#   // Forbidden.
 #   stackdriver_failed_requests_count{grpc="false",code="403"} 13
-#   // Not Found.
 #   stackdriver_failed_requests_count{grpc="false",code="404"} 34
-#   // Too Many Requests.
 #   stackdriver_failed_requests_count{grpc="false",code="429"} 11
-#   // Internal Server Error.
-#   stackdriver_failed_requests_count{grpc="false",code="500"} 23
-#   // Not Implemented.
-#   stackdriver_failed_requests_count{grpc="false",code="501"} 9
 #
+#   // OK.
 #   stackdriver_ingested_entries_count{grpc="false",code="200"} 7050
 #
+#   // Bad Request.
 #   stackdriver_dropped_entries_count{grpc="false",code="400"} 250
+#   // Unauthorized.
 #   stackdriver_dropped_entries_count{grpc="false",code="401"} 380
+#   // Forbidden.
 #   stackdriver_dropped_entries_count{grpc="false",code="403"} 210
+#   // Not Found.
 #   stackdriver_dropped_entries_count{grpc="false",code="404"} 480
+#   // Too Many Requests.
 #   stackdriver_dropped_entries_count{grpc="false",code="429"} 187
 #
+#   // Internal Server Error.
 #   stackdriver_retried_entries_count{grpc="false",code="500"} 600
+#   // Not Implemented.
 #   stackdriver_retried_entries_count{grpc="false",code="501"} 290
 #
 # The expected output follows:
@@ -59,8 +57,6 @@ INTERVAL=${COLLECTD_INTERVAL:-10}
 #   PUTVAL /agent-403/derive-request_count N:13
 #   PUTVAL /agent-404/derive-request_count N:34
 #   PUTVAL /agent-429/derive-request_count N:11
-#   PUTVAL /agent-500/derive-request_count N:23
-#   PUTVAL /agent-501/derive-request_count N:9
 #
 #   PUTVAL /agent-200/derive-log_entry_count N:7050
 #
@@ -76,33 +72,31 @@ INTERVAL=${COLLECTD_INTERVAL:-10}
 # 2. If the Logging Agent uses gRPC.
 # The part of the input that sed looks at looks like:
 #
-#   // OK.
 #   stackdriver_successful_requests_count{grpc="true",code="0"} 255
 #
-#   // InvalidArgument.
 #   stackdriver_failed_requests_count{grpc="true",code="3"} 18
-#   // Unauthenticated.
 #   stackdriver_failed_requests_count{grpc="true",code="16"} 25
-#   // PermissionDenied.
 #   stackdriver_failed_requests_count{grpc="true",code="7"} 13
-#   // NotFound.
 #   stackdriver_failed_requests_count{grpc="true",code="5"} 34
-#   // ResourceExhausted.
 #   stackdriver_failed_requests_count{grpc="true",code="8"} 11
-#   // Internal.
-#   stackdriver_failed_requests_count{grpc="true",code="13"} 23
-#   // Unavailable.
-#   stackdriver_failed_requests_count{grpc="true",code="14"} 9
 #
+#   // OK.
 #   stackdriver_ingested_entries_count{grpc="true",code="0"} 7050
 #
+#   // InvalidArgument.
 #   stackdriver_dropped_entries_count{grpc="true",code="3"} 250
+#   // Unauthenticated.
 #   stackdriver_dropped_entries_count{grpc="true",code="16"} 38
+#   // PermissionDenied.
 #   stackdriver_dropped_entries_count{grpc="true",code="7"} 210
+#   // NotFound.
 #   stackdriver_dropped_entries_count{grpc="true",code="5"} 480
+#   // ResourceExhausted.
 #   stackdriver_retried_entries_count{grpc="true",code="8"} 187
 #
+#   // Internal.
 #   stackdriver_retried_entries_count{grpc="true",code="13"} 600
+#   // Unavailable.
 #   stackdriver_retried_entries_count{grpc="true",code="14"} 290
 #
 # The expected output follows:
@@ -113,8 +107,6 @@ INTERVAL=${COLLECTD_INTERVAL:-10}
 #   PUTVAL /agent-7/derive-request_count N:13
 #   PUTVAL /agent-5/derive-request_count N:34
 #   PUTVAL /agent-8/derive-request_count N:11
-#   PUTVAL /agent-13/derive-request_count N:23
-#   PUTVAL /agent-14/derive-request_count N:9
 #
 #   PUTVAL /agent-0/derive-log_entry_count N:7050
 #
