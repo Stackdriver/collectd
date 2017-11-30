@@ -19,28 +19,28 @@ URL="${1:-http://localhost:24231/metrics}"
 # Default to 10s if unset, as a fail-safe mechanism.
 INTERVAL=${COLLECTD_INTERVAL:-10}
 
-# The part of the input that sed looks at looks like:
 # 1. If the Logging Agent uses REST.
-#   stackdriver_successful_requests_count{grpc="false",code="200"} 255
+# The part of the input that sed looks at looks like:
+#   stackdriver_successful_requests_count{grpc="false"} 255
 #   stackdriver_failed_requests_count{grpc="false",code="404"} 18
-#   stackdriver_ingested_entries_count{grpc="false",code="200"} 7050
+#   stackdriver_ingested_entries_count{grpc="false"} 7050
 #   stackdriver_dropped_entries_count{grpc="false",code="401"} 25
 #   stackdriver_retried_entries_count{grpc="false",code="500"} 2
-# 2. If the Logging Agent uses gRPC.
-#   stackdriver_successful_requests_count{grpc="true",code="0"} 255
-#   stackdriver_failed_requests_count{grpc="true",code="3"} 18
-#   stackdriver_ingested_entries_count{grpc="true",code="0"} 7050
-#   stackdriver_dropped_entries_count{grpc="true",code="3"} 25
-#   stackdriver_retried_entries_count{grpc="true",code="13"} 2
-
 # The expected output follows:
-# 1. If the Logging Agent uses REST.
 #   PUTVAL /agent-200/derive-request_count N:255
 #   PUTVAL /agent-404/derive-request_count N:18
 #   PUTVAL /agent-200/derive-log_entry_count N:7050
 #   PUTVAL /agent-401/derive-log_entry_count N:25
 #   PUTVAL /agent-500/derive-log_entry_retry_count N:2
+
 # 2. If the Logging Agent uses gRPC.
+# The part of the input that sed looks at looks like:
+#   stackdriver_successful_requests_count{grpc="true"} 255
+#   stackdriver_failed_requests_count{grpc="true",code="3"} 18
+#   stackdriver_ingested_entries_count{grpc="true"} 7050
+#   stackdriver_dropped_entries_count{grpc="true",code="3"} 25
+#   stackdriver_retried_entries_count{grpc="true",code="13"} 2
+# The expected output follows:
 #   PUTVAL /agent-0/derive-request_count N:255
 #   PUTVAL /agent-3/derive-request_count N:18
 #   PUTVAL /agent-0/derive-log_entry_count N:7050
@@ -59,6 +59,8 @@ while :; do
   curl --silent "${URL}" \
     | grep -E '^stackdriver_' \
     | sed -E \
+      -e "s/\{grpc=\"true\"\}/{grpc=\"true\",code=\"0\"}/" \
+      -e "s/\{grpc=\"false\"\}/{grpc=\"false\",code=\"200\"}/" \
       -e "s/^stackdriver_([a-zA-Z0-9_]*)(\{(.*code=\"([0-9]*)\")?.*\})? ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-\4\/derive-\1 N:\5/" \
       -e "s/(successful|failed)_requests_count/request_count/" \
       -e "s/(ingested|dropped)_entries_count/log_entry_count/" \
