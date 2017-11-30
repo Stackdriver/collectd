@@ -21,9 +21,9 @@ INTERVAL=${COLLECTD_INTERVAL:-10}
 
 # 1. If the Logging Agent uses REST.
 # The part of the input that sed looks at looks like:
-#   stackdriver_successful_requests_count{grpc="false"} 255
+#   stackdriver_successful_requests_count{grpc="false",code="200"} 255
 #   stackdriver_failed_requests_count{grpc="false",code="404"} 18
-#   stackdriver_ingested_entries_count{grpc="false"} 7050
+#   stackdriver_ingested_entries_count{grpc="false",code="200"} 7050
 #   stackdriver_dropped_entries_count{grpc="false",code="401"} 25
 #   stackdriver_retried_entries_count{grpc="false",code="500"} 2
 # The expected output follows:
@@ -35,9 +35,9 @@ INTERVAL=${COLLECTD_INTERVAL:-10}
 
 # 2. If the Logging Agent uses gRPC.
 # The part of the input that sed looks at looks like:
-#   stackdriver_successful_requests_count{grpc="true"} 255
+#   stackdriver_successful_requests_count{grpc="true",code="0"} 255
 #   stackdriver_failed_requests_count{grpc="true",code="3"} 18
-#   stackdriver_ingested_entries_count{grpc="true"} 7050
+#   stackdriver_ingested_entries_count{grpc="true",code="0"} 7050
 #   stackdriver_dropped_entries_count{grpc="true",code="3"} 25
 #   stackdriver_retried_entries_count{grpc="true",code="13"} 2
 # The expected output follows:
@@ -59,8 +59,6 @@ while :; do
   curl --silent "${URL}" \
     | grep -E '^stackdriver_' \
     | sed -E \
-      -e "s/\{grpc=\"true\"\}/{grpc=\"true\",code=\"0\"}/" \
-      -e "s/\{grpc=\"false\"\}/{grpc=\"false\",code=\"200\"}/" \
       -e "s/^stackdriver_([a-zA-Z0-9_]*)(\{(.*code=\"([0-9]*)\")?.*\})? ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-\4\/derive-\1 N:\5/" \
       -e "s/(successful|failed)_requests_count/request_count/" \
       -e "s/(ingested|dropped)_entries_count/log_entry_count/" \
