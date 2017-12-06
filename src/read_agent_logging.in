@@ -134,6 +134,6 @@ while :; do
       -e "s/^stackdriver_([a-zA-Z0-9_]*)(\{(.*code=\"([0-9]*)\")?.*\})? ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-\4\/derive-\1 N:\5/" \
       -e "s/(successful|failed)_requests_count/request_count/" \
       -e "s/(ingested|dropped)_entries_count/log_entry_count/" \
-      -e "s/retried_entries_count/log_entry_retry_count/" \
+      -e "s/retried_entries_count/log_entry_retry_count/"
   sleep "${INTERVAL}"
 done
