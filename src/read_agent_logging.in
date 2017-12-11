@@ -125,7 +125,7 @@ URL="${1:-http://localhost:24231/metrics}"
 # - The first two lines handle ingested/dropped entries as a corner case until
 #   the agent starts exporting the partial errors for dropped entries, then
 #   the rest of the sed expression should handle them generically.
-curl --silent "${URL}" \
+exec curl --silent "${URL}" \
   | grep -E '^stackdriver_' \
   | sed -E \
     -e "s/^stackdriver_([a-zA-Z0-9_]*)(\{(.*code=\"([0-9]*)\")?.*\})? ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-\4\/derive-\1 N:\5/" \
