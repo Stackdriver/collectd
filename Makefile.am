@@ -9,6 +9,17 @@ SUBDIRS += src/libmongoc
 DIST_SUBDIRS =
 endif
 
+if BUILD_WIN32
+pkgdatadir=$(datadir)
+pkglibdir=$(libdir)/plugins
+pkglocalstatedir=${localstatedir}
+else
+pkglocalstatedir="${localstatedir}/lib/${PACKAGE_NAME}"
+endif
+
+
+
+
 BUILT_SOURCES = \
 	src/libcollectdclient/collectd/lcc_features.h \
 	src/liboconfig/parser.h \
@@ -107,7 +118,13 @@ lib_LTLIBRARIES = \
 	libcollectd.la \
 	libcollectdclient.la
 
+if BUILD_WIN32
+# TODO: Build all executables on Windows as well.
+sbin_PROGRAMS = \
+        collectd
 
+bin_PROGRAMS =
+else
 sbin_PROGRAMS = \
 	collectd \
 	collectdmon
@@ -117,9 +134,9 @@ bin_PROGRAMS = \
 	collectd-nagios \
 	collectd-tg \
 	collectdctl
+endif # BUILD_WIN32
 
-
-noinst_LTLIBRARIES = \
+EXTRA_LTLIBRARIES = \
 	libavltree.la \
 	libcmds.la \
 	libcommon.la \
@@ -133,7 +150,6 @@ noinst_LTLIBRARIES = \
 	libmetadata.la \
 	libmount.la \
 	liboconfig.la
-
 
 check_LTLIBRARIES = \
 	libplugin_mock.la
@@ -169,20 +185,32 @@ PLUGIN_LDFLAGS = \
 	-module \
 	-avoid-version \
 	-export-symbols-regex '\<module_register\>'
-
+if BUILD_WIN32
+PLUGIN_LDFLAGS += -shared -no-undefined
+endif
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/src -I$(top_srcdir)/src/daemon \
 	-DPREFIX='"${prefix}"' \
 	-DCONFIGFILE='"${sysconfdir}/${PACKAGE_NAME}.conf"' \
 	-DLOCALSTATEDIR='"${localstatedir}"' \
-	-DPKGLOCALSTATEDIR='"${localstatedir}/lib/${PACKAGE_NAME}"' \
+	-DPKGLOCALSTATEDIR='"${pkglocalstatedir}"' \
 	-DPLUGINDIR='"${pkglibdir}"' \
 	-DPKGDATADIR='"${pkgdatadir}"'
 
+COMMON_LDFLAGS =
+if BUILD_WIN32
+COMMON_LDFLAGS += -shared -no-undefined
+endif
 
 # Link to these libraries..
 COMMON_LIBS = $(PTHREAD_LIBS)
+if BUILD_WIN32
+COMMON_LIBS += -lws2_32
+endif
+if BUILD_WITH_GNULIB
+COMMON_LIBS += -lgnu
+endif
 if BUILD_WITH_CAPABILITY
 COMMON_LIBS += -lcap
 endif
@@ -201,7 +229,6 @@ endif
 if BUILD_WITH_LIBDEVINFO
 COMMON_LIBS += -ldevinfo
 endif
-
 
 libcollectd_la_SOURCES = \
 	src/daemon/configfile.c \
@@ -238,6 +265,7 @@ libcollectd_la_LIBADD = \
 	libllist.la \
 	liboconfig.la \
 	-lm \
+	-ldl \
 	$(COMMON_LIBS) \
 	$(DLOPEN_LIBS)
 
@@ -522,6 +550,10 @@ libcollectdclient_la_CPPFLAGS = \
 	-I$(srcdir)/src/daemon
 libcollectdclient_la_LDFLAGS = -version-info 2:0:1
 libcollectdclient_la_LIBADD = -lm
+if BUILD_WIN32
+libcollectdclient_la_LDFLAGS += -shared -no-undefined
+libcollectdclient_la_LIBADD += -lgnu -lws2_32 -liphlpapi
+endif
 if BUILD_WITH_LIBGCRYPT
 libcollectdclient_la_CPPFLAGS += $(GCRYPT_CPPFLAGS)
 libcollectdclient_la_LDFLAGS += $(GCRYPT_LDFLAGS)
@@ -549,7 +581,9 @@ liboconfig_la_SOURCES = \
 	src/liboconfig/parser.y
 liboconfig_la_CPPFLAGS = -I$(srcdir)/src/liboconfig $(AM_CPPFLAGS)
 liboconfig_la_LDFLAGS = -avoid-version $(LEXLIB)
-
+if BUILD_WIN32
+liboconfig_la_LDFLAGS += -shared -no-undefined
+endif
 
 if BUILD_PLUGIN_AGGREGATION
 pkglib_LTLIBRARIES += aggregation.la
@@ -589,6 +623,9 @@ apcups_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 apcups_la_LIBADD =
 if BUILD_WITH_LIBSOCKET
 apcups_la_LIBADD += -lsocket
+endif
+if BUILD_WITH_GNULIB
+apcups_la_LIBADD += -lgnu
 endif
 endif
 
@@ -934,6 +971,9 @@ hddtemp_la_LIBADD =
 if BUILD_WITH_LIBSOCKET
 hddtemp_la_LIBADD += -lsocket
 endif
+if BUILD_WITH_GNULIB
+hddtemp_la_LIBADD += -lgnu
+endif
 endif
 
 if BUILD_PLUGIN_HUGEPAGES
@@ -1048,6 +1088,7 @@ endif # BUILD_PLUGIN_LOAD
 if BUILD_PLUGIN_LOGFILE
 pkglib_LTLIBRARIES += logfile.la
 logfile_la_SOURCES = src/logfile.c
+logfile_la_LIBADD = libcollectd.la
 logfile_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 endif
 
@@ -1110,6 +1151,7 @@ if BUILD_PLUGIN_MATCH_REGEX
 pkglib_LTLIBRARIES += match_regex.la
 match_regex_la_SOURCES = src/match_regex.c
 match_regex_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+match_regex_la_LIBADD = libcollectd.la
 endif
 
 if BUILD_PLUGIN_MATCH_THROTTLE_METADATA_KEYS
@@ -1137,6 +1179,9 @@ mbmon_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 mbmon_la_LIBADD =
 if BUILD_WITH_LIBSOCKET
 mbmon_la_LIBADD += -lsocket
+endif
+if BUILD_WITH_GNULIB
+mbmon_la_LIBADD += -lgnu
 endif
 endif
 
@@ -1171,6 +1216,9 @@ memcached_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 memcached_la_LIBADD =
 if BUILD_WITH_LIBSOCKET
 memcached_la_LIBADD += -lsocket
+endif
+if BUILD_WITH_GNULIB
+memcached_la_LIBADD += -lgnu
 endif
 endif
 
@@ -1275,9 +1323,15 @@ network_la_SOURCES = \
 	src/utils_fbhash.h
 network_la_CPPFLAGS = $(AM_CPPFLAGS)
 network_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-network_la_LIBADD =
+network_la_LIBADD = libcollectd.la
 if BUILD_WITH_LIBSOCKET
 network_la_LIBADD += -lsocket
+endif
+if BUILD_WITH_GNULIB
+network_la_LIBADD += -lgnu
+endif
+if BUILD_WIN32
+network_la_LIBADD += -liphlpapi
 endif
 if BUILD_WITH_LIBGCRYPT
 network_la_CPPFLAGS += $(GCRYPT_CPPFLAGS)
@@ -1330,6 +1384,9 @@ ntpd_la_LIBADD =
 if BUILD_WITH_LIBSOCKET
 ntpd_la_LIBADD += -lsocket
 endif
+if BUILD_WITH_GNULIB
+ntpd_la_LIBADD += -lgnu
+endif
 endif
 
 if BUILD_PLUGIN_NUMA
@@ -1353,6 +1410,9 @@ olsrd_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 olsrd_la_LIBADD =
 if BUILD_WITH_LIBSOCKET
 olsrd_la_LIBADD += -lsocket
+endif
+if BUILD_WITH_GNULIB
+olsrd_la_LIBADD += -lgnu
 endif
 endif
 
@@ -1640,6 +1700,7 @@ if BUILD_PLUGIN_SYSLOG
 pkglib_LTLIBRARIES += syslog.la
 syslog_la_SOURCES = src/syslog.c
 syslog_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+syslog_la_LIBADD = libcollectd.la
 endif
 
 if BUILD_PLUGIN_TABLE
@@ -1688,6 +1749,7 @@ if BUILD_PLUGIN_TARGET_REPLACE
 pkglib_LTLIBRARIES += target_replace.la
 target_replace_la_SOURCES = src/target_replace.c
 target_replace_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+target_replace_la_LIBADD = libcollectd.la
 endif
 
 if BUILD_PLUGIN_TARGET_SCALE
@@ -1700,6 +1762,7 @@ if BUILD_PLUGIN_TARGET_SET
 pkglib_LTLIBRARIES += target_set.la
 target_set_la_SOURCES = src/target_set.c
 target_set_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+target_set_la_LIBADD = libcollectd.la
 endif
 
 if BUILD_PLUGIN_TARGET_V5UPGRADE
@@ -1751,6 +1814,9 @@ tokyotyrant_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBTOKYOTYRANT_LDFLAGS)
 tokyotyrant_la_LIBADD  = $(BUILD_WITH_LIBTOKYOTYRANT_LIBS)
 if BUILD_WITH_LIBSOCKET
 tokyotyrant_la_LIBADD += -lsocket
+endif
+if BUILD_WITH_GNULIB
+tokyotyrant_la_LIBADD += -lgnu
 endif
 endif
 
@@ -1857,7 +1923,7 @@ libstackdriver_json_la_CPPFLAGS  = $(AM_CPPFLAGS) $(BUILD_WITH_LIBYAJL_CPPFLAGS)
 libstackdriver_json_la_LDFLAGS   = $(AM_LDFLAGS) $(BUILD_WITH_LIBYAJL_LDFLAGS)
 libstackdriver_json_la_LIBADD    = $(BUILD_WITH_LIBYAJL_LIBS) libcommon.la libllist.la
 
-noinst_LTLIBRARIES += libstackdriver_json.la
+EXTRA_LTLIBRARIES += libstackdriver_json.la
 check_PROGRAMS += test_stackdriver_json
 
 EXTRA_DIST += \
@@ -1904,7 +1970,10 @@ write_http_la_SOURCES = \
 	src/utils_format_kairosdb.h
 write_http_la_CFLAGS = $(AM_CFLAGS) $(BUILD_WITH_LIBCURL_CFLAGS)
 write_http_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-write_http_la_LIBADD = libformat_json.la $(BUILD_WITH_LIBCURL_LIBS)
+write_http_la_LIBADD = libformat_json.la $(BUILD_WITH_LIBCURL_LIBS) libcollectd.la
+if BUILD_WITH_GNULIB
+write_http_la_LIBADD += -lgnu
+endif
 endif
 
 if BUILD_PLUGIN_WRITE_KAFKA
@@ -1923,7 +1992,10 @@ if BUILD_PLUGIN_WRITE_LOG
 pkglib_LTLIBRARIES += write_log.la
 write_log_la_SOURCES = src/write_log.c
 write_log_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-write_log_la_LIBADD = libformat_graphite.la libformat_json.la
+write_log_la_LIBADD = libformat_graphite.la libformat_json.la libcollectd.la
+if BUILD_WITH_GNULIB
+write_log_la_LIBADD += -lgnu
+endif
 endif
 
 if BUILD_PLUGIN_WRITE_MONGODB
