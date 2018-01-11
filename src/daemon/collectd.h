@@ -27,6 +27,10 @@
 #ifndef COLLECTD_H
 #define COLLECTD_H
 
+#ifdef WIN32
+#include "gnulib_config.h"
+#endif
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -121,6 +125,10 @@
 #include <sys/isa_defs.h>
 #endif
 
+#if HAVE_SYS_PARAM_H
+#include <sys/param.h>
+#endif
+
 #ifndef BYTE_ORDER
 #if defined(_BYTE_ORDER)
 #define BYTE_ORDER _BYTE_ORDER
@@ -180,10 +188,6 @@
 #if HAVE_NDIR_H
 #include <ndir.h>
 #endif
-#endif
-
-#if HAVE_SYS_PARAM_H
-#include <sys/param.h>
 #endif
 
 #ifndef PACKAGE_NAME
