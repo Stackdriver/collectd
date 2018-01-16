@@ -194,6 +194,42 @@
 #define PACKAGE_NAME "collectd"
 #endif
 
+#ifdef WIN32
+
+#ifndef PREFIX
+#define PREFIX "C:/Program Files/collectd"
+#endif
+
+#ifndef SYSCONFDIR
+#define SYSCONFDIR PREFIX
+#endif
+
+#ifndef CONFIGFILE
+#define CONFIGFILE SYSCONFDIR "/collectd.conf"
+#endif
+
+#ifndef LOCALSTATEDIR
+#define LOCALSTATEDIR PREFIX
+#endif
+
+#ifndef PKGLOCALSTATEDIR
+#define PKGLOCALSTATEDIR PREFIX
+#endif
+
+#ifndef PIDFILE
+#define PIDFILE PREFIX "/" PACKAGE_NAME ".pid"
+#endif
+
+#ifndef PLUGINDIR
+#define PLUGINDIR PREFIX "/plugins"
+#endif
+
+#ifndef PKGDATADIR
+#define PKGDATADIR PREFIX
+#endif
+
+#else
+
 #ifndef PREFIX
 #define PREFIX "/opt/" PACKAGE_NAME
 #endif
@@ -226,6 +262,8 @@
 #define PKGDATADIR PREFIX "/share/" PACKAGE_NAME
 #endif
 
+#endif /* WIN32 */
+
 #ifndef COLLECTD_GRP_NAME
 #define COLLECTD_GRP_NAME "collectd"
 #endif
@@ -248,5 +286,17 @@
 #endif
 
 #include "globals.h"
+
+struct cmdline_config {
+  _Bool test_config;
+  _Bool test_readall;
+  _Bool create_basedir;
+  const char *configfile;
+  _Bool daemonize;
+};
+
+void stop_collectd(void);
+struct cmdline_config init_config(int argc, char **argv);
+int run_loop(_Bool test_readall);
 
 #endif /* COLLECTD_H */
