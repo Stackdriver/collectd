@@ -6298,6 +6298,10 @@ if test "x$ac_system" = "xLinux"; then
   fi
 fi
 
+if test "x$ac_system" = "xWindows"; then
+  plugin_wmi="yes"
+fi
+
 if test "x$ac_system" = "xOpenBSD"; then
   plugin_tcpconns="yes"
 fi
@@ -6722,6 +6726,7 @@ AC_PLUGIN([virt],                [$plugin_virt],            [Virtual machine sta
 AC_PLUGIN([vmem],                [$plugin_vmem],            [Virtual memory statistics])
 AC_PLUGIN([vserver],             [$plugin_vserver],         [Linux VServer statistics])
 AC_PLUGIN([wireless],            [$plugin_wireless],        [Wireless statistics])
+AC_PLUGIN([wmi],                 [$plugin_wmi],             [Windows Management Instrumentation])
 AC_PLUGIN([write_graphite],      [yes],                     [Graphite / Carbon output plugin])
 AC_PLUGIN([write_gcm],           [$plugin_write_gcm],       [Google cloud monitoring output plugin])
 AC_PLUGIN([write_http],          [$with_libcurl],           [HTTP output plugin])
@@ -7151,6 +7156,7 @@ AC_MSG_RESULT([    virt  . . . . . . . . $enable_virt])
 AC_MSG_RESULT([    vmem  . . . . . . . . $enable_vmem])
 AC_MSG_RESULT([    vserver . . . . . . . $enable_vserver])
 AC_MSG_RESULT([    wireless  . . . . . . $enable_wireless])
+AC_MSG_RESULT([    wmi . . . . . . . . . $enable_wmi])
 AC_MSG_RESULT([    write_gcm   . . . . . $enable_write_gcm])
 AC_MSG_RESULT([    write_graphite  . . . $enable_write_graphite])
 AC_MSG_RESULT([    write_http  . . . . . $enable_write_http])
