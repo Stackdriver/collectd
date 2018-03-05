@@ -31,6 +31,10 @@
 #include "utils_avltree.h"
 #include "utils_fbhash.h"
 
+#ifdef WIN32
+#include <windows.h>
+#endif
+
 struct fbhash_s {
   char *filename;
   time_t mtime;
@@ -64,11 +68,22 @@ static void fbh_free_tree(c_avl_tree_t *tree) /* {{{ */
   c_avl_destroy(tree);
 } /* }}} void fbh_free_tree */
 
+static int lock_file(FILE *fh) {
+#ifdef WIN32
+  return LockFile((HANDLE)_get_osfhandle(fileno(fh)), 0, 0, 0, 0);
+#else
+  /* TODO: Lock file? -> fcntl */
+  struct flock fl = {0};
+  fl.l_type = F_RDLCK;
+  fl.l_whence = SEEK_SET;
+  return fcntl(fileno(fh), F_SETLK, &fl);
+#endif
+}
+
 static int fbh_read_file(fbhash_t *h) /* {{{ */
 {
   FILE *fh;
   char buffer[4096];
-  struct flock fl = {0};
   c_avl_tree_t *tree;
   int status;
 
@@ -76,11 +91,7 @@ static int fbh_read_file(fbhash_t *h) /* {{{ */
   if (fh == NULL)
     return -1;
 
-  fl.l_type = F_RDLCK;
-  fl.l_whence = SEEK_SET;
-  /* TODO: Lock file? -> fcntl */
-
-  status = fcntl(fileno(fh), F_SETLK, &fl);
+  status = lock_file(fh);
   if (status != 0) {
     fclose(fh);
     return -1;

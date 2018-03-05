@@ -151,6 +151,7 @@ build_windows ()
 	  --disable-all-plugins \
 	  --host="mingw32" \
 	  --enable-logfile \
+	  --enable-network \
 	  --enable-wmi
 
 	cp ${GNULIB_DIR}/../config.h src/gnulib_config.h

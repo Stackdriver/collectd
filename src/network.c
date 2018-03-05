@@ -25,6 +25,12 @@
 #define _DEFAULT_SOURCE
 #define _BSD_SOURCE /* For struct ip_mreq */
 
+#ifdef WIN32
+#include <ws2tcpip.h>
+#include <netioapi.h>
+#undef interface
+#endif
+
 #include "collectd.h"
 
 #include "common.h"
@@ -81,6 +87,12 @@ GCRY_THREAD_OPTION_PTHREAD_IMPL;
 #error "Neither IP_ADD_MEMBERSHIP nor IPV6_JOIN_GROUP is defined"
 #endif
 #endif /* !IP_ADD_MEMBERSHIP */
+
+#ifdef WIN32
+#define OPTION char
+#else
+#define OPTION void
+#endif
 
 /*
  * Maximum size required for encryption / signing:
@@ -1576,7 +1588,7 @@ static int network_set_ttl(const sockent_t *se, const struct addrinfo *ai) {
     else
       optname = IP_TTL;
 
-    if (setsockopt(se->data.client.fd, IPPROTO_IP, optname, &network_config_ttl,
+    if (setsockopt(se->data.client.fd, IPPROTO_IP, optname, (OPTION*)&network_config_ttl,
                    sizeof(network_config_ttl)) != 0) {
       ERROR("network plugin: setsockopt (ipv4-ttl): %s", STRERRNO);
       return -1;
@@ -1593,7 +1605,7 @@ static int network_set_ttl(const sockent_t *se, const struct addrinfo *ai) {
       optname = IPV6_UNICAST_HOPS;
 
     if (setsockopt(se->data.client.fd, IPPROTO_IPV6, optname,
-                   &network_config_ttl, sizeof(network_config_ttl)) != 0) {
+                   (OPTION*)&network_config_ttl, sizeof(network_config_ttl)) != 0) {
       ERROR("network plugin: setsockopt(ipv6-ttl): %s", STRERRNO);
       return -1;
     }
@@ -1628,7 +1640,7 @@ static int network_set_interface(const sockent_t *se,
                              .imr_interface.s_addr = ntohl(INADDR_ANY)};
 #endif
 
-      if (setsockopt(se->data.client.fd, IPPROTO_IP, IP_MULTICAST_IF, &mreq,
+      if (setsockopt(se->data.client.fd, IPPROTO_IP, IP_MULTICAST_IF, (OPTION*)&mreq,
                      sizeof(mreq)) != 0) {
         ERROR("network plugin: setsockopt (ipv4-multicast-if): %s", STRERRNO);
         return -1;
@@ -1641,7 +1653,7 @@ static int network_set_interface(const sockent_t *se,
 
     if (IN6_IS_ADDR_MULTICAST(&addr->sin6_addr)) {
       if (setsockopt(se->data.client.fd, IPPROTO_IPV6, IPV6_MULTICAST_IF,
-                     &se->interface, sizeof(se->interface)) != 0) {
+                     (OPTION*)&se->interface, sizeof(se->interface)) != 0) {
         ERROR("network plugin: setsockopt (ipv6-multicast-if): %s", STRERRNO);
         return -1;
       }
@@ -1685,7 +1697,7 @@ static int network_set_interface(const sockent_t *se,
 
 static int network_bind_socket(int fd, const struct addrinfo *ai,
                                const int interface_idx) {
-#if KERNEL_SOLARIS
+#if KERNEL_SOLARIS || WIN32
   char loop = 0;
 #else
   int loop = 0;
@@ -1693,7 +1705,7 @@ static int network_bind_socket(int fd, const struct addrinfo *ai,
   int yes = 1;
 
   /* allow multiple sockets to use the same PORT number */
-  if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {
+  if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (OPTION*)&yes, sizeof(yes)) == -1) {
     ERROR("network plugin: setsockopt (reuseaddr): %s", STRERRNO);
     return -1;
   }
@@ -1726,14 +1738,13 @@ static int network_bind_socket(int fd, const struct addrinfo *ai,
 #else
       mreq.imr_interface.s_addr = ntohl(INADDR_ANY);
 #endif
-
       if (setsockopt(fd, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop)) ==
           -1) {
         ERROR("network plugin: setsockopt (multicast-loop): %s", STRERRNO);
         return -1;
       }
 
-      if (setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) ==
+      if (setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (OPTION*)&mreq, sizeof(mreq)) ==
           -1) {
         ERROR("network plugin: setsockopt (add-membership): %s", STRERRNO);
         return -1;
@@ -1769,7 +1780,7 @@ static int network_bind_socket(int fd, const struct addrinfo *ai,
         return -1;
       }
 
-      if (setsockopt(fd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &mreq,
+      if (setsockopt(fd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, (OPTION*)&mreq,
                      sizeof(mreq)) == -1) {
         ERROR("network plugin: setsockopt (ipv6-add-membership): %s", STRERRNO);
         return -1;
@@ -1945,9 +1956,12 @@ static int sockent_client_connect(sockent_t *se) /* {{{ */
     return 0;
 
   struct addrinfo ai_hints = {.ai_family = AF_UNSPEC,
-                              .ai_flags = AI_ADDRCONFIG,
+                              .ai_flags = 0,
                               .ai_protocol = IPPROTO_UDP,
                               .ai_socktype = SOCK_DGRAM};
+#ifndef WIN32
+  ai_hints.ai_flags = AI_ADDDRCONFIG;
+#endif
 
   status = getaddrinfo(se->node,
                        (se->service != NULL) ? se->service : NET_DEFAULT_PORT,
@@ -2029,9 +2043,12 @@ static int sockent_server_listen(sockent_t *se) /* {{{ */
         service);
 
   struct addrinfo ai_hints = {.ai_family = AF_UNSPEC,
-                              .ai_flags = AI_ADDRCONFIG | AI_PASSIVE,
+                              .ai_flags = AI_PASSIVE,
                               .ai_protocol = IPPROTO_UDP,
                               .ai_socktype = SOCK_DGRAM};
+#ifndef WIN32
+  ai_hints |= AI_ADDRCONFIG;
+#endif
 
   status = getaddrinfo(node, service, &ai_hints, &ai_list);
   if (status != 0) {
@@ -2762,7 +2779,7 @@ static int network_config_add_listen(const oconfig_item_t *ci) /* {{{ */
     else
 #endif /* HAVE_GCRYPT_H */
         if (strcasecmp("Interface", child->key) == 0)
-      network_config_set_interface(child, &se->interface);
+          network_config_set_interface(child, &se->interface);
     else {
       WARNING("network plugin: Option `%s' is not allowed here.", child->key);
     }
@@ -2842,7 +2859,7 @@ static int network_config_add_server(const oconfig_item_t *ci) /* {{{ */
     else
 #endif /* HAVE_GCRYPT_H */
         if (strcasecmp("Interface", child->key) == 0)
-      network_config_set_interface(child, &se->interface);
+          network_config_set_interface(child, &se->interface);
     else if (strcasecmp("ResolveInterval", child->key) == 0)
       cf_util_get_cdtime(child, &se->data.client.resolve_interval);
     else {
