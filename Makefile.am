@@ -121,7 +121,8 @@ lib_LTLIBRARIES = \
 if BUILD_WIN32
 # TODO: Build all executables on Windows as well.
 sbin_PROGRAMS = \
-        collectd
+	collectd \
+	collectd_svc
 
 bin_PROGRAMS =
 else
@@ -295,6 +296,16 @@ collectd_CFLAGS += $(BUILD_WITH_LIBSTATGRAB_CFLAGS)
 collectd_LDADD += $(BUILD_WITH_LIBSTATGRAB_LDFLAGS)
 endif
 
+if BUILD_WIN32
+collectd_svc_SOURCES = \
+	src/daemon/collectd_svc.c \
+	src/daemon/collectd.c \
+	src/daemon/collectd.h
+collectd_svc_CFLAGS = $(AM_CFLAGS)
+collectd_svc_CPPFLAGS = $(AM_CPPFLAGS)
+collectd_svc_LDFLAGS = -export-dynamic
+collectd_svc_LDADD = libcollectd.la -lkernel32 -ladvapi32
+endif
 
 collectdmon_SOURCES = src/collectdmon.c
 
