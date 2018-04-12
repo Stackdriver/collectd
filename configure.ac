@@ -30,6 +30,7 @@ AC_PROG_CC_C99([],
 
 AX_COMPILER_VENDOR
 
+LT_PROG_RC
 AC_PROG_CXX
 AC_PROG_CPP
 AC_PROG_EGREP
@@ -6197,6 +6198,7 @@ plugin_dpdkevents="no"
 plugin_dpdkstat="no"
 plugin_entropy="no"
 plugin_ethstat="no"
+plugin_eventlog="no"
 plugin_fhcount="no"
 plugin_fscache="no"
 plugin_gps="no"
@@ -6238,6 +6240,7 @@ plugin_virt="no"
 plugin_vmem="no"
 plugin_vserver="no"
 plugin_wireless="no"
+plugin_wmi="no"
 plugin_write_prometheus="no"
 plugin_xencpu="no"
 plugin_zfs_arc="no"
@@ -6299,6 +6302,7 @@ if test "x$ac_system" = "xLinux"; then
 fi
 
 if test "x$ac_system" = "xWindows"; then
+  plugin_eventlog="yes"
   plugin_wmi="yes"
 fi
 
@@ -6613,6 +6617,7 @@ AC_PLUGIN([drbd],                [$plugin_drbd],            [DRBD statistics])
 AC_PLUGIN([email],               [yes],                     [EMail statistics])
 AC_PLUGIN([entropy],             [$plugin_entropy],         [Entropy statistics])
 AC_PLUGIN([ethstat],             [$plugin_ethstat],         [Stats from NIC driver])
+AC_PLUGIN([eventlog],            [$plugin_eventlog],        [Windows event logging plugin])
 AC_PLUGIN([exec],                [yes],                     [Execution of external programs])
 AC_PLUGIN([fhcount],             [$plugin_fhcount],         [File handles statistics])
 AC_PLUGIN([filecount],           [yes],                     [Count files in directories])
@@ -6758,6 +6763,12 @@ else
   LOAD_PLUGIN_SYSLOG="##"
 fi
 
+if test "x$enable_eventlog" = "xyes"; then
+  default_log_plugin="eventlog"
+else
+  LOAD_PLUGIN_EVENTLOG="##"
+fi
+
 if test "x$enable_logfile" = "xyes"; then
   if test "x$default_log_plugin" = "xnone"; then
     default_log_plugin="logfile"
@@ -6777,6 +6788,7 @@ fi
 AC_MSG_RESULT([$default_log_plugin])
 
 AC_SUBST([LOAD_PLUGIN_SYSLOG])
+AC_SUBST([LOAD_PLUGIN_EVENTLOG])
 AC_SUBST([LOAD_PLUGIN_LOGFILE])
 AC_SUBST([LOAD_PLUGIN_LOG_LOGSTASH])
 
@@ -7044,6 +7056,7 @@ AC_MSG_RESULT([    drbd  . . . . . . . . $enable_drbd])
 AC_MSG_RESULT([    email . . . . . . . . $enable_email])
 AC_MSG_RESULT([    entropy . . . . . . . $enable_entropy])
 AC_MSG_RESULT([    ethstat . . . . . . . $enable_ethstat])
+AC_MSG_RESULT([    eventlog  . . . . . . $enable_eventlog])
 AC_MSG_RESULT([    exec  . . . . . . . . $enable_exec])
 AC_MSG_RESULT([    fhcount . . . . . . . $enable_fhcount])
 AC_MSG_RESULT([    filecount . . . . . . $enable_filecount])

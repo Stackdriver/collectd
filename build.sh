@@ -151,6 +151,7 @@ build_windows ()
 	  --disable-all-plugins \
 	  --host="mingw32" \
 	  --enable-logfile \
+	  --enable-eventlog \
 	  --enable-network \
 	  --enable-wmi
 

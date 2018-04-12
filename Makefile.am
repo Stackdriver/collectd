@@ -1731,6 +1731,24 @@ syslog_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 syslog_la_LIBADD = libcollectd.la
 endif
 
+if BUILD_PLUGIN_EVENTLOG
+RCFLAGS = --preprocessor="${CC} -E -xc-header -DRC_INVOKED"
+
+%.lo: %.mc
+	windmc $*.mc --headerdir=src --rcdir=src
+	$(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --tag=RC --mode=compile $(RC) $(RCFLAGS) $*.rc -o $*.lo
+
+pkglib_LTLIBRARIES += eventlogres.la
+eventlogres_la_SOURCES = src/eventlogres.mc src/eventlogres.c
+eventlogres_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+
+pkglib_LTLIBRARIES += eventlog.la
+eventlog_la_SOURCES = src/eventlog.c
+eventlog_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+eventlog_la_LIBADD = libcollectd.la
+eventlog_la_DEPENDENCIES = eventlogres.la
+endif
+
 if BUILD_PLUGIN_TABLE
 pkglib_LTLIBRARIES += table.la
 table_la_SOURCES = src/table.c
