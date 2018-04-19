@@ -152,7 +152,10 @@ build_windows ()
 	  --host="mingw32" \
 	  --enable-logfile \
 	  --enable-eventlog \
+	  --enable-match_regex \
 	  --enable-network \
+	  --enable-target_replace \
+	  --enable-target_set \
 	  --enable-wmi
 
 	cp ${GNULIB_DIR}/../config.h src/gnulib_config.h
