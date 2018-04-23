@@ -847,6 +847,7 @@ disk_la_CFLAGS = $(AM_CFLAGS)
 disk_la_CPPFLAGS = $(AM_CPPFLAGS)
 disk_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 disk_la_LIBADD = libignorelist.la
+disk_la_DEPENDENCIES = libignorelist.la
 if BUILD_WITH_LIBKSTAT
 disk_la_LIBADD += -lkstat
 endif
@@ -870,6 +871,12 @@ disk_la_LIBADD += -ldevstat -lgeom
 endif
 if BUILD_WITH_PERFSTAT
 disk_la_LIBADD += -lperfstat
+endif
+if BUILD_WIN32
+disk_la_SOURCES += src/utils_wmi.c src/utils_wmi.h
+disk_la_LDFLAGS += -L.
+disk_la_LIBADD += -loleaut32 -lole32 -luuid libcollectd.la
+disk_la_DEPENDENCIES += libuuid.dll
 endif
 endif
 

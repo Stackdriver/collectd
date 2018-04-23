@@ -6302,6 +6302,7 @@ if test "x$ac_system" = "xLinux"; then
 fi
 
 if test "x$ac_system" = "xWindows"; then
+  plugin_disk="yes"
   plugin_eventlog="yes"
   plugin_wmi="yes"
 fi

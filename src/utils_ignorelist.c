@@ -48,9 +48,11 @@
  *     return;
  **/
 
-#if HAVE_CONFIG_H
-#include "config.h"
-#endif
+//#if HAVE_CONFIG_H
+//#include "config.h"
+//#endif
+
+#include "collectd.h"
 
 #include "common.h"
 #include "plugin.h"

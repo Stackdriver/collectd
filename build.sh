@@ -151,6 +151,7 @@ build_windows ()
 	  --disable-all-plugins \
 	  --host="mingw32" \
 	  --enable-logfile \
+	  --enable-disk \
 	  --enable-eventlog \
 	  --enable-match_regex \
 	  --enable-network \

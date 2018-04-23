@@ -25,7 +25,9 @@
 
 #include "common.h"
 #include "plugin.h"
+#ifndef BUILD_WIN32
 #include "utils_ignorelist.h"
+#endif
 
 #if HAVE_MACH_MACH_TYPES_H
 #include <mach/mach_types.h>
@@ -137,6 +139,11 @@ static perfstat_disk_t *stat_disk;
 static int numdisk;
 static int pnumdisk;
 /* #endif HAVE_PERFSTAT */
+
+#elif KERNEL_WIN32
+#include "utils_wmi.h"
+static wmi_connection_t *wmi;
+/* #endif KERNEL_WIN32 */
 
 #else
 #error "No applicable input method."
@@ -256,7 +263,10 @@ static int disk_init(void) {
       continue;
     ksp[numdisk++] = ksp_chain;
   }
-#endif /* HAVE_LIBKSTAT */
+/* #endif HAVE_LIBKSTAT */
+#elif KERNEL_WIN32
+  wmi = wmi_connect();
+#endif /* KERNEL_WIN32 */
 
   return 0;
 } /* int disk_init */
@@ -267,7 +277,10 @@ static int disk_shutdown(void) {
   if (handle_udev != NULL)
     udev_unref(handle_udev);
 #endif /* HAVE_LIBUDEV_H */
-#endif /* KERNEL_LINUX */
+/* #endif KERNEL_LINUX */
+#elif KERNEL_WIN32
+  wmi_release(wmi);
+#endif /* KERNEL_WIN32 */
   return 0;
 } /* int disk_shutdown */
 
@@ -1016,7 +1029,52 @@ static int disk_read(void) {
                   1000000.0;
     disk_submit(stat_disk[i].name, "disk_time", read_time, write_time);
   }
-#endif /* defined(HAVE_PERFSTAT) */
+/* #emdof defined(HAVE_PERFSTAT) */
+#elif KERNEL_WIN32
+  const char *statement = "select * from Win32_PerfRawData_PerfDisk_PhysicalDisk where Name != '_Total'";
+  wmi_result_list_t *results;
+  results = wmi_query(wmi, statement);
+
+  if (results->count == 0) {
+    WARNING("disk plugin: no results for query %s.", statement);
+    wmi_result_list_release(results);
+    return 0;
+  }
+
+  wmi_result_t *result;
+  while ((result = wmi_get_next_result(results))) {
+    VARIANT read_value_v;
+    VARIANT write_value_v;
+    VARIANT plugin_instance_v;
+    char *plugin_instance_s = NULL;
+
+    if (wmi_result_get_value(result, "DiskReadBytesPersec", &read_value_v) != 0) {
+      VariantClear(&read_value_v);
+      ERROR("disk plugin: failed to read field 'DiskReadBytesPersec'");
+      continue;
+    }
+    if (wmi_result_get_value(result, "DiskWriteBytesPersec", &write_value_v) != 0) {
+      VariantClear(&read_value_v);
+      VariantClear(&write_value_v);
+      ERROR("disk plugin: failed to read field 'DiskWriteBytesPersec'");
+      continue;
+    }
+    if (wmi_result_get_value(result, "Name", &plugin_instance_v) != 0) {
+      ERROR("disk plugin: failed to read field 'Name'");
+    }
+    plugin_instance_s = variant_get_string(&plugin_instance_v);
+    if (plugin_instance_s == NULL) {
+      ERROR("disk plugin: failed to convert plugin_instance to string");
+    }
+    disk_submit(plugin_instance_s, "disk_octets", variant_get_int64(&read_value_v), variant_get_int64(&write_value_v));
+    free(plugin_instance_s);
+    VariantClear(&read_value_v);
+    VariantClear(&write_value_v);
+    VariantClear(&plugin_instance_v);
+    wmi_result_release(result);
+  }
+  wmi_result_list_release(results);
+#endif /* KERNEL_WIN32 */
 
   return 0;
 } /* int disk_read */
