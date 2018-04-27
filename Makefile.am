@@ -1045,6 +1045,7 @@ interface_la_SOURCES = src/interface.c
 interface_la_CFLAGS = $(AM_CFLAGS)
 interface_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 interface_la_LIBADD = libignorelist.la
+interface_la_DEPENDENCIES = libignorelist.la
 if BUILD_WITH_LIBSTATGRAB
 interface_la_CFLAGS += $(BUILD_WITH_LIBSTATGRAB_CFLAGS)
 interface_la_LIBADD += $(BUILD_WITH_LIBSTATGRAB_LDFLAGS)
@@ -1058,6 +1059,12 @@ endif # BUILD_WITH_LIBDEVINFO
 endif # !BUILD_WITH_LIBSTATGRAB
 if BUILD_WITH_PERFSTAT
 interface_la_LIBADD += -lperfstat
+endif
+if BUILD_WIN32
+interface_la_SOURCES += src/utils_wmi.c src/utils_wmi.h
+interface_la_LDFLAGS += -L.
+interface_la_LIBADD += -loleaut32 -lole32 -luuid libcollectd.la
+interface_la_DEPENDENCIES += libuuid.dll
 endif
 endif # BUILD_PLUGIN_INTERFACE
 

@@ -73,8 +73,13 @@ static int nif;
 static int pnif;
 #endif /* HAVE_PERFSTAT */
 
+#if KERNEL_WIN32
+#include "utils_wmi.h"
+static wmi_connection_t *wmi;
+#endif
+
 #if !HAVE_GETIFADDRS && !KERNEL_LINUX && !HAVE_LIBKSTAT &&                     \
-    !HAVE_LIBSTATGRAB && !HAVE_PERFSTAT
+    !HAVE_LIBSTATGRAB && !HAVE_PERFSTAT && !KERNEL_WIN32
 #error "No applicable input method."
 #endif
 
@@ -154,7 +159,18 @@ static int interface_init(void) {
 
   return 0;
 } /* int interface_init */
-#endif /* HAVE_LIBKSTAT */
+/* #endif HAVE_LIBKSTAT */
+#elif KERNEL_WIN32
+static int interface_init(void) {
+  wmi = wmi_connect();
+  return 0;
+}
+
+static int interface_shutdown(void) {
+  wmi_release(wmi);
+  return 0;
+} /* int interface_shutdown */
+#endif /* KERNEL_WIN32 */
 
 static void if_submit(const char *dev, const char *type, derive_t rx,
                       derive_t tx) {
@@ -381,7 +397,52 @@ static int interface_read(void) {
     if_submit(ifstat[i].name, "if_errors", ifstat[i].ierrors,
               ifstat[i].oerrors);
   }
-#endif /* HAVE_PERFSTAT */
+/* #endif HAVE_PERFSTAT */
+#elif KERNEL_WIN32
+  const char *statement = "select * from Win32_PerfRawData_Tcpip_NetworkInterface";
+  wmi_result_list_t *results;
+  results = wmi_query(wmi, statement);
+
+  if (results->count == 0) {
+    WARNING("interface plugin: no results for query %s.", statement);
+    wmi_result_list_release(results);
+    return 0;
+  }
+
+  wmi_result_t *result;
+  while ((result = wmi_get_next_result(results))) {
+    VARIANT rx_value_v;
+    VARIANT tx_value_v;
+    VARIANT plugin_instance_v;
+    char *plugin_instance_s = NULL;
+
+    if (wmi_result_get_value(result, "BytesReceivedPersec", &rx_value_v) != 0) {
+      VariantClear(&rx_value_v);
+      ERROR("interface plugin: failed to read field 'BytesReceivedPersec'");
+      continue;
+    }
+    if (wmi_result_get_value(result, "BytesSentPersec", &tx_value_v) != 0) {
+      VariantClear(&rx_value_v);
+      VariantClear(&tx_value_v);
+      ERROR("interface plugin: failed to read field 'BytesSentPersec'");
+      continue;
+    }
+    if (wmi_result_get_value(result, "Name", &plugin_instance_v) != 0) {
+      ERROR("interface plugin: failed to read field 'Name'");
+    }
+    plugin_instance_s = variant_get_string(&plugin_instance_v);
+    if (plugin_instance_s == NULL) {
+      ERROR("interface plugin: failed to convert plugin_instance to string");
+    }
+    if_submit(plugin_instance_s, "if_octets", variant_get_int64(&rx_value_v), variant_get_int64(&tx_value_v));
+    free(plugin_instance_s);
+    VariantClear(&rx_value_v);
+    VariantClear(&tx_value_v);
+    VariantClear(&plugin_instance_v);
+    wmi_result_release(result);
+  }
+  wmi_result_list_release(results);
+#endif /* KERNEL_WIN32 */
 
   return 0;
 } /* int interface_read */
@@ -389,8 +450,11 @@ static int interface_read(void) {
 void module_register(void) {
   plugin_register_config("interface", interface_config, config_keys,
                          config_keys_num);
-#if HAVE_LIBKSTAT
+#if HAVE_LIBKSTAT || KERNEL_WIN32
   plugin_register_init("interface", interface_init);
+#endif
+#if KERNEL_WIN32
+  plugin_register_shutdown("interface", interface_shutdown);
 #endif
   plugin_register_read("interface", interface_read);
 } /* void module_register */

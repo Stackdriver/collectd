@@ -153,6 +153,7 @@ build_windows ()
 	  --enable-logfile \
 	  --enable-disk \
 	  --enable-eventlog \
+	  --enable-interface \
 	  --enable-match_regex \
 	  --enable-network \
 	  --enable-target_replace \
