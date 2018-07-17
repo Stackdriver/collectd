@@ -118,7 +118,8 @@ build_windows ()
 	      strtok_r \
 	      poll \
 	      recv \
-	      net_if
+	      net_if \
+          fnmatch
 
 	  cd ${TOP_SRCDIR}/_build_aux/_gnulib
 	  ./configure --host="mingw32" LIBS="-lws2_32 -lpthread"
