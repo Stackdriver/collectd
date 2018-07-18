@@ -1170,7 +1170,11 @@ static int wg_oauth2_sign(unsigned char *signature, size_t sig_capacity,
   }
 
   #if OPENSSL_VERSION_NUMBER < 0x10100000L
-  EVP_MD_CTX_cleanup(ctx);
+  if (EVP_MD_CTX_cleanup(ctx) == 0) {
+    ERR_error_string_n(ERR_get_error(), err_buf, sizeof(err_buf));
+    ERROR ("write_gcm: EVP_MD_CTX_cleanup failed: %s", err_buf);
+    return -1;
+  }
   #else 
   EVP_MD_CTX_free(ctx);
   #endif
