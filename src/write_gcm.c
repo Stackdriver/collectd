@@ -2799,7 +2799,7 @@ typedef struct {
 // exhausted. Upon success, the json argument is set to a json string (memory
 // owned by caller), and 0 is returned.
 static int wg_json_CreateCollectdTimeseriesRequest(_Bool pretty,
-    const const monitored_resource_t *monitored_resource,
+    const monitored_resource_t *monitored_resource,
     const wg_payload_t *head, const wg_payload_t **new_head,
     char **json);
 
