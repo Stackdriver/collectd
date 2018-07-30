@@ -141,6 +141,14 @@ static _Bool wg_some_error_occurred_g = 0;
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
 #include <openssl/engine.h>
 
+static void *OPENSSL_zalloc(size_t num) {
+  void *ret = OPENSSL_malloc(num);
+
+  if (ret != NULL)
+    memset(ret, 0, num);
+  return ret;
+}
+
 EVP_MD_CTX *EVP_MD_CTX_new(void) {
   return OPENSSL_zalloc(sizeof(EVP_MD_CTX));
 }
