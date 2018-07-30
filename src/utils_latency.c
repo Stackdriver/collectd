@@ -33,6 +33,10 @@
 #include <math.h>
 #include <limits.h>
 
+#ifndef LATENCY_DATA_DEFAULT_LENGTH
+# define LATENCY_DATA_DEFAULT_LENGTH 1000
+#endif
+
 #ifndef LLONG_MAX
 # define LLONG_MAX 9223372036854775807LL
 #endif
@@ -49,6 +53,9 @@
 struct latency_counter_s
 {
   cdtime_t start_time;
+
+  cdtime_t *latency_data;
+  size_t max_data_length;
 
   cdtime_t sum;
   size_t num;
@@ -125,6 +132,9 @@ latency_counter_t *latency_counter_create (void) /* {{{ */
   if (lc == NULL)
     return (NULL);
 
+  lc->latency_data = calloc (LATENCY_DATA_DEFAULT_LENGTH, sizeof (cdtime_t));
+  lc->max_data_length = LATENCY_DATA_DEFAULT_LENGTH;
+
   lc->bin_width = HISTOGRAM_DEFAULT_BIN_WIDTH;
   latency_counter_reset (lc);
   return (lc);
@@ -132,6 +142,7 @@ latency_counter_t *latency_counter_create (void) /* {{{ */
 
 void latency_counter_destroy (latency_counter_t *lc) /* {{{ */
 {
+  sfree (lc->latency_data);
   sfree (lc);
 } /* }}} void latency_counter_destroy */
 
@@ -142,6 +153,14 @@ void latency_counter_add (latency_counter_t *lc, cdtime_t latency) /* {{{ */
   if ((lc == NULL) || (latency == 0) || (latency > ((cdtime_t) LLONG_MAX)))
     return;
 
+  if (lc->num == lc->max_data_length) {
+    lc->max_data_length *= 2;
+    cdtime_t *extended_latency_data = calloc (lc->max_data_length, sizeof (cdtime_t));
+    memcpy (extended_latency_data, lc->latency_data, lc->num);
+    sfree (lc->latency_data);
+    lc->latency_data = extended_latency_data;
+  }
+  lc->latency_data[lc->num] = latency;
   lc->sum += latency;
   lc->num++;
 
@@ -202,7 +221,17 @@ void latency_counter_reset (latency_counter_t *lc) /* {{{ */
   /* preserve bin width */
   lc->bin_width = bin_width;
   lc->start_time = cdtime ();
+
+  lc->latency_data = calloc (LATENCY_DATA_DEFAULT_LENGTH, sizeof (cdtime_t));
+  lc->max_data_length = LATENCY_DATA_DEFAULT_LENGTH;
 } /* }}} void latency_counter_reset */
+
+cdtime_t *latency_counter_get_data (latency_counter_t *lc) /* {{{ */
+{ 
+  if (lc == NULL)
+    return NULL;
+  return lc->latency_data;
+} /* }}} cdtime_t *latency_counter_get_data */
 
 cdtime_t latency_counter_get_min (latency_counter_t *lc) /* {{{ */
 {
