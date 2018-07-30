@@ -91,6 +91,7 @@ static _Bool conf_timer_lower     = 0;
 static _Bool conf_timer_upper     = 0;
 static _Bool conf_timer_sum       = 0;
 static _Bool conf_timer_count     = 0;
+static _Bool conf_timer_data      = 0;
 
 /* Must hold metrics_lock when calling this function. */
 static statsd_metric_t *statsd_metric_lookup_unsafe (char const *name, /* {{{ */
@@ -688,6 +689,8 @@ static int statsd_config (oconfig_item_t *ci) /* {{{ */
       cf_util_get_boolean (child, &conf_timer_sum);
     else if (strcasecmp ("TimerCount", child->key) == 0)
       cf_util_get_boolean (child, &conf_timer_count);
+    else if (strcasecmp ("TimerData", child->key) == 0)
+      cf_util_get_boolean (child, &conf_timer_data);
     else if (strcasecmp ("TimerPercentile", child->key) == 0)
       statsd_config_timer_percentile (child);
     else
@@ -822,6 +825,22 @@ static int statsd_metric_submit_unsafe (char const *name, statsd_metric_t *metri
         ? CDTIME_T_TO_DOUBLE (latency_counter_get_percentile (metric->latency, conf_timer_percentile[i]))
         : NAN;
       plugin_dispatch_values (&vl);
+    }
+
+    if (conf_timer_data) {
+      ssnprintf (vl.type_instance, sizeof (vl.type_instance),
+          "%s-data", name);
+      if (have_events) {
+          size_t total = latency_counter_get_num (metric->latency);
+          cdtime_t *latency_data = latency_counter_get_data (metric->latency);
+          for (size_t i = 0; i < total; ++i) {
+            values[0].gauge = CDTIME_T_TO_DOUBLE (latency_data[i]);
+            plugin_dispatch_values (&vl);
+          }
+      } else {
+        values[0].gauge = NAN;
+        plugin_dispatch_values (&vl);
+      }
     }
 
     /* Keep this at the end, since vl.type is set to "gauge" here. The

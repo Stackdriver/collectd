@@ -37,6 +37,7 @@ void latency_counter_destroy (latency_counter_t *lc);
 void latency_counter_add (latency_counter_t *lc, cdtime_t latency);
 void latency_counter_reset (latency_counter_t *lc);
 
+cdtime_t latency_counter_get_data (latency_counter_t *lc);
 cdtime_t latency_counter_get_min (latency_counter_t *lc);
 cdtime_t latency_counter_get_max (latency_counter_t *lc);
 cdtime_t latency_counter_get_sum (latency_counter_t *lc);
