@@ -70,7 +70,6 @@ struct user_config_s {
 	_Bool collect_sms;
 #if HAVE_VARNISH_V2
 	_Bool collect_sm;
-	_Bool collect_sma;
 #endif
 #if HAVE_VARNISH_V2 || HAVE_VARNISH_V4 || HAVE_VARNISH_V5
   _Bool collect_sma;
