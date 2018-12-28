@@ -39,10 +39,12 @@ static const char this_plugin_name[] = "mongodb";
 typedef struct {
   char *hostname;
   char *server_uri;
+  _Bool export_database_metrics;
   _Bool prefer_secondary_query;
 } context_t;
 
 static context_t *context_create(const char *hostname, const char *server_uri,
+                                 _Bool export_database_metrics,
                                  _Bool prefer_secondary_query) {
   context_t *result = calloc(1, sizeof(*result));
   if (result == NULL) {
@@ -51,6 +53,7 @@ static context_t *context_create(const char *hostname, const char *server_uri,
   }
   result->hostname = strdup(hostname);
   result->server_uri = strdup(server_uri);
+  result->export_database_metrics = export_database_metrics;
   result->prefer_secondary_query = prefer_secondary_query;
   return result;
 }
@@ -377,19 +380,21 @@ static int mg_read(user_data_t *user_data) {
     goto leave;
   }
 
-  // Get the list of databases, then process each database.
-  databases = mg_get_database_names(client, &error);
-  if (databases == NULL) {
-    ERROR("mongodb plugin: mongoc_client_get_database_names failed: %s.",
-          error.message);
-    goto leave;
-  }
-  int i;
-  for (i = 0; databases[i] != NULL; ++i) {
-    if (mg_process_database(ctx, client, databases[i]) != 0) {
-      // If there's an error, maybe it's only on one of the databases.
-      ERROR("mongodb plugin: mg_process_database '%s' failed."
-          " Continuing anyway...", databases[i]);
+  if (ctx->export_database_metrics) {
+    // Get the list of databases, then process each database.
+    databases = mg_get_database_names(client, &error);
+    if (databases == NULL) {
+      ERROR("mongodb plugin: mongoc_client_get_database_names failed: %s.",
+            error.message);
+      goto leave;
+    }
+    int i;
+    for (i = 0; databases[i] != NULL; ++i) {
+      if (mg_process_database(ctx, client, databases[i]) != 0) {
+        // If there's an error, maybe it's only on one of the databases.
+        ERROR("mongodb plugin: mg_process_database '%s' failed."
+            " Continuing anyway...", databases[i]);
+      }
     }
   }
   result = 0;  // Success!
@@ -449,6 +454,7 @@ static int mg_config(oconfig_item_t *ci) {
   int port = MONGOC_DEFAULT_PORT;
   char *user = NULL;
   char *password = NULL;
+  _Bool export_database_metrics = 1;  // Default to true.
   _Bool prefer_secondary_query = 0;
   context_t *ctx = NULL;
   int result = -1;  // Pessimistically assume failure.
@@ -494,6 +500,12 @@ static int mg_config(oconfig_item_t *ci) {
         ++parse_errors;
         continue;
       }
+    } else if (strcasecmp("ExportDatabaseMetrics", child->key) == 0) {
+      if (cf_util_get_boolean(child, &export_database_metrics) != 0) {
+        ERROR(error_template, "ExportDatabaseMetrics");
+        ++parse_errors;
+        continue;
+      }
     } else if (strcasecmp("PreferSecondaryQuery", child->key) == 0) {
       if (cf_util_get_boolean(child, &prefer_secondary_query) != 0) {
         ERROR(error_template, "PreferSecondaryQuery");
@@ -530,7 +542,7 @@ static int mg_config(oconfig_item_t *ci) {
   }
 
   const char *stats_hostname = hostname != NULL ? hostname : hostname_g;
-  ctx = context_create(stats_hostname, uri, prefer_secondary_query);
+  ctx = context_create(stats_hostname, uri, export_database_metrics, prefer_secondary_query);
   if (ctx == NULL) {
     ERROR("mongodb plugin: context_create failed.");
     goto leave;
