@@ -726,7 +726,7 @@ mongodb_la_CPPFLAGS += -Ilibmongoc/src/mongoc -Ilibmongoc/src/libbson/src/bson
 mongodb_la_LIBADD += libmongoc/libmongoc-1.0.la libmongoc/src/libbson/libbson.la
 
 else
-mongodb_la_LIBADD += -lmongoc
+mongodb_la_LIBADD += -lmongoc-1.0
 endif
 endif
 
@@ -1339,7 +1339,7 @@ pkglib_LTLIBRARIES += write_mongodb.la
 write_mongodb_la_SOURCES = write_mongodb.c
 write_mongodb_la_CPPFLAGS = $(AM_CPPFLAGS) $(BUILD_WITH_LIBMONGOC_CPPFLAGS)
 write_mongodb_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBMONGOC_LDFLAGS)
-write_mongodb_la_LIBADD = -lmongoc
+write_mongodb_la_LIBADD = -lmongoc-1.0
 endif
 
 if BUILD_PLUGIN_WRITE_REDIS

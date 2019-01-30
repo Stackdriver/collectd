@@ -3081,15 +3081,9 @@ then
 	fi
 	if test "x$with_own_libmongoc" != "xyes"
 	then
-	    AC_CHECK_HEADERS(mongo.h,
+	    PKG_CHECK_MODULES([MONGOC], [libmongoc-1.0],
 	    [with_libmongoc="yes"],
-	    [with_libmongoc="no ('mongo.h' not found)"],
-[#if HAVE_STDINT_H
-# define MONGO_HAVE_STDINT 1
-#else
-# define MONGO_USE_LONG_LONG_INT 1
-#endif
-])
+	    [with_libmongoc="no (pkg-config could not find libmongoc)"])
     fi
 fi
 if test "x$with_libmongoc" = "xyes" -a "x$with_own_libmongoc" != "xyes"
@@ -3098,9 +3092,11 @@ then
 	then
 		AC_MSG_NOTICE([libmongoc LDFLAGS: $LIBMONGOC_LDFLAGS])
 	fi
-	AC_CHECK_LIB(mongoc, mongo_run_command,
+	AC_CHECK_LIB(mongoc-1.0, mongoc_init,
 	[with_libmongoc="yes"],
-	[with_libmongoc="no (symbol 'mongo_run_command' not found)"])
+	[with_libmongoc="no (symbol 'mongoc_init' not found)"])
+	LIBMONGOC_CPPFLAGS="$LIBMONGOC_CPPFLAGS `$PKG_CONFIG --cflags libmongoc-1.0`"
+	LIBMONGOC_LDFLAGS="$LIBMONGOC_LDFLAGS `$PKG_CONFIG --libs libmongoc-1.0`"
 fi
 
 CPPFLAGS="$SAVE_CPPFLAGS"

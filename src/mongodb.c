@@ -24,6 +24,8 @@
  *   Corey Kosak <kosak at google.com>
  **/
 
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 #include "collectd.h"
 #include "common.h"
 #include "plugin.h"
