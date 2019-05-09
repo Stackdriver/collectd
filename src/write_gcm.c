@@ -402,19 +402,24 @@ static credential_ctx_t *wg_credential_ctx_create_from_json_file(
     ERROR("write_gcm: Couldn't find 'client_email' entry in credentials file.");
     goto leave;
   }
-  // use the client email to determine the project
-  if (strstr(ctx->email, "@developer.gserviceaccount.com") != NULL) {
-    // old style email address like projectnumber-hash@developer.gserviceaccount.com
+  // Check whether the project id is specified explicitly; otherwise fall back
+  // on using the client email to determine the project.
+  if (wg_extract_toplevel_json_string(creds, "project_id", &ctx->project_id)
+      == 0) {
+    DEBUG("write_gcm: Explicit project_id in credentials file: %s.",
+          ctx->project_id);
+  } else if (strstr(ctx->email, "@developer.gserviceaccount.com") != NULL) {
+    // Old style email address like projectnumber-hash@developer.gserviceaccount.com.
     char *dash;
     dash = strstr(ctx->email, "-");
     if (dash != NULL) {
-      char * project = sstrdup(ctx->email);
+      char *project = sstrdup(ctx->email);
       dash = strstr(project, "-");
       *dash = '\0';
       ctx->project_id = project;
     }
   } else if (strstr(ctx->email, ".iam.gserviceaccount.com") != NULL) {
-    // new style email address like string@project.iam.gserviceaccount.com
+    // New style email address like string@project.iam.gserviceaccount.com.
     char *at, *dot;
     at = strstr(ctx->email, "@");
     dot = strstr(ctx->email, ".iam.gserviceaccount.com");
