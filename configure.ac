@@ -4717,7 +4717,7 @@ if test "$PYTHON3_CONFIG" != ""; then
   if test $? -ne 0; then
     with_libpython3="no"
   fi
-  LIBPYTHON3_LIBS="`${PYTHON3_CONFIG} --libs`"
+  LIBPYTHON3_LIBS="`${PYTHON3_CONFIG} --libs --embed`" || LIBPYTHON3_LIBS="`${PYTHON3_CONFIG} --libs`"
   if test $? -ne 0; then
     with_libpython3="no"
   fi
