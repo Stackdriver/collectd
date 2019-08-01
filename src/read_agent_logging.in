@@ -117,6 +117,7 @@ URL="${1:-http://localhost:24231/metrics}"
 #   PUTVAL /agent-14/derive-log_entry_retry_count N:290
 
 # - Only pass to sed the Stackdriver metrics.
+# - Drop the fractional part, if present; the output must be an integer counter.
 # - Combine successful and failed submetrics into one with response code (200
 #   for successful), in order to fit the schema that Stackdriver expects.
 # - Make all nouns singular.
@@ -128,7 +129,7 @@ URL="${1:-http://localhost:24231/metrics}"
 exec curl --silent "${URL}" \
   | grep -E '^stackdriver_' \
   | sed -E \
-    -e "s/^stackdriver_([a-zA-Z0-9_]*)(\{(.*code=\"([0-9]*)\")?.*\})? ([0-9]*)/PUTVAL ${COLLECTD_HOSTNAME}\/agent-\4\/derive-\1 N:\5/" \
+    -e "s/^stackdriver_([a-zA-Z0-9_]*)(\{(.*code=\"([0-9]*)\")?.*\})? ([0-9]*).*/PUTVAL ${COLLECTD_HOSTNAME}\/agent-\4\/derive-\1 N:\5/" \
     -e "s/(successful|failed)_requests_count/request_count/" \
     -e "s/(ingested|dropped)_entries_count/log_entry_count/" \
     -e "s/retried_entries_count/log_entry_retry_count/"
