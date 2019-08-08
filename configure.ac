@@ -6861,8 +6861,8 @@ AC_CONFIG_FILES([src/libcollectdclient/collectd/lcc_features.h])
 AM_CFLAGS="-Wall"
 AM_CXXFLAGS="-Wall"
 if test "x$enable_werror" != "xno"; then
-  AM_CFLAGS="$AM_CFLAGS -Werror"
-  AM_CXXFLAGS="$AM_CXXFLAGS -Werror"
+  AM_CFLAGS="$AM_CFLAGS -Werror -Wno-format-truncation -Wno-stringop-truncation -Wno-stringop-overflow"
+  AM_CXXFLAGS="$AM_CXXFLAGS -Werror -Wno-format-truncation -Wno-stringop-truncation -Wno-stringop-overflow"
 fi
 
 AC_SUBST([AM_CFLAGS])
