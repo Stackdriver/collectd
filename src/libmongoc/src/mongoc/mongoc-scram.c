@@ -40,6 +40,29 @@
 #define MONGOC_SCRAM_B64_HASH_SIZE \
    MONGOC_SCRAM_B64_ENCODED_SIZE (MONGOC_SCRAM_HASH_SIZE)
 
+//==============================================================================
+// OpenSSL1.0 Compatibility Layer
+//==============================================================================
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#include <openssl/engine.h>
+
+static void *OPENSSL_zalloc(size_t num) {
+  void *ret = OPENSSL_malloc(num);
+
+  if (ret != NULL)
+    memset(ret, 0, num);
+  return ret;
+}
+
+EVP_MD_CTX *EVP_MD_CTX_new(void) {
+  return OPENSSL_zalloc(sizeof(EVP_MD_CTX));
+}
+
+void EVP_MD_CTX_free(EVP_MD_CTX *ctx) {
+  EVP_MD_CTX_cleanup(ctx);
+  OPENSSL_free(ctx);
+}
+#endif
 
 void
 _mongoc_scram_startup()
@@ -310,23 +333,23 @@ _mongoc_scram_sha1 (const unsigned char *input,
                     const size_t         input_len,
                     unsigned char       *output)
 {
-   EVP_MD_CTX digest_ctx;
+   EVP_MD_CTX *digest_ctx;
    bool rval = false;
 
-   EVP_MD_CTX_init (&digest_ctx);
+   digest_ctx = EVP_MD_CTX_new();
 
-   if (1 != EVP_DigestInit_ex (&digest_ctx, EVP_sha1 (), NULL)) {
+   if (1 != EVP_DigestInit_ex (digest_ctx, EVP_sha1 (), NULL)) {
       goto cleanup;
    }
 
-   if (1 != EVP_DigestUpdate (&digest_ctx, input, input_len)) {
+   if (1 != EVP_DigestUpdate (digest_ctx, input, input_len)) {
       goto cleanup;
    }
 
-   rval = (1 == EVP_DigestFinal_ex (&digest_ctx, output, NULL));
+   rval = (1 == EVP_DigestFinal_ex (digest_ctx, output, NULL));
 
 cleanup:
-   EVP_MD_CTX_cleanup (&digest_ctx);
+   EVP_MD_CTX_free (digest_ctx);
 
    return rval;
 }
