@@ -173,8 +173,8 @@ static int agg_instance_create_name(agg_instance_t *inst, /* {{{ */
     sstrncpy(inst->ident.plugin_instance, agg->set_plugin_instance,
              sizeof(inst->ident.plugin_instance));
   else {
-    char tmp_plugin[DATA_MAX_NAME_LEN];
-    char tmp_plugin_instance[DATA_MAX_NAME_LEN] = "";
+    char tmp_plugin[DATA_MAX_NAME_LEN - 15];
+    char tmp_plugin_instance[DATA_MAX_NAME_LEN - 15] = "";
 
     if ((agg->regex_fields & LU_GROUP_BY_PLUGIN) &&
         (agg->group_by & LU_GROUP_BY_PLUGIN))

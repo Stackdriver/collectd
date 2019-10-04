@@ -244,7 +244,7 @@ static int udb_result_submit(udb_result_t *r, /* {{{ */
         return status;
       }
     } else {
-      char tmp[DATA_MAX_NAME_LEN];
+      char tmp[DATA_MAX_NAME_LEN - 10];
 
       int status = strjoin(tmp, sizeof(tmp), r_area->instances_buffer,
                            r->instances_num, "-");

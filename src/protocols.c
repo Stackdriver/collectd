@@ -74,7 +74,7 @@ static void submit(const char *protocol_name, const char *str_key,
 
 static int read_file(const char *path) {
   FILE *fh;
-  char key_buffer[4096];
+  char key_buffer[2 * DATA_MAX_NAME_LEN - 1];
   char value_buffer[4096];
   char *key_ptr;
   char *value_ptr;
