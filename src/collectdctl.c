@@ -150,7 +150,7 @@ static int parse_identifier (lcc_connection_t *c,
     const char *value, lcc_identifier_t *ident)
 {
   char hostname[1024];
-  char ident_str[1024] = "";
+  char ident_str[1028] = "";
   int  n_slashes;
 
   int status;
