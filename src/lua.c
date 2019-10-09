@@ -44,11 +44,6 @@
 
 #include <pthread.h>
 
-#if COLLECT_DEBUG && __GNUC__
-#undef sprintf
-#pragma GCC poison sprintf
-#endif
-
 typedef struct lua_script_s {
   char *script_path;
   lua_State *lua_state;
