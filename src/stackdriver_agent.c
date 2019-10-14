@@ -124,10 +124,9 @@ static int sagt_read(user_data_t *user_data)
   // uptime
   {
     meta_data_t *md = meta_data_create();
-    if (meta_data_add_string(md, "stackdriver_metric_type",
-                             AGENT_PREFIX "/uptime") == 0 &&
-        meta_data_add_string(md, "label:version", COLLECTD_USERAGENT) == 0)
-    {
+    if (meta_data_add_string(
+            md, "stackdriver_metric_type", AGENT_PREFIX "/uptime") == 0 &&
+        meta_data_add_string(md, "label:version", COLLECTD_USERAGENT) == 0) {
       derive_t uptime = CDTIME_T_TO_TIME_T(now - ctx->start_time);
       sagt_submit_derive("", NULL, now, interval, uptime, md);
     }
@@ -137,15 +136,13 @@ static int sagt_read(user_data_t *user_data)
   // memory used
   {
     FILE *f = fopen("/proc/self/statm", "r");
-    if (f)
-    {
+    if (f) {
       size_t vm = 0;
-      if (fscanf(f, "%zu", &vm))
-      {
+      if (fscanf(f, "%zu", &vm)) {
         meta_data_t *md = meta_data_create();
-        if (meta_data_add_string(md, "stackdriver_metric_type",
-                                 AGENT_PREFIX "/memory_usage") == 0)
-        {
+        if (meta_data_add_string(
+                md, "stackdriver_metric_type",
+                AGENT_PREFIX "/memory_usage") == 0) {
           long page_size = sysconf(_SC_PAGESIZE);
           size_t mused = vm * page_size;
           sagt_submit_gauge("", NULL, now, interval, mused, md);
@@ -160,24 +157,24 @@ static int sagt_read(user_data_t *user_data)
   // write_gcm.c.
   {
     meta_data_t *md = meta_data_create();
-    if (meta_data_add_string(md, "stackdriver_metric_type",
-                             AGENT_PREFIX "/api_request_count") == 0)
-    {
+    if (meta_data_add_string(
+            md, "stackdriver_metric_type",
+            AGENT_PREFIX "/api_request_count") == 0) {
       uint64_t value;
-      if (uc_meta_data_get_unsigned_int(&vl, SAGT_API_REQUESTS_SUCCESS, &value) == 0 &&
-          meta_data_add_string(md, "label:state", "success") == 0)
-      {
+      if (uc_meta_data_get_unsigned_int(
+              &vl, SAGT_API_REQUESTS_SUCCESS, &value) == 0 &&
+          meta_data_add_string(md, "label:state", "success") == 0) {
         sagt_submit_derive("", NULL, now, interval, value, md);
       }
       if (uc_meta_data_get_unsigned_int(
               &vl, SAGT_API_REQUESTS_CONNECTIVITY_FAILURES, &value) == 0 &&
-          meta_data_add_string(md, "label:state", "connectivity_failures") == 0)
-      {
+          meta_data_add_string(
+              md, "label:state", "connectivity_failures") == 0) {
         sagt_submit_derive("", NULL, now, interval, value, md);
       }
-      if (uc_meta_data_get_unsigned_int(&vl, SAGT_API_REQUESTS_ERRORS, &value) == 0 &&
-          meta_data_add_string(md, "label:state", "errors") == 0)
-      {
+      if (uc_meta_data_get_unsigned_int(
+              &vl, SAGT_API_REQUESTS_ERRORS, &value) == 0 &&
+          meta_data_add_string(md, "label:state", "errors") == 0) {
         sagt_submit_derive("", NULL, now, interval, value, md);
       }
     }
@@ -190,16 +187,18 @@ static int sagt_read(user_data_t *user_data)
     meta_data_t *md = meta_data_create();
     uint64_t streamspace_size;
     _Bool throttling;
-    if (meta_data_add_string(md, "stackdriver_metric_type",
-                             AGENT_PREFIX "/streamspace_size") == 0 &&
-        uc_meta_data_get_unsigned_int(&vl, SAGT_STREAMSPACE_SIZE, &streamspace_size) == 0)
-    {
+    if (meta_data_add_string(
+            md, "stackdriver_metric_type",
+            AGENT_PREFIX "/streamspace_size") == 0 &&
+        uc_meta_data_get_unsigned_int(
+            &vl, SAGT_STREAMSPACE_SIZE, &streamspace_size) == 0) {
       sagt_submit_gauge("", NULL, now, interval, streamspace_size, md);
     }
-    if (meta_data_add_string(md, "stackdriver_metric_type",
-                             AGENT_PREFIX "/streamspace_size_throttling") == 0 &&
-        uc_meta_data_get_boolean(&vl, SAGT_STREAMSPACE_SIZE_THROTTLING, &throttling) == 0)
-    {
+    if (meta_data_add_string(
+            md, "stackdriver_metric_type",
+            AGENT_PREFIX "/streamspace_size_throttling") == 0 &&
+        uc_meta_data_get_boolean(
+            &vl, SAGT_STREAMSPACE_SIZE_THROTTLING, &throttling) == 0) {
       sagt_submit_gauge("", NULL, now, interval, throttling, md);
     }
     meta_data_destroy(md);
