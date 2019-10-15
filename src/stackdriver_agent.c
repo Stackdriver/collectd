@@ -28,6 +28,8 @@
 #include "liboconfig/oconfig.h"
 #include "stackdriver-agent-keys.h"
 
+#define AGENT_PREFIX "agent.googleapis.com/agent"
+
 static const char this_plugin_name[] = "stackdriver_agent";
 
 static const char *hostname = NULL;
@@ -119,10 +121,17 @@ static int sagt_read(user_data_t *user_data)
   value_list_t vl = {};  // zero-init
   sstrncpy(vl.plugin, this_plugin_name, sizeof(vl.plugin));
 
+  // This function passes metric information using two mechanisms. The standard
+  // collectd type and type_instance are useful for most plugins and expected by
+  // some of the caching inside collectd, and the Stackdriver metadata is needed
+  // to write these with the CreateTimeSeries call in the write_gcm plug-in.
+
   // uptime
   {
     meta_data_t *md = meta_data_create();
-    if (meta_data_add_string(md, "version", COLLECTD_USERAGENT) == 0) {
+    if (meta_data_add_string(
+            md, "stackdriver_metric_type", AGENT_PREFIX "/uptime") == 0 &&
+        meta_data_add_string(md, "label:version", COLLECTD_USERAGENT) == 0) {
       derive_t uptime = CDTIME_T_TO_TIME_T(now - ctx->start_time);
       sagt_submit_derive("uptime", NULL, now, interval, uptime, md);
     }
@@ -135,9 +144,15 @@ static int sagt_read(user_data_t *user_data)
     if (f) {
       size_t vm = 0;
       if (fscanf(f, "%zu", &vm)) {
+        meta_data_t *md = meta_data_create();
         long page_size = sysconf(_SC_PAGESIZE);
         size_t mused = vm * page_size;
-        sagt_submit_gauge("memory_usage", NULL, now, interval, mused, NULL);
+        if (meta_data_add_string(
+                md, "stackdriver_metric_type",
+                AGENT_PREFIX "/memory_usage") == 0) {
+          sagt_submit_gauge("memory_usage", NULL, now, interval, mused, md);
+        }
+        meta_data_destroy(md);
       }
       fclose(f);
     }
@@ -146,39 +161,58 @@ static int sagt_read(user_data_t *user_data)
   // Stats for API requests. The corresponding uc_meta_data_set calls are in
   // write_gcm.c.
   {
-    uint64_t value;
-    if (uc_meta_data_get_unsigned_int(
-            &vl, SAGT_API_REQUESTS_SUCCESS, &value) == 0) {
-      sagt_submit_derive("api_request_count", "success",
-                         now, interval, value, NULL);
+    meta_data_t *md = meta_data_create();
+    if (meta_data_add_string(
+            md, "stackdriver_metric_type",
+            AGENT_PREFIX "/api_request_count") == 0) {
+      uint64_t value;
+      if (uc_meta_data_get_unsigned_int(
+              &vl, SAGT_API_REQUESTS_SUCCESS, &value) == 0 &&
+          meta_data_add_string(md, "label:state", "success") == 0) {
+        sagt_submit_derive(
+            "api_request_count", "success", now, interval, value, md);
+      }
+      if (uc_meta_data_get_unsigned_int(
+              &vl, SAGT_API_REQUESTS_CONNECTIVITY_FAILURES, &value) == 0 &&
+          meta_data_add_string(
+              md, "label:state", "connectivity_failures") == 0) {
+        sagt_submit_derive(
+            "api_request_count", "connectivity_failures", now, interval, value,
+            md);
+      }
+      if (uc_meta_data_get_unsigned_int(
+              &vl, SAGT_API_REQUESTS_ERRORS, &value) == 0 &&
+          meta_data_add_string(md, "label:state", "errors") == 0) {
+        sagt_submit_derive(
+            "api_request_count", "errors", now, interval, value, md);
+      }
     }
-    if (uc_meta_data_get_unsigned_int(
-            &vl, SAGT_API_REQUESTS_CONNECTIVITY_FAILURES, &value) == 0) {
-      sagt_submit_derive("api_request_count", "connectivity_failures",
-                         now, interval, value, NULL);
-    }
-    if (uc_meta_data_get_unsigned_int(
-            &vl, SAGT_API_REQUESTS_ERRORS, &value) == 0) {
-      sagt_submit_derive("api_request_count", "errors",
-                         now, interval, value, NULL);
-    }
+    meta_data_destroy(md);
   }
 
   // Cloud Monarch-related stats. The corresponding uc_meta_data_set calls are in
   // match_throttle_metadata_keys.c.
   {
+    meta_data_t *md = meta_data_create();
     uint64_t streamspace_size;
     _Bool throttling;
-    if (uc_meta_data_get_unsigned_int(
+    if (meta_data_add_string(
+            md, "stackdriver_metric_type",
+            AGENT_PREFIX "/streamspace_size") == 0 &&
+        uc_meta_data_get_unsigned_int(
             &vl, SAGT_STREAMSPACE_SIZE, &streamspace_size) == 0) {
-      sagt_submit_gauge("streamspace_size", NULL,
-                        now, interval, streamspace_size, NULL);
+      sagt_submit_gauge(
+          "streamspace_size", NULL, now, interval, streamspace_size, md);
     }
-    if (uc_meta_data_get_boolean(
+    if (meta_data_add_string(
+            md, "stackdriver_metric_type",
+            AGENT_PREFIX "/streamspace_size_throttling") == 0 &&
+        uc_meta_data_get_boolean(
             &vl, SAGT_STREAMSPACE_SIZE_THROTTLING, &throttling) == 0) {
-      sagt_submit_gauge("streamspace_size_throttling", NULL,
-                        now, interval, throttling, NULL);
+      sagt_submit_gauge(
+          "streamspace_size_throttling", NULL, now, interval, throttling, md);
     }
+    meta_data_destroy(md);
   }
 
   return 0;
