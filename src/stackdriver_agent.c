@@ -121,6 +121,11 @@ static int sagt_read(user_data_t *user_data)
   value_list_t vl = {};  // zero-init
   sstrncpy(vl.plugin, this_plugin_name, sizeof(vl.plugin));
 
+  // This functions passes metric information using two mechanisms. The standard
+  // collectd type and type_instance are useful for most plugins and expected by
+  // some of the caching inside collectd, and the Stackdriver metadata is needed
+  // to write these with the CreateTimeSeries call in the write_gcm plug-in.
+
   // uptime
   {
     meta_data_t *md = meta_data_create();
@@ -128,7 +133,7 @@ static int sagt_read(user_data_t *user_data)
             md, "stackdriver_metric_type", AGENT_PREFIX "/uptime") == 0 &&
         meta_data_add_string(md, "label:version", COLLECTD_USERAGENT) == 0) {
       derive_t uptime = CDTIME_T_TO_TIME_T(now - ctx->start_time);
-      sagt_submit_derive("", NULL, now, interval, uptime, md);
+      sagt_submit_derive("uptime", NULL, now, interval, uptime, md);
     }
     meta_data_destroy(md);
   }
@@ -140,12 +145,12 @@ static int sagt_read(user_data_t *user_data)
       size_t vm = 0;
       if (fscanf(f, "%zu", &vm)) {
         meta_data_t *md = meta_data_create();
+        long page_size = sysconf(_SC_PAGESIZE);
+        size_t mused = vm * page_size;
         if (meta_data_add_string(
                 md, "stackdriver_metric_type",
                 AGENT_PREFIX "/memory_usage") == 0) {
-          long page_size = sysconf(_SC_PAGESIZE);
-          size_t mused = vm * page_size;
-          sagt_submit_gauge("", NULL, now, interval, mused, md);
+          sagt_submit_gauge("memory_usage", NULL, now, interval, mused, md);
         }
         meta_data_destroy(md);
       }
@@ -164,18 +169,22 @@ static int sagt_read(user_data_t *user_data)
       if (uc_meta_data_get_unsigned_int(
               &vl, SAGT_API_REQUESTS_SUCCESS, &value) == 0 &&
           meta_data_add_string(md, "label:state", "success") == 0) {
-        sagt_submit_derive("", NULL, now, interval, value, md);
+        sagt_submit_derive(
+            "api_request_count", "success", now, interval, value, md);
       }
       if (uc_meta_data_get_unsigned_int(
               &vl, SAGT_API_REQUESTS_CONNECTIVITY_FAILURES, &value) == 0 &&
           meta_data_add_string(
               md, "label:state", "connectivity_failures") == 0) {
-        sagt_submit_derive("", NULL, now, interval, value, md);
+        sagt_submit_derive(
+            "api_request_count", "connectivity_failures", now, interval, value,
+            md);
       }
       if (uc_meta_data_get_unsigned_int(
               &vl, SAGT_API_REQUESTS_ERRORS, &value) == 0 &&
           meta_data_add_string(md, "label:state", "errors") == 0) {
-        sagt_submit_derive("", NULL, now, interval, value, md);
+        sagt_submit_derive(
+            "api_request_count", "errors", now, interval, value, md);
       }
     }
     meta_data_destroy(md);
@@ -192,14 +201,16 @@ static int sagt_read(user_data_t *user_data)
             AGENT_PREFIX "/streamspace_size") == 0 &&
         uc_meta_data_get_unsigned_int(
             &vl, SAGT_STREAMSPACE_SIZE, &streamspace_size) == 0) {
-      sagt_submit_gauge("", NULL, now, interval, streamspace_size, md);
+      sagt_submit_gauge(
+          "streamspace_size", NULL, now, interval, streamspace_size, md);
     }
     if (meta_data_add_string(
             md, "stackdriver_metric_type",
             AGENT_PREFIX "/streamspace_size_throttling") == 0 &&
         uc_meta_data_get_boolean(
             &vl, SAGT_STREAMSPACE_SIZE_THROTTLING, &throttling) == 0) {
-      sagt_submit_gauge("", NULL, now, interval, throttling, md);
+      sagt_submit_gauge(
+          "streamspace_size_throttling", NULL, now, interval, throttling, md);
     }
     meta_data_destroy(md);
   }
