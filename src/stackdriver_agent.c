@@ -121,7 +121,7 @@ static int sagt_read(user_data_t *user_data)
   value_list_t vl = {};  // zero-init
   sstrncpy(vl.plugin, this_plugin_name, sizeof(vl.plugin));
 
-  // This functions passes metric information using two mechanisms. The standard
+  // This function passes metric information using two mechanisms. The standard
   // collectd type and type_instance are useful for most plugins and expected by
   // some of the caching inside collectd, and the Stackdriver metadata is needed
   // to write these with the CreateTimeSeries call in the write_gcm plug-in.
