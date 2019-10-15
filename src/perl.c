@@ -32,7 +32,9 @@
 /* do not automatically get the thread specific Perl interpreter */
 #define PERL_NO_GET_CONTEXT
 
+#if HAVE_STDBOOL_H
 #include <stdbool.h>
+#endif
 
 #include <EXTERN.h>
 #include <perl.h>
