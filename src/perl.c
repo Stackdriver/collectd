@@ -33,7 +33,7 @@
 #define PERL_NO_GET_CONTEXT
 
 #if HAVE_STDBOOL_H
-#include <stdbool.h>
+# include <stdbool.h>
 #endif
 
 #include <EXTERN.h>
