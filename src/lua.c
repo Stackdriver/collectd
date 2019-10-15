@@ -28,10 +28,6 @@
  *   Ruben Kerkhof <ruben at rubenkerkhof.com>
  **/
 
-/* <lua5.1/luaconf.h> defines a macro using "sprintf". Although not used here,
- * GCC will complain about the macro definition. */
-#define DONT_POISON_SPRINTF_YET
-
 #include "collectd.h"
 #include "common.h"
 #include "plugin.h"
@@ -43,11 +39,6 @@
 #include <lualib.h>
 
 #include <pthread.h>
-
-#if COLLECT_DEBUG && __GNUC__
-#undef sprintf
-#pragma GCC poison sprintf
-#endif
 
 typedef struct lua_script_s {
   char *script_path;

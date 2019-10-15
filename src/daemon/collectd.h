@@ -281,26 +281,6 @@ typedef int _Bool;
 # endif
 #endif
 
-#if defined(COLLECT_DEBUG) && COLLECT_DEBUG && defined(__GNUC__) && __GNUC__
-# undef strcpy
-# undef strcat
-# undef strtok
-# pragma GCC poison strcpy strcat strtok
-#endif
-
-/*
- * Special hack for the perl plugin: Because the later included perl.h defines
- * a macro which is never used, but contains `sprintf', we cannot poison that
- * identifies just yet. The parl plugin will do that itself once perl.h is
- * included.
- */
-#ifndef DONT_POISON_SPRINTF_YET
-# if defined(COLLECT_DEBUG) && COLLECT_DEBUG && defined(__GNUC__) && __GNUC__
-#  undef sprintf
-#  pragma GCC poison sprintf
-# endif
-#endif
-
 #ifndef GAUGE_FORMAT
 # define GAUGE_FORMAT "%.15g"
 #endif

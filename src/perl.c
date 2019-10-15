@@ -32,22 +32,12 @@
 /* do not automatically get the thread specific Perl interpreter */
 #define PERL_NO_GET_CONTEXT
 
-#define DONT_POISON_SPRINTF_YET 1
-#include "collectd.h"
-
-#undef DONT_POISON_SPRINTF_YET
-
 #if HAVE_STDBOOL_H
 # include <stdbool.h>
 #endif
 
 #include <EXTERN.h>
 #include <perl.h>
-
-#if defined(COLLECT_DEBUG) && COLLECT_DEBUG && defined(__GNUC__) && __GNUC__
-# undef sprintf
-# pragma GCC poison sprintf
-#endif
 
 #include <XSUB.h>
 
