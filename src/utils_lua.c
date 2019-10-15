@@ -24,7 +24,6 @@
  *   Florian Forster <octo at collectd.org>
  **/
 
-#include "common.h"
 #include "utils_lua.h"
 #include "common.h"
 
