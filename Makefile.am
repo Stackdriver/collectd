@@ -1843,7 +1843,7 @@ libstackdriver_json_la_SOURCES = \
 	src/utils_stackdriver_json.h
 libstackdriver_json_la_CPPFLAGS  = $(AM_CPPFLAGS) $(BUILD_WITH_LIBYAJL_CPPFLAGS)
 libstackdriver_json_la_LDFLAGS   = $(AM_LDFLAGS) $(BUILD_WITH_LIBYAJL_LDFLAGS)
-libstackdriver_json_la_LIBADD    = $(BUILD_WITH_LIBYAJL_LIBS)
+libstackdriver_json_la_LIBADD    = $(BUILD_WITH_LIBYAJL_LIBS) libcommon.la
 
 noinst_LTLIBRARIES += libstackdriver_json.la
 check_PROGRAMS += test_stackdriver_json
@@ -1853,7 +1853,8 @@ test_stackdriver_json_SOURCES = \
 	src/testing.h
 test_stackdriver_json_LDADD = \
 	libstackdriver_json.la \
-	libmetadata.la
+	libmetadata.la \
+	libplugin_mock.la
 
 pkglib_LTLIBRARIES += write_gcm.la
 write_gcm_la_SOURCES = src/write_gcm.c

@@ -36,64 +36,14 @@ typedef struct {
 } collectd_time_series_response_t;
 
 /*
-Expected input:
-{
-  "error": {
-    "code": 429,
-    "status", "RESOURCE_EXHAUSTED",
-    "message": "Retry in 300 milliseconds.",
-    "details": [
-      {
-        "@type":"type.googleapis.com/google.monitoring.v3.CreateTimeSeriesSummary",
-        "total_point_count": 3,
-        "success_point_count": 1,
-      },
-      // Other detail messages, such as CreateTimeSeriesError.
-    ],
-  }
-}
-
-The expected `response` for the input above is:
-{
-  total_point_count = 3
-  success_point_count = 1
-}
+Extract statistics from the backend API response. For sample input see
+time_series_summary_test.json.
 */
 int parse_time_series_summary(char *buffer, time_series_summary_t *response);
 
 /*
-Expected input:
-{
-  "payload_errors": [
-    {
-      "index": 0,
-      "error": {
-        "code": 429,
-        "status", "RESOURCE_EXHAUSTED",
-        "message": "Retry in 300 milliseconds.",
-      }
-    }, {
-      "index": 1,
-      "value_errors": [
-      {
-        "index": 0,
-        "error": {
-          // Similar to field "error" above.
-        }
-      }, {
-        "index": 1,
-        "error": {
-          // Similar to field "error" above.
-        }
-      }
-    ],
-  }
-}
-
-The expected `response` for the input above is:
-{
-  error_point_count = 3
-}
+Extract statistics from the backend API response. For sample input see
+collectd_time_series_response_test.json.
 */
 int parse_collectd_time_series_response(char *buffer, collectd_time_series_response_t *response);
 

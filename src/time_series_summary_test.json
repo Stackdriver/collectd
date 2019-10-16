@@ -1,0 +1,23 @@
+{
+  "error": {
+    "code": 429,
+    "status", "RESOURCE_EXHAUSTED",
+    "message": "Retry in 300 milliseconds.",
+    "details": [
+      {
+        "@type":"type.googleapis.com/google.monitoring.v3.CreateTimeSeriesSummary",
+        "total_point_count": 3,
+        "success_point_count": 1,
+      },
+      {
+        "@type":"type.googleapis.com/google.monitoring.v3.CreateTimeSeriesError",
+	"time_series": {},
+        "status": {
+          "code": 429,
+          "status", "RESOURCE_EXHAUSTED",
+          "message": "Retry in 300 milliseconds.",
+	},
+      },
+    ],
+  }
+}

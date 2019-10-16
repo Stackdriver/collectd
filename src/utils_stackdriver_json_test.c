@@ -1,5 +1,5 @@
 /**
- * collectd - src/utils_format_json.h
+ * collectd - src/utils_format_json_test.c
  * Copyright (C) 2019  Google Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
@@ -23,18 +23,26 @@
 
 #include "collectd.h"
 
+#include "daemon/common.h"
 #include "testing.h"
 #include "utils_stackdriver_json.h"
 
 DEF_TEST(time_series_summary) {
-  time_series_summary_t summary;
-  CHECK_ZERO(parse_time_series_summary("", &summary));
+  char buf[10000];
+  OK(read_file_contents("src/time_series_summary_test.json", buf, sizeof(buf)) >= 0);
+  time_series_summary_t summary = {0};
+  CHECK_ZERO(parse_time_series_summary(buf, &summary));
+  EXPECT_EQ_INT(summary.total_point_count, 3);
+  EXPECT_EQ_INT(summary.success_point_count, 1);
   return 0;
 }
 
 DEF_TEST(collectd_time_series_response) {
-  collectd_time_series_response_t response;
-  CHECK_ZERO(parse_collectd_time_series_response("", &response));
+  char buf[10000];
+  OK(read_file_contents("src/collectd_time_series_response_test.json", buf, sizeof(buf)) >= 0);
+  collectd_time_series_response_t response = {0};
+  CHECK_ZERO(parse_collectd_time_series_response(buf, &response));
+  EXPECT_EQ_INT(response.error_point_count, 3);
   return 0;
 }
 

@@ -1,5 +1,5 @@
 /**
- * collectd - src/utils_format_json.h
+ * collectd - src/utils_format_json.c
  * Copyright (C) 2019  Google Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
