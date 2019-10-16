@@ -6,27 +6,33 @@
         "code": 429,
         "status": "RESOURCE_EXHAUSTED",
         "message": "Retry in 300 milliseconds."
-      }
+      },
+      "value_errors": [
+        {
+        "index": 0
+	}
+      ]
     },
     {
       "index": 1,
       "value_errors": [
-      {
-        "index": 0,
-        "error": {
-          "code": 429,
-          "status": "RESOURCE_EXHAUSTED",
-          "message": "Retry in 300 milliseconds."
-        }
-      },
-      {
-        "index": 1,
-        "error": {
-          "code": 429,
-          "status": "RESOURCE_EXHAUSTED",
-          "message": "Retry in 300 milliseconds."
-        }
-      }
-    ]
-  }
+	{
+          "index": 0,
+          "error": {
+            "code": 429,
+            "status": "RESOURCE_EXHAUSTED",
+            "message": "Retry in 300 milliseconds."
+          }
+	},
+	{
+          "index": 1,
+          "error": {
+            "code": 429,
+            "status": "RESOURCE_EXHAUSTED",
+            "message": "Retry in 300 milliseconds."
+          }
+	}
+      ]
+    }
+  ]
 }
