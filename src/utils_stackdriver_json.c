@@ -54,6 +54,33 @@ static void handle_yajl_status(yajl_status status, yajl_handle handle,
   yajl_free_error(handle, message);
 }
 
+static int parse_json(yajl_callbacks *funcs, char *buffer, void *ctx) {
+  yajl_handle handle;
+  yajl_status result;
+  size_t buffer_length;
+
+#if HAVE_YAJL_V2
+  handle = yajl_alloc(funcs, /* alloc = */ NULL, ctx);
+#else
+  handle = yajl_alloc(funcs, /* config = */ NULL, /* alloc = */ NULL, ctx);
+#endif
+  if (handle == NULL) return -1;
+
+  buffer_length = strlen(buffer);
+  result = yajl_parse(handle, (unsigned char *)buffer, buffer_length);
+  handle_yajl_status(result, handle, buffer, buffer_length);
+
+#if HAVE_YAJL_V2
+  result = yajl_complete_parse(handle);
+#else
+  result = yajl_parse_complete(handle);
+#endif
+  handle_yajl_status(result, handle, NULL, 0);
+
+  yajl_free(handle);
+  return result == yajl_status_ok ? 0 : -1;
+}
+
 typedef struct {
   struct {
     // Whether the parser is inside the Summary.total_point_count field.
@@ -101,34 +128,10 @@ int parse_time_series_summary(char *buffer, time_series_summary_t *response) {
       .yajl_integer = summary_parse_integer,
       .yajl_map_key = summary_parse_map_key,
   };
-  yajl_handle handle;
-  yajl_status result;
-  size_t buffer_length;
   parse_summary_t ctx = {0};
-
   if (response == NULL) return -1;
-
   ctx.response = response;
-#if HAVE_YAJL_V2
-  handle = yajl_alloc(&funcs, /* alloc = */ NULL, &ctx);
-#else
-  handle = yajl_alloc(&funcs, /* config = */ NULL, /* alloc = */ NULL, &ctx);
-#endif
-  if (handle == NULL) return -1;
-
-  buffer_length = strlen(buffer);
-  result = yajl_parse(handle, (unsigned char *)buffer, buffer_length);
-  handle_yajl_status(result, handle, buffer, buffer_length);
-
-#if HAVE_YAJL_V2
-  result = yajl_complete_parse(handle);
-#else
-  result = yajl_parse_complete(handle);
-#endif
-  handle_yajl_status(result, handle, NULL, 0);
-
-  yajl_free(handle);
-  return result == yajl_status_ok ? 0 : -1;
+  return parse_json(&funcs, buffer, &ctx);
 }
 
 typedef struct {
@@ -179,32 +182,8 @@ int parse_collectd_time_series_response(char *buffer, collectd_time_series_respo
       .yajl_start_map = collectd_start_map,
       .yajl_end_map = collectd_end_map,
   };
-  yajl_handle handle;
-  yajl_status result;
-  size_t buffer_length;
   parse_collectd_t ctx = {0};
-
   if (response == NULL) return -1;
-
   ctx.response = response;
-#if HAVE_YAJL_V2
-  handle = yajl_alloc(&funcs, /* alloc = */ NULL, &ctx);
-#else
-  handle = yajl_alloc(&funcs, /* config = */ NULL, /* alloc = */ NULL, &ctx);
-#endif
-  if (handle == NULL) return -1;
-
-  buffer_length = strlen(buffer);
-  result = yajl_parse(handle, (unsigned char *)buffer, buffer_length);
-  handle_yajl_status(result, handle, buffer, buffer_length);
-
-#if HAVE_YAJL_V2
-  result = yajl_complete_parse(handle);
-#else
-  result = yajl_parse_complete(handle);
-#endif
-  handle_yajl_status(result, handle, NULL, 0);
-
-  yajl_free(handle);
-  return result == yajl_status_ok ? 0 : -1;
+  return parse_json(&funcs, buffer, &ctx);
 }
