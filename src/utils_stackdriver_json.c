@@ -121,15 +121,18 @@ static int summary_parse_integer(void *c, wg_yajl_integer_t val) {
   return 1;
 }
 
-// This implementation assumes that the fields it's looking for are unique in
-// the input.
+// This implementation looks for the CreateTimeSeriesSummary fields and assumes
+// that they are unique in the input. It's theoretically possible that there
+// could be a conflict, but unlikely given their names and that this is always a
+// response from CreateTimeSeries.
 int parse_time_series_summary(char *buffer, time_series_summary_t *response) {
   yajl_callbacks funcs = {
       .yajl_integer = summary_parse_integer,
       .yajl_map_key = summary_parse_map_key,
   };
-  parse_summary_t ctx = {0};
+  parse_summary_t ctx;
   if (response == NULL) return -1;
+  memset(&ctx, 0, sizeof(ctx));
   ctx.response = response;
   return parse_json(&funcs, buffer, &ctx);
 }
@@ -176,14 +179,17 @@ static int collectd_end_map(void *c) {
   return 1;
 }
 
+// This implementation counts the 'index' fields in the input that are inside a
+// value_errors map, as they represent individual points.
 int parse_collectd_time_series_response(char *buffer, collectd_time_series_response_t *response) {
   yajl_callbacks funcs = {
       .yajl_map_key = collectd_parse_map_key,
       .yajl_start_map = collectd_start_map,
       .yajl_end_map = collectd_end_map,
   };
-  parse_collectd_t ctx = {0};
+  parse_collectd_t ctx;
   if (response == NULL) return -1;
+  memset(&ctx, 0, sizeof(ctx));
   ctx.response = response;
   return parse_json(&funcs, buffer, &ctx);
 }
