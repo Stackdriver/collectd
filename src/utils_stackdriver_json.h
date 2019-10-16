@@ -45,6 +45,7 @@ int parse_time_series_summary(char *buffer, time_series_summary_t *response);
 Extract statistics from the backend API response. For sample input see
 collectd_time_series_response_test.json.
 */
-int parse_collectd_time_series_response(char *buffer, collectd_time_series_response_t *response);
+int parse_collectd_time_series_response(
+    char *buffer, collectd_time_series_response_t *response);
 
 #endif /* UTILS_STACKDRIVER_JSON_H */
