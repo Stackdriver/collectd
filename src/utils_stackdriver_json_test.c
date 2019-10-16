@@ -21,6 +21,8 @@
  * DEALINGS IN THE SOFTWARE.
  **/
 
+#include "config.h"
+
 #include "collectd.h"
 
 #include "daemon/common.h"
@@ -29,7 +31,8 @@
 
 DEF_TEST(time_series_summary) {
   char buf[10000];
-  OK(read_file_contents("src/time_series_summary_test.json", buf, sizeof(buf)) >= 0);
+  OK(read_file_contents(SRCDIR "/src/time_series_summary_test.json", buf,
+                        sizeof(buf)) >= 0);
   time_series_summary_t summary = {0};
   CHECK_ZERO(parse_time_series_summary(buf, &summary));
   EXPECT_EQ_INT(summary.total_point_count, 3);
@@ -39,7 +42,8 @@ DEF_TEST(time_series_summary) {
 
 DEF_TEST(collectd_time_series_response) {
   char buf[10000];
-  OK(read_file_contents("src/collectd_time_series_response_test.json", buf, sizeof(buf)) >= 0);
+  OK(read_file_contents(SRCDIR "/src/collectd_time_series_response_test.json", buf,
+                        sizeof(buf)) >= 0);
   collectd_time_series_response_t response = {0};
   CHECK_ZERO(parse_collectd_time_series_response(buf, &response));
   EXPECT_EQ_INT(response.error_point_count, 3);

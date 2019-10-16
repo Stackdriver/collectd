@@ -1848,6 +1848,13 @@ libstackdriver_json_la_LIBADD    = $(BUILD_WITH_LIBYAJL_LIBS) libcommon.la
 noinst_LTLIBRARIES += libstackdriver_json.la
 check_PROGRAMS += test_stackdriver_json
 
+EXTRA_DIST += \
+	src/collectd_time_series_response_test.json \
+	src/time_series_summary_test.json
+
+AM_CPPFLAGS += \
+	-DSRCDIR='"${srcdir}"'
+
 test_stackdriver_json_SOURCES = \
 	src/utils_stackdriver_json_test.c \
 	src/testing.h
