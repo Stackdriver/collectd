@@ -243,7 +243,7 @@ DEF_TEST(escape_string)
 
 DEF_TEST(strunescape)
 {
-  char buffer[16];
+  char buffer[32];
   int status;
 
   strncpy (buffer, "foo\\tbar", sizeof (buffer));
