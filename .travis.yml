@@ -56,4 +56,5 @@ before_install:
       perl
       protobuf-c-compiler
       python-dev
-script: sh build.sh && ./configure --with-libmongoc=own && make distcheck
+# VERBOSE=1 dumps the contents of the test suites logs to standard output.
+script: sh build.sh && ./configure --with-libmongoc=own && make distcheck VERBOSE=1
