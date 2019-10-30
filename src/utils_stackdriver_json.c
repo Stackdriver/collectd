@@ -43,6 +43,8 @@ typedef long wg_yajl_integer_t;
 typedef unsigned int wg_yajl_size_t;
 #endif
 
+#define TYPE_SUMMARY "type.googleapis.com/google.monitoring.v3.CreateTimeSeriesSummary"
+
 static void handle_yajl_status(yajl_status status, yajl_handle handle,
                                char *buffer, size_t length) {
   if (status == yajl_status_ok) {
@@ -81,38 +83,104 @@ static int parse_json(yajl_callbacks *funcs, char *buffer, void *ctx) {
   return result == yajl_status_ok ? 0 : -1;
 }
 
+typedef enum {
+  FIELD_UNSET = 0,
+  FIELD_TYPE,
+  FIELD_TOTAL_POINT_COUNT,
+  FIELD_SUCCESS_POINT_COUNT,
+} field_t;
+
 typedef struct {
   struct {
-    // Whether the parser is inside the Summary.total_point_count field.
-    _Bool in_summary_total;
-    // Whether the parser is inside the Summary.success_point_count field.
-    _Bool in_summary_success;
+    // Whether the parser is inside a summary map and at what depth the map was
+    // found.
+    _Bool in_summary;
+    _Bool summary_depth;
+    // The depth of the current map element.
+    int depth;
+    // The most recent field encountered.
+    field_t current_field;
   } state;
 
   // Holds the output.
   time_series_summary_t *response;
 } parse_summary_t;
 
+static void print_context(const parse_summary_t *ctx) {
+  INFO("in_summary %d; summary_depth %d; depth %d; current_field %d",
+       ctx->state.in_summary, ctx->state.summary_depth, ctx->state.depth,
+       ctx->state.current_field);
+}
+
+static int summary_start_map(void *c) {
+  parse_summary_t *ctx = (parse_summary_t *)c;
+  ctx->state.depth++;
+  return 1;
+}
+
+static int summary_end_map(void *c) {
+  parse_summary_t *ctx = (parse_summary_t *)c;
+  ctx->state.depth--;
+  if (ctx->state.depth == ctx->state.summary_depth) {
+    ctx->state.in_summary = 0;
+  }
+  return 1;
+}
+
 static int summary_parse_map_key(void *c, const unsigned char *key,
                                  wg_yajl_size_t length) {
   parse_summary_t *ctx = (parse_summary_t *)c;
-  memset(&ctx->state, 0, sizeof(ctx->state));
+  print_context(ctx);
+  INFO("map_key: %.*s", (int) length, (const char*) key);
+  ctx->state.current_field = FIELD_UNSET;
+  // Is this a CreateTimeSeriesSummary object within a CreateCollectdTimeSeriesResponse?
+  if (strncmp((const char *)key, "summary", length) == 0) {
+    ctx->state.in_summary = 1;
+    ctx->state.summary_depth = ctx->state.depth;
+    return 1;
+  }
+  // Is this a @type annotation within a CreateTimeSeries status payload?
+  if (strncmp((const char *)key, "@type", length) == 0) {
+    ctx->state.current_field = FIELD_TYPE;
+    return 1;
+  }
+  if (!ctx->state.in_summary) {
+    return 1;
+  }
+  // We are inside a summary object. This implementation assumes that the field
+  // names used within the message are unique.
   if (strncmp((const char *)key, "total_point_count", length) == 0) {
-    ctx->state.in_summary_total = 1;
+    ctx->state.current_field = FIELD_TOTAL_POINT_COUNT;
   } else if (strncmp((const char *)key, "success_point_count", length) == 0) {
-    ctx->state.in_summary_success = 1;
+    ctx->state.current_field = FIELD_SUCCESS_POINT_COUNT;
+  }
+  return 1;
+}
+
+static int summary_parse_string(void *c, const unsigned char *val,
+                                 wg_yajl_size_t length) {
+  parse_summary_t *ctx = (parse_summary_t *)c;
+  print_context(ctx);
+  INFO("string: %.*s", (int) length, (const char*)val);
+  // Is this a CreateTimeSeries object within a CreateTimeSeries status payload?
+  if (ctx->state.current_field == FIELD_TYPE &&
+      strncmp((const char *)val, TYPE_SUMMARY, length) == 0) {
+    ctx->state.in_summary = 1;
+    ctx->state.summary_depth = ctx->state.depth;
   }
   return 1;
 }
 
 static int summary_parse_integer(void *c, wg_yajl_integer_t val) {
   parse_summary_t *ctx = (parse_summary_t *)c;
-  if (ctx->state.in_summary_total) {
+  print_context(ctx);
+  INFO("integer: %lld", val);
+  if (ctx->state.current_field == FIELD_TOTAL_POINT_COUNT) {
     if (ctx->response->total_point_count > 0) {
       DEBUG("total_point_count was already set. Bug?");
     }
     ctx->response->total_point_count += val;
-  } else if (ctx->state.in_summary_success) {
+  } else if (ctx->state.current_field == FIELD_SUCCESS_POINT_COUNT) {
     if (ctx->response->success_point_count > 0) {
       DEBUG("success_point_count was already set. Bug?");
     }
@@ -121,73 +189,15 @@ static int summary_parse_integer(void *c, wg_yajl_integer_t val) {
   return 1;
 }
 
-// This implementation looks for the CreateTimeSeriesSummary fields and assumes
-// that they are unique in the input. It's theoretically possible that there
-// could be a conflict, but unlikely given their names and that this is always a
-// response from CreateTimeSeries.
 int parse_time_series_summary(char *buffer, time_series_summary_t *response) {
   yajl_callbacks funcs = {
       .yajl_integer = summary_parse_integer,
+      .yajl_string = summary_parse_string,
       .yajl_map_key = summary_parse_map_key,
+      .yajl_start_map = summary_start_map,
+      .yajl_end_map = summary_end_map,
   };
   parse_summary_t ctx;
-  if (response == NULL) return -1;
-  memset(&ctx, 0, sizeof(ctx));
-  ctx.response = response;
-  return parse_json(&funcs, buffer, &ctx);
-}
-
-typedef struct {
-  struct {
-    // Whether the parser is inside a value_errors map and at what depth the map
-    // was found.
-    _Bool in_value_errors;
-    _Bool value_errors_depth;
-    // The depth of the map.
-    int depth;
-  } state;
-
-  // Holds the output.
-  collectd_time_series_response_t *response;
-} parse_collectd_t;
-
-static int collectd_parse_map_key(void *c, const unsigned char *key,
-                                  wg_yajl_size_t length) {
-  parse_collectd_t *ctx = (parse_collectd_t *)c;
-  if (strncmp((const char *)key, "value_errors", length) == 0) {
-    ctx->state.in_value_errors = 1;
-    ctx->state.value_errors_depth = ctx->state.depth;
-  } else if (strncmp((const char *)key, "index", length) == 0 &&
-             ctx->state.in_value_errors) {
-    ctx->response->error_point_count++;
-  }
-  return 1;
-}
-
-static int collectd_start_map(void *c) {
-  parse_collectd_t *ctx = (parse_collectd_t *)c;
-  ctx->state.depth++;
-  return 1;
-}
-
-static int collectd_end_map(void *c) {
-  parse_collectd_t *ctx = (parse_collectd_t *)c;
-  ctx->state.depth--;
-  if (ctx->state.depth == ctx->state.value_errors_depth) {
-    ctx->state.in_value_errors = 0;
-  }
-  return 1;
-}
-
-// This implementation counts the 'index' fields in the input that are inside a
-// value_errors map, as they represent individual points.
-int parse_collectd_time_series_response(char *buffer, collectd_time_series_response_t *response) {
-  yajl_callbacks funcs = {
-      .yajl_map_key = collectd_parse_map_key,
-      .yajl_start_map = collectd_start_map,
-      .yajl_end_map = collectd_end_map,
-  };
-  parse_collectd_t ctx;
   if (response == NULL) return -1;
   memset(&ctx, 0, sizeof(ctx));
   ctx.response = response;

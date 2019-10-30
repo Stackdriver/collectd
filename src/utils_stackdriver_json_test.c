@@ -26,8 +26,25 @@
 #include "collectd.h"
 
 #include "daemon/common.h"
+#include "daemon/utils_llist.h"
 #include "testing.h"
 #include "utils_stackdriver_json.h"
+
+static int run_summary_test(time_series_summary_t summary) {
+  EXPECT_EQ_INT(4, summary.total_point_count);
+  EXPECT_EQ_INT(1, summary.success_point_count);
+  CHECK_NOT_NULL(summary.errors);
+  EXPECT_EQ_INT(2, llist_size(summary.errors));
+  time_series_error_t *error1 = (time_series_error_t *)llist_search(summary.errors, "404");
+  CHECK_NOT_NULL(error1);
+  EXPECT_EQ_INT(1, error1->point_count);
+  EXPECT_EQ_INT(404, error1->code);
+  time_series_error_t *error2 = (time_series_error_t *)llist_search(summary.errors, "429");
+  CHECK_NOT_NULL(error2);
+  EXPECT_EQ_INT(2, error2->point_count);
+  EXPECT_EQ_INT(429, error2->code);
+  return 0;
+}
 
 DEF_TEST(time_series_summary) {
   char buf[10000];
@@ -35,19 +52,16 @@ DEF_TEST(time_series_summary) {
                         sizeof(buf)) >= 0);
   time_series_summary_t summary = {0};
   CHECK_ZERO(parse_time_series_summary(buf, &summary));
-  EXPECT_EQ_INT(summary.total_point_count, 3);
-  EXPECT_EQ_INT(summary.success_point_count, 1);
-  return 0;
+  return run_summary_test(summary);
 }
 
 DEF_TEST(collectd_time_series_response) {
   char buf[10000];
   OK(read_file_contents(SRCDIR "/src/collectd_time_series_response_test.json", buf,
                         sizeof(buf)) >= 0);
-  collectd_time_series_response_t response = {0};
-  CHECK_ZERO(parse_collectd_time_series_response(buf, &response));
-  EXPECT_EQ_INT(response.error_point_count, 3);
-  return 0;
+  time_series_summary_t summary = {0};
+  CHECK_ZERO(parse_time_series_summary(buf, &summary));
+  return run_summary_test(summary);
 }
 
 int main(void) {

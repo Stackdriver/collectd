@@ -126,6 +126,7 @@ noinst_LTLIBRARIES = \
 	libheap.la \
 	libignorelist.la \
 	liblatency.la \
+	libllist.la \
 	liblookup.la \
 	libmetadata.la \
 	libmount.la \
@@ -217,8 +218,6 @@ collectd_SOURCES = \
 	src/daemon/utils_cache.h \
 	src/daemon/utils_complain.c \
 	src/daemon/utils_complain.h \
-	src/daemon/utils_llist.c \
-	src/daemon/utils_llist.h \
 	src/daemon/utils_random.c \
 	src/daemon/utils_random.h \
 	src/daemon/utils_subst.c \
@@ -238,6 +237,7 @@ collectd_LDADD = \
 	libavltree.la \
 	libcommon.la \
 	libheap.la \
+	libllist.la \
 	liboconfig.la \
 	-lm \
 	$(COMMON_LIBS) \
@@ -355,6 +355,10 @@ libheap_la_SOURCES = \
 libignorelist_la_SOURCES = \
 	src/utils_ignorelist.c \
 	src/utils_ignorelist.h
+
+libllist_la_SOURCES = \
+	src/daemon/utils_llist.c \
+	src/daemon/utils_llist.h
 
 libmetadata_la_SOURCES = \
 	src/daemon/meta_data.c \
@@ -1843,7 +1847,7 @@ libstackdriver_json_la_SOURCES = \
 	src/utils_stackdriver_json.h
 libstackdriver_json_la_CPPFLAGS  = $(AM_CPPFLAGS) $(BUILD_WITH_LIBYAJL_CPPFLAGS)
 libstackdriver_json_la_LDFLAGS   = $(AM_LDFLAGS) $(BUILD_WITH_LIBYAJL_LDFLAGS)
-libstackdriver_json_la_LIBADD    = $(BUILD_WITH_LIBYAJL_LIBS) libcommon.la
+libstackdriver_json_la_LIBADD    = $(BUILD_WITH_LIBYAJL_LIBS) libcommon.la libllist.la
 
 noinst_LTLIBRARIES += libstackdriver_json.la
 check_PROGRAMS += test_stackdriver_json

@@ -25,27 +25,25 @@
 #define UTILS_STACKDRIVER_JSON_H 1
 
 #include "collectd.h"
+#include "utils_llist.h"
+
+typedef struct {
+  int point_count;
+  int code;
+} time_series_error_t;
 
 typedef struct {
   int total_point_count;
   int success_point_count;
+  // Elements have type time_series_error_t.
+  llist_t *errors;
 } time_series_summary_t;
 
-typedef struct {
-  int error_point_count;
-} collectd_time_series_response_t;
-
 /*
-Extract statistics from the backend API response. For sample input see
-time_series_summary_test.json.
+Extract statistics from the backend API response. Supports both CreateTimeSeries
+and CreateCollectdTimeSeries. For sample input see time_series_summary_test.json
+and collectd_time_series_response_test.json.
 */
 int parse_time_series_summary(char *buffer, time_series_summary_t *response);
-
-/*
-Extract statistics from the backend API response. For sample input see
-collectd_time_series_response_test.json.
-*/
-int parse_collectd_time_series_response(
-    char *buffer, collectd_time_series_response_t *response);
 
 #endif /* UTILS_STACKDRIVER_JSON_H */

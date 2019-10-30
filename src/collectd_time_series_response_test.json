@@ -34,5 +34,26 @@
 	}
       ]
     }
-  ]
+  ],
+  "summary": {
+    "total_point_count": 4,
+    "success_point_count": 1,
+    "errors": [
+      {
+        "point_count": 2,
+        "status": {
+          "code": 429,
+          "status": "RESOURCE_EXHAUSTED",
+          "message": "Retry in 500 milliseconds."
+        }
+      },
+      {
+        "status": {
+          "status": "NOT_FOUND",
+          "code": 404
+        },
+        "point_count": 1
+      }
+    ]
+  }
 }
