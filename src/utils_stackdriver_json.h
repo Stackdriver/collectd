@@ -46,4 +46,10 @@ and collectd_time_series_response_test.json.
 */
 int parse_time_series_summary(char *buffer, time_series_summary_t *response);
 
+/*
+Release the resources allocated by the time_series_summary_t instance. It
+doesn't release `response` itself.
+*/
+void free_time_series_summary(time_series_summary_t *response);
+
 #endif /* UTILS_STACKDRIVER_JSON_H */
