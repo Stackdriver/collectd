@@ -1,59 +1,59 @@
 {
-  "payload_errors": [
-    {
-      "index": 0,
-      "error": {
-        "code": 429,
-        "status": "RESOURCE_EXHAUSTED",
-        "message": "Retry in 300 milliseconds."
-      },
-      "value_errors": [
-        {
-        "index": 0
-	}
-      ]
-    },
-    {
-      "index": 1,
-      "value_errors": [
-	{
-          "index": 0,
-          "error": {
-            "code": 429,
-            "status": "RESOURCE_EXHAUSTED",
-            "message": "Retry in 300 milliseconds."
-          }
-	},
-	{
-          "index": 1,
-          "error": {
-            "code": 429,
-            "status": "RESOURCE_EXHAUSTED",
-            "message": "Retry in 300 milliseconds."
-          }
-	}
-      ]
-    }
-  ],
-  "summary": {
-    "total_point_count": 4,
-    "success_point_count": 1,
-    "errors": [
+   "payload_errors" : [
       {
-        "point_count": 2,
-        "status": {
-          "code": 429,
-          "status": "RESOURCE_EXHAUSTED",
-          "message": "Retry in 500 milliseconds."
-        }
+         "error" : {
+            "message" : "Retry in 300 milliseconds.",
+            "status" : "RESOURCE_EXHAUSTED",
+            "code" : 429
+         },
+         "value_errors" : [
+            {
+               "index" : 0
+            }
+         ],
+         "index" : 0
       },
       {
-        "status": {
-          "status": "NOT_FOUND",
-          "code": 404
-        },
-        "point_count": 1
+         "index" : 1,
+         "value_errors" : [
+            {
+               "error" : {
+                  "status" : "RESOURCE_EXHAUSTED",
+                  "code" : 429,
+                  "message" : "Retry in 300 milliseconds."
+               },
+               "index" : 0
+            },
+            {
+               "error" : {
+                  "message" : "Retry in 300 milliseconds.",
+                  "status" : "RESOURCE_EXHAUSTED",
+                  "code" : 429
+               },
+               "index" : 1
+            }
+         ]
       }
-    ]
-  }
+   ],
+   "summary" : {
+      "errors" : [
+         {
+            "point_count" : 2,
+            "status" : {
+               "message" : "Retry in 500 milliseconds.",
+               "status" : "RESOURCE_EXHAUSTED",
+               "code" : 429
+            }
+         },
+         {
+            "status" : {
+               "status" : "NOT_FOUND",
+               "code" : 404
+            },
+            "point_count" : 1
+         }
+      ],
+      "total_point_count" : 4,
+      "success_point_count" : 1
+   }
 }
