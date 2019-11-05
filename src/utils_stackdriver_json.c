@@ -110,7 +110,7 @@ typedef struct {
   time_series_summary_t *response;
 } parse_summary_t;
 
-static void print_context(const parse_summary_t *ctx) {
+static void log_context(const parse_summary_t *ctx) {
   DEBUG("in_summary %d; summary_depth %d; depth %d; current_field %d",
        ctx->state.in_summary, ctx->state.summary_depth, ctx->state.depth,
        ctx->state.current_field);
@@ -152,7 +152,7 @@ static int summary_end_map(void *c) {
 static int summary_parse_map_key(void *c, const unsigned char *key,
                                  wg_yajl_size_t length) {
   parse_summary_t *ctx = (parse_summary_t *)c;
-  print_context(ctx);
+  log_context(ctx);
   DEBUG("map_key: %.*s", (int) length, (const char*) key);
   ctx->state.current_field = FIELD_UNSET;
   // Is this a CreateTimeSeriesSummary object within a CreateCollectdTimeSeriesResponse?
@@ -187,7 +187,7 @@ static int summary_parse_map_key(void *c, const unsigned char *key,
 static int summary_parse_string(void *c, const unsigned char *val,
                                  wg_yajl_size_t length) {
   parse_summary_t *ctx = (parse_summary_t *)c;
-  print_context(ctx);
+  log_context(ctx);
   DEBUG("string: %.*s", (int) length, (const char*)val);
   // Is this a CreateTimeSeries object within a CreateTimeSeries status payload?
   if (ctx->state.current_field == FIELD_TYPE &&
@@ -200,7 +200,7 @@ static int summary_parse_string(void *c, const unsigned char *val,
 
 static int summary_parse_integer(void *c, wg_yajl_integer_t val) {
   parse_summary_t *ctx = (parse_summary_t *)c;
-  print_context(ctx);
+  log_context(ctx);
   DEBUG("integer: %lld", val);
   if (ctx->state.current_field == FIELD_TOTAL_POINT_COUNT) {
     if (ctx->response->total_point_count > 0) {
