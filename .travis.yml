@@ -57,4 +57,5 @@ before_install:
       protobuf-c-compiler
       python-dev
 # VERBOSE=1 dumps the contents of the test suites logs to standard output.
-script: sh build.sh && ./configure --with-libmongoc=own && make distcheck VERBOSE=1
+# -fsanitize=address enables https://github.com/google/sanitizers/wiki/AddressSanitizer
+script: sh build.sh && ./configure --with-libmongoc=own && make check VERBOSE=1 CFLAGS=-fsanitize=address LDFLAGS=-fsanitize=address && make distcheck
