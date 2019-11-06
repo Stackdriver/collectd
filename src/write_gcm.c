@@ -4236,10 +4236,14 @@ static int wg_update_stats(const wg_stats_t *stats)
       stats->api_connectivity_failures);
   res |= uc_meta_data_add_unsigned_int(
       &vl, SAGT_API_REQUESTS_ERRORS, stats->api_errors);
+  // "point_count" metric.
   sstrncpy(vl.plugin_instance, SAGT_POINT_COUNT, sizeof(vl.plugin_instance));
-  // 200 == OK because we are using the HTTP+JSON API.
+  if (uc_update(&ds, &vl) != 0) {
+    ERROR("%s: uc_update returned an error", this_plugin_name);
+    return -1;
+  }
   res |= uc_meta_data_add_unsigned_int(
-      &vl, "200", stats->point_count.success_point_count);
+      &vl, SAGT_STATUS_HTTP_OK, stats->point_count.success_point_count);
   llentry_t *e_this;
   for (e_this = llist_head(stats->point_count.errors); e_this != NULL; e_this = e_this->next) {
     time_series_error_t *value = (time_series_error_t *) e_this->value;
