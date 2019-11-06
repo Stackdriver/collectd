@@ -2,7 +2,6 @@ sudo: required
 dist: trusty
 compiler:
   - gcc
-  - clang
 language: c
 before_install:
   - sudo apt-get update -qq
