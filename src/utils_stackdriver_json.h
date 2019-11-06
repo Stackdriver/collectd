@@ -47,6 +47,19 @@ and collectd_time_series_response_test.json.
 int parse_time_series_summary(char *buffer, time_series_summary_t *response);
 
 /*
+Append an error to a time_series_summary_t instance. `code` will be used as the
+key in the `errors` list.
+*/
+void time_series_summary_append_error(time_series_summary_t *s, int code, int point_count);
+
+/*
+Pairwise add all the elements of `b` into `a`. If both inputs contain an element
+with the same error code, the output will have one element with the sum of the
+point counts.
+*/
+void time_series_summary_add(time_series_summary_t *a, const time_series_summary_t *b);
+
+/*
 Release the resources allocated by the time_series_summary_t instance. It
 doesn't release `response` itself.
 */
