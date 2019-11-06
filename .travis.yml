@@ -8,10 +8,11 @@ before_script: autoreconf -vif
 
 script:
   - sh build.sh
-  - ./configure
+  - ./configure --enable-debug
   # VERBOSE=1 dumps the contents of the test suites logs to standard output.
   # -fsanitize=address enables https://github.com/google/sanitizers/wiki/AddressSanitizer
-  - make check VERBOSE=1 CFLAGS=-fsanitize=address LDFLAGS=-fsanitize=address
+  # -ldl works around a dlsym error when tsan is enabled in this environment.
+  - make check VERBOSE=1 CFLAGS=-fsanitize=address LDFLAGS="-ldl -fsanitize=address"
   - make distcheck
 
 addons:
