@@ -30,6 +30,25 @@
 #include "testing.h"
 #include "utils_stackdriver_json.h"
 
+static int expect_time_series_summary_equals(const time_series_summary_t *a,
+                                             const time_series_summary_t *b) {
+  EXPECT_EQ_INT(a->total_point_count, b->total_point_count);
+  EXPECT_EQ_INT(a->success_point_count, b->success_point_count);
+  const llentry_t *a_entry = llist_head(a->errors);
+  const llentry_t *b_entry = llist_head(b->errors);
+  while (a_entry != NULL && b_entry != NULL) {
+    const time_series_error_t *error_a = (time_series_error_t *) a_entry->value;
+    const time_series_error_t *error_b = (time_series_error_t *) b_entry->value;
+    EXPECT_EQ_STR(a_entry->key, b_entry->key);
+    EXPECT_EQ_INT(error_a->code, error_b->code);
+    EXPECT_EQ_INT(error_a->point_count, error_b->point_count);
+    a_entry = a_entry->next;
+    b_entry = b_entry->next;
+  }
+  EXPECT_EQ_INT(llist_size(a->errors), llist_size(b->errors));
+  return 0;
+}
+
 static int run_summary_test(time_series_summary_t summary) {
   llentry_t *entry;
   time_series_error_t *error;
@@ -74,8 +93,38 @@ DEF_TEST(collectd_time_series_response) {
   return ret;
 }
 
+DEF_TEST(time_series_summary_add) {
+  int ret;
+  time_series_summary_t a = {
+    .total_point_count = 5,
+    .success_point_count = 2,
+  };
+  time_series_summary_t b = {
+    .total_point_count = 7,
+    .success_point_count = 3,
+  };
+  time_series_summary_t expected = {
+    .total_point_count = 12,
+    .success_point_count = 5,
+  };
+  time_series_summary_append_error(&a, 400, 1);
+  time_series_summary_append_error(&a, 403, 2);
+  time_series_summary_append_error(&b, 403, 1);
+  time_series_summary_append_error(&b, 404, 3);
+  time_series_summary_append_error(&expected, 400, 1);
+  time_series_summary_append_error(&expected, 403, 3);
+  time_series_summary_append_error(&expected, 404, 3);
+  time_series_summary_add(&a, &b);
+  ret = expect_time_series_summary_equals(&a, &expected);
+  free_time_series_summary(&a);
+  free_time_series_summary(&b);
+  free_time_series_summary(&expected);
+  return ret;
+}
+
 int main(void) {
   RUN_TEST(time_series_summary);
   RUN_TEST(collectd_time_series_response);
+  RUN_TEST(time_series_summary_add);
   END_TEST;
 }

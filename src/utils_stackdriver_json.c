@@ -132,18 +132,10 @@ static int summary_end_map(void *c) {
     // If the parser is inside a CreateTimeSeriesSummary message and there is a
     // fully initialized error element, commit it to the response.
     if (ctx->state.temp_error.point_count > 0 && ctx->state.temp_error.code > 0) {
-      const int max_key_length = 10;  // Includes trailing NUL.
-      char *key;
-      time_series_error_t *value;
-      key = malloc(max_key_length);
-      snprintf(key, max_key_length, "%d", ctx->state.temp_error.code);
-      value = malloc(sizeof(time_series_error_t));
-      memcpy(value, &ctx->state.temp_error, sizeof(*value));
+      time_series_summary_append_error(ctx->response,
+                                       ctx->state.temp_error.code,
+                                       ctx->state.temp_error.point_count);
       memset(&ctx->state.temp_error, 0, sizeof(ctx->state.temp_error));
-      if (ctx->response->errors == NULL) {
-        ctx->response->errors = llist_create();
-      }
-      llist_append(ctx->response->errors, llentry_create(key, value));
     }
   }
   return 1;
@@ -239,6 +231,39 @@ int parse_time_series_summary(char *buffer, time_series_summary_t *response) {
   memset(&ctx, 0, sizeof(ctx));
   ctx.response = response;
   return parse_json(&funcs, buffer, &ctx);
+}
+
+void time_series_summary_append_error(time_series_summary_t *s, int code, int point_count) {
+  const int max_key_length = 10;  // Includes trailing NUL.
+  char *key;
+  time_series_error_t *value;
+  key = malloc(max_key_length);
+  snprintf(key, max_key_length, "%d", code);
+  value = malloc(sizeof(time_series_error_t));
+  value->code = code;
+  value->point_count = point_count;
+  if (s->errors == NULL) {
+    s->errors = llist_create();
+  }
+  llist_append(s->errors, llentry_create(key, value));
+}
+
+void time_series_summary_add(time_series_summary_t *a, const time_series_summary_t *b) {
+  a->total_point_count += b->total_point_count;
+  a->success_point_count += b->success_point_count;
+  // This is a quadratic algorithm, but we expect these lists to have at most
+  // several elements.
+  for (const llentry_t *b_entry = llist_head(b->errors); b_entry != NULL;
+         b_entry = b_entry->next) {
+    llentry_t *a_entry = llist_search(a->errors, b_entry->key);
+    const time_series_error_t *error_b = (const time_series_error_t *) b_entry->value;
+    if (a_entry == NULL) {
+      time_series_summary_append_error(a, error_b->code, error_b->point_count);
+    } else {
+      time_series_error_t *error_a = (time_series_error_t *) a_entry->value;
+      error_a->point_count += error_b->point_count;
+    }
+  }
 }
 
 void free_time_series_summary(time_series_summary_t *response) {
