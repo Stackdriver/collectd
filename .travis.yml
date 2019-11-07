@@ -4,10 +4,12 @@ compiler:
   - clang
 language: c
 
-before_script: autoreconf -vif
+before_script:
+  - sh clean.sh
+  - sh build.sh
+  - autoreconf -vif
 
 script:
-  - sh build.sh
   - ./configure --enable-debug
   # VERBOSE=1 dumps the contents of the test suites logs to standard output.
   # -fsanitize=address enables https://github.com/google/sanitizers/wiki/AddressSanitizer
