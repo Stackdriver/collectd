@@ -189,6 +189,7 @@ static int sagt_read(user_data_t *user_data)
     }
     meta_data_destroy(md);
   }
+
   // Metric point_count from write_gcm.c.
   {
     value_list_t vl = {};  // zero-init
