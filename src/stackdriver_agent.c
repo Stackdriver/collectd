@@ -190,6 +190,36 @@ static int sagt_read(user_data_t *user_data)
     meta_data_destroy(md);
   }
 
+  // Metric point_count from write_gcm.c.
+  {
+    value_list_t vl = {};  // zero-init
+    int status;
+    char **status_keys;
+    sstrncpy(vl.plugin, this_plugin_name, sizeof(vl.plugin));
+    sstrncpy(vl.plugin_instance, SAGT_POINT_COUNT, sizeof(vl.plugin_instance));
+    status = uc_meta_data_toc(&vl, &status_keys);
+    if (status > 0) {
+      size_t status_keys_size = (size_t) status;
+      meta_data_t *md = meta_data_create();
+      if (meta_data_add_string(
+              md, "stackdriver_metric_type",
+              AGENT_PREFIX "/monitoring/point_count") == 0) {
+        for (size_t i = 0; i < status_keys_size; ++i) {
+          uint64_t value;
+          if (uc_meta_data_get_unsigned_int(&vl, status_keys[i], &value) == 0 &&
+              meta_data_add_string(md, "label:status", status_keys[i]) == 0) {
+            sagt_submit_derive(
+                SAGT_POINT_COUNT, status_keys[i], now, interval, value, md);
+          }
+        }
+      }
+      meta_data_destroy(md);
+      for (size_t i = 0; i < status_keys_size; ++i)
+        sfree(status_keys[i]);
+      sfree(status_keys);
+    }
+  }
+
   // Cloud Monarch-related stats. The corresponding uc_meta_data_set calls are in
   // match_throttle_metadata_keys.c.
   {

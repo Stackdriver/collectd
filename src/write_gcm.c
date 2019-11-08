@@ -35,6 +35,7 @@
 #include "configfile.h"
 #include "stackdriver-agent-keys.h"
 #include "utils_avltree.h"
+#include "utils_stackdriver_json.h"
 
 #include <errno.h>
 #include <stdarg.h>
@@ -1353,6 +1354,7 @@ typedef struct {
 static wg_payload_t *wg_payload_create(const data_set_t *ds,
     const value_list_t *vl);
 static void wg_payload_destroy(wg_payload_t *list);
+static int wg_payload_num_values(const wg_payload_t *list);
 
 static int wg_typed_value_create_from_value_t_inline(wg_typed_value_t *result,
     int ds_type, value_t value, const char **dataSourceType_static);
@@ -1440,6 +1442,15 @@ static void wg_payload_destroy(wg_payload_t *list) {
     sfree(list);
     list = next;
   }
+}
+
+static int wg_payload_num_values(const wg_payload_t *list) {
+  int num_values = 0;
+  while (list != NULL) {
+    num_values += list->num_values;
+    list = list->next;
+  }
+  return num_values;
 }
 
 // Based on 'ds_type', determine the appropriate value for the corresponding
@@ -2509,6 +2520,7 @@ typedef struct {
   size_t api_successes;
   size_t api_connectivity_failures;
   size_t api_errors;
+  time_series_summary_t point_count;
 } wg_stats_t;
 
 typedef struct {
@@ -2809,6 +2821,7 @@ static wg_stats_t *wg_stats_create() {
 }
 
 static void wg_stats_destroy(wg_stats_t *stats) {
+  free_time_series_summary(&stats->point_count);
   sfree(stats);
 }
 
@@ -3906,12 +3919,13 @@ static int wg_transmit_unique_segment(
     const wg_payload_t *new_list;
 
     if (queue == ctx->ats_queue) {
-
+      int request_point_count = wg_payload_num_values(list);
       if (wg_format_some_of_list_ctr(ctx->resource, list, &new_list, &json,
                                      ctx->pretty_print_json) != 0) {
         ERROR("write_gcm: Error formatting list as JSON");
         goto leave;
       }
+      request_point_count -= wg_payload_num_values(new_list);
 
       wg_log_json_message(
           ctx, "Sending JSON (CollectdTimeseriesRequest):\n%s\n", json);
@@ -3934,13 +3948,19 @@ static int wg_transmit_unique_segment(
 
       wg_log_json_message(
           ctx, "Server response (CollectdTimeseriesRequest):\n%s\n", response);
-      // Since the response is expected to be valid JSON, we don't look at the
-      // characters beyond the closing brace. When the response isn't empty, it
-      // represents a partial success case. Because some points were accepted
-      // in that case, we treat it as a successful API call.
-      if (strncmp(response, "{}", 2) != 0) {
-        ERROR("%s: Server response (CollectdTimeseriesRequest) contains errors:\n%s",
-              this_plugin_name, response);
+      // Emit telemetry about the response. When the response is empty, it
+      // represents a complete success. A non-empty response indicates partial
+      // success.
+      if (strncmp(response, "{}", 2) == 0) {
+        ctx->ats_stats->point_count.success_point_count += request_point_count;
+      } else {
+        time_series_summary_t summary = {0};
+        WARNING("%s: Server response (CollectdTimeseriesRequest) contains errors:\n%s",
+                this_plugin_name, response);
+        if (0 == parse_time_series_summary(response, &summary)) {
+          time_series_summary_add(&ctx->ats_stats->point_count, &summary);
+          free_time_series_summary(&summary);
+        }
       }
       ++ctx->ats_stats->api_successes;
 
@@ -3948,11 +3968,13 @@ static int wg_transmit_unique_segment(
 
       assert(queue == ctx->gsd_queue);
 
+      int request_point_count = wg_payload_num_values(list);
       if (wg_format_some_of_list_custom(ctx->resource, list, &new_list, &json,
                                         ctx->pretty_print_json) != 0) {
         ERROR("write_gcm: Error formatting list as CreateTimeSeries request");
         goto leave;
       }
+      request_point_count -= wg_payload_num_values(new_list);
 
       if (json != NULL) {
         wg_log_json_message(
@@ -3971,13 +3993,19 @@ static int wg_transmit_unique_segment(
         // TODO: Validate API response properly.
         wg_log_json_message(
             ctx, "Server response (TimeseriesRequest):\n%s\n", response);
-        // Since the response is expected to be valid JSON, we don't look at the
-        // characters beyond the closing brace. When the response isn't empty, it
-        // represents a partial success case. Because some points were accepted
-        // in that case, we treat it as a successful API call.
-        if (strncmp(response, "{}", 2) != 0) {
-          ERROR("%s: Server response (TimeseriesRequest) contains errors:\n%s",
-                this_plugin_name, response);
+        // Emit telemetry about the response. When the response is empty, it
+        // represents a complete success. A non-empty response indicates partial
+        // success.
+        if (strncmp(response, "{}", 2) == 0) {
+          ctx->gsd_stats->point_count.success_point_count += request_point_count;
+        } else {
+          time_series_summary_t summary = {0};
+          WARNING("%s: Server response (TimeseriesRequest) contains errors:\n%s",
+                  this_plugin_name, response);
+          if (0 == parse_time_series_summary(response, &summary)) {
+            time_series_summary_add(&ctx->gsd_stats->point_count, &summary);
+            free_time_series_summary(&summary);
+          }
         }
       } else {
         wg_log_json_message(
@@ -4200,14 +4228,29 @@ static int wg_update_stats(const wg_stats_t *stats)
     return -1;
   }
   // The corresponding uc_meta_data_get calls are in stackdriver_agent.c.
-  int res0 = uc_meta_data_add_unsigned_int(
+  int res = 0;
+  res |= uc_meta_data_add_unsigned_int(
       &vl, SAGT_API_REQUESTS_SUCCESS, stats->api_successes);
-  int res1 = uc_meta_data_add_unsigned_int(
+  res |= uc_meta_data_add_unsigned_int(
       &vl, SAGT_API_REQUESTS_CONNECTIVITY_FAILURES,
       stats->api_connectivity_failures);
-  int res2 = uc_meta_data_add_unsigned_int(
+  res |= uc_meta_data_add_unsigned_int(
       &vl, SAGT_API_REQUESTS_ERRORS, stats->api_errors);
-  if (res0 != 0 || res1 != 0 || res2 != 0) {
+  // "point_count" metric.
+  sstrncpy(vl.plugin_instance, SAGT_POINT_COUNT, sizeof(vl.plugin_instance));
+  if (uc_update(&ds, &vl) != 0) {
+    ERROR("%s: uc_update returned an error", this_plugin_name);
+    return -1;
+  }
+  res |= uc_meta_data_add_unsigned_int(
+      &vl, SAGT_STATUS_HTTP_OK, stats->point_count.success_point_count);
+  llentry_t *e_this;
+  for (e_this = llist_head(stats->point_count.errors); e_this != NULL; e_this = e_this->next) {
+    time_series_error_t *value = (time_series_error_t *) e_this->value;
+    res |= uc_meta_data_add_unsigned_int(
+        &vl, e_this->key, value->point_count);
+  }
+  if (res != 0) {
     ERROR("%s: uc_meta_data_add returned an error", this_plugin_name);
     return -1;
   }
