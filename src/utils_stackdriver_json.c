@@ -171,11 +171,11 @@ static int summary_parse_map_key(void *c, const unsigned char *key,
   }
   // We are inside a summary object. This implementation assumes that the field
   // names used within the message are unique.
-  if (strncmp((const char *)key, "total_point_count", length) == 0) {
+  if (strncmp((const char *)key, "totalPointCount", length) == 0) {
     ctx->state.current_field = FIELD_TOTAL_POINT_COUNT;
-  } else if (strncmp((const char *)key, "success_point_count", length) == 0) {
+  } else if (strncmp((const char *)key, "successPointCount", length) == 0) {
     ctx->state.current_field = FIELD_SUCCESS_POINT_COUNT;
-  } else if (strncmp((const char *)key, "point_count", length) == 0) {
+  } else if (strncmp((const char *)key, "pointCount", length) == 0) {
     // Not a typo. The field name doesn't contain "error".
     ctx->state.current_field = FIELD_ERROR_POINT_COUNT;
   } else if (strncmp((const char *)key, "code", length) == 0) {
@@ -204,17 +204,17 @@ static int summary_parse_integer(void *c, wg_yajl_integer_t val) {
   DEBUG("integer: %lld", val);
   if (ctx->state.current_field == FIELD_TOTAL_POINT_COUNT) {
     if (ctx->response->total_point_count > 0) {
-      DEBUG("total_point_count was already set. Bug?");
+      DEBUG("totalPointCount was already set. Bug?");
     }
     ctx->response->total_point_count += val;
   } else if (ctx->state.current_field == FIELD_SUCCESS_POINT_COUNT) {
     if (ctx->response->success_point_count > 0) {
-      DEBUG("success_point_count was already set. Bug?");
+      DEBUG("successPointCount was already set. Bug?");
     }
     ctx->response->success_point_count += val;
   } else if (ctx->state.current_field == FIELD_ERROR_POINT_COUNT) {
     if (ctx->state.temp_error.point_count > 0) {
-      DEBUG("error point_count was already set. Bug?");
+      DEBUG("error pointCount was already set. Bug?");
     }
     ctx->state.temp_error.point_count += val;
   } else if (ctx->state.current_field == FIELD_CODE) {

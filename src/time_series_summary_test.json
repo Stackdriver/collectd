@@ -5,8 +5,8 @@
       "details" : [
          {
             "@type" : "type.googleapis.com/google.monitoring.v3.CreateTimeSeriesSummary",
-            "success_point_count" : 1,
-            "total_point_count" : 4,
+            "successPointCount" : 1,
+            "totalPointCount" : 4,
             "errors" : [
                {
                   "status" : {
@@ -14,19 +14,19 @@
                      "message" : "Retry in 500 milliseconds.",
                      "status" : "RESOURCE_EXHAUSTED"
                   },
-                  "point_count" : 2
+                  "pointCount" : 2
                },
                {
                   "status" : {
                      "code" : 404,
                      "status" : "NOT_FOUND"
                   },
-                  "point_count" : 1
+                  "pointCount" : 1
                }
             ]
          },
          {
-            "time_series" : {},
+            "timeSeries" : {},
             "@type" : "type.googleapis.com/google.monitoring.v3.CreateTimeSeriesError",
             "status" : {
                "code" : 429,

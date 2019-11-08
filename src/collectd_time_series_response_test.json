@@ -1,12 +1,12 @@
 {
-   "payload_errors" : [
+   "payloadErrors" : [
       {
          "error" : {
             "message" : "Retry in 300 milliseconds.",
             "status" : "RESOURCE_EXHAUSTED",
             "code" : 429
          },
-         "value_errors" : [
+         "valueErrors" : [
             {
                "index" : 0
             }
@@ -15,7 +15,7 @@
       },
       {
          "index" : 1,
-         "value_errors" : [
+         "valueErrors" : [
             {
                "error" : {
                   "status" : "RESOURCE_EXHAUSTED",
@@ -38,7 +38,7 @@
    "summary" : {
       "errors" : [
          {
-            "point_count" : 2,
+            "pointCount" : 2,
             "status" : {
                "message" : "Retry in 500 milliseconds.",
                "status" : "RESOURCE_EXHAUSTED",
@@ -50,10 +50,10 @@
                "status" : "NOT_FOUND",
                "code" : 404
             },
-            "point_count" : 1
+            "pointCount" : 1
          }
       ],
-      "total_point_count" : 4,
-      "success_point_count" : 1
+      "totalPointCount" : 4,
+      "successPointCount" : 1
    }
 }
