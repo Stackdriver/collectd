@@ -4713,7 +4713,7 @@ if test "$PYTHON3_CONFIG" != ""; then
   if test $? -ne 0; then
     with_libpython3="no"
   fi
-  LIBPYTHON3_LDFLAGS="`${PYTHON3_CONFIG} --ldflags`"
+  LIBPYTHON3_LDFLAGS="`${PYTHON3_CONFIG} --ldflags --embed`" || LIBPYTHON3_LDFLAGS="`${PYTHON3_CONFIG} --ldflags`"
   if test $? -ne 0; then
     with_libpython3="no"
   fi
