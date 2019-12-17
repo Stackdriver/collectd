@@ -2872,7 +2872,7 @@ static int wg_json_CreateCollectdTimeseriesRequest(_Bool pretty,
     const wg_payload_t *head, const wg_payload_t **new_head,
     char **json) {
   char name[256];
-  int result = snprintf(name, sizeof(name), "project/%s",
+  int result = snprintf(name, sizeof(name), "projects/%s",
       monitored_resource->project_id);
   if (result < 0 || result >= sizeof(name)) {
     ERROR("write_gcm: project_id %s doesn't fit in buffer.",
@@ -3140,7 +3140,7 @@ static int wg_json_CreateTimeSeriesRequest(_Bool pretty,
     const wg_payload_t *head, const wg_payload_t **new_head,
     char **json) {
   char name[256];
-  int result = snprintf(name, sizeof(name), "project/%s",
+  int result = snprintf(name, sizeof(name), "projects/%s",
       monitored_resource->project_id);
   if (result < 0 || result >= sizeof(name)) {
     ERROR("write_gcm: project_id %s doesn't fit in buffer.",
