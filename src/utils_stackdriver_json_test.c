@@ -74,7 +74,7 @@ DEF_TEST(time_series_summary) {
   ssize_t file_size;
   int ret;
   file_size = read_file_contents(SRCDIR "/src/time_series_summary_test.json", buf,
-                                 sizeof(buf));
+                                 sizeof(buf) - 1);
   OK(file_size >= 0);
   buf[file_size] = 0;
   time_series_summary_t summary = {0};
@@ -89,7 +89,7 @@ DEF_TEST(collectd_time_series_response) {
   ssize_t file_size;
   int ret;
   file_size = read_file_contents(SRCDIR "/src/collectd_time_series_response_test.json", buf,
-                                 sizeof(buf));
+                                 sizeof(buf) - 1);
   OK(file_size >= 0);
   buf[file_size] = 0;
   time_series_summary_t summary = {0};
