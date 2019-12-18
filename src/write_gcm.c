@@ -3000,10 +3000,9 @@ static void wg_json_Points(json_ctx_t *jc, const wg_payload_t *element) {
 // }
 //
 // Returns the number of Timeseries created.
-static int wg_json_CreateTimeSeriesRequest(_Bool pretty,
-    const monitored_resource_t *monitored_resource,
-    const wg_payload_t *head, const wg_payload_t **new_head,
-    char **json) {
+static int wg_json_CreateTimeSeries(
+    json_ctx_t *jc, const monitored_resource_t *resource,
+    const wg_payload_t *head, const wg_payload_t **new_head) {
   int count = 0;
 
   wg_json_array_open(jc);
@@ -3124,10 +3123,10 @@ static int wg_json_CreateTimeSeriesRequest(_Bool pretty,
 //   string name = 3;
 //   repeated TimeSeries time_series = 2;
 // }
-static int wg_json_CreateTimeSeriesRequest(
-    _Bool pretty, const monitored_resource_t *monitored_resource,
-    const wg_payload_t *head, const wg_payload_t **new_head, char **json)
-{
+static int wg_json_CreateTimeSeriesRequest(_Bool pretty,
+    const monitored_resource_t *monitored_resource,
+    const wg_payload_t *head, const wg_payload_t **new_head,
+    char **json) {
   json_ctx_t *jc = wg_json_ctx_create(pretty);
   if (jc == NULL) {
     ERROR("write_gcm: wg_json_ctx_create failed");
