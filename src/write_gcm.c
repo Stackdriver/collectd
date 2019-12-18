@@ -2871,15 +2871,6 @@ static int wg_json_CreateCollectdTimeseriesRequest(_Bool pretty,
     const monitored_resource_t *monitored_resource,
     const wg_payload_t *head, const wg_payload_t **new_head,
     char **json) {
-  char name[256];
-  int result = snprintf(name, sizeof(name), "project/%s",
-      monitored_resource->project_id);
-  if (result < 0 || result >= sizeof(name)) {
-    ERROR("write_gcm: project_id %s doesn't fit in buffer.",
-        monitored_resource->project_id);
-    return (-ENOMEM);
-  }
-
   json_ctx_t *jc = wg_json_ctx_create(pretty);
   if (jc == NULL) {
     ERROR("write_gcm: wg_json_ctx_create failed");
@@ -2887,9 +2878,6 @@ static int wg_json_CreateCollectdTimeseriesRequest(_Bool pretty,
   }
 
   wg_json_map_open(jc);
-  wg_json_string(jc, "name");
-  wg_json_string(jc, name);
-
   wg_json_string(jc, "resource");
   wg_json_MonitoredResource(jc, monitored_resource);
 
@@ -3139,15 +3127,6 @@ static int wg_json_CreateTimeSeriesRequest(_Bool pretty,
     const monitored_resource_t *monitored_resource,
     const wg_payload_t *head, const wg_payload_t **new_head,
     char **json) {
-  char name[256];
-  int result = snprintf(name, sizeof(name), "project/%s",
-      monitored_resource->project_id);
-  if (result < 0 || result >= sizeof(name)) {
-    ERROR("write_gcm: project_id %s doesn't fit in buffer.",
-        monitored_resource->project_id);
-    return (-ENOMEM);
-  }
-
   json_ctx_t *jc = wg_json_ctx_create(pretty);
   if (jc == NULL) {
     ERROR("write_gcm: wg_json_ctx_create failed");
