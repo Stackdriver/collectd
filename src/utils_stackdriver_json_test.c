@@ -71,9 +71,12 @@ static int run_summary_test(time_series_summary_t summary) {
 
 DEF_TEST(time_series_summary) {
   char buf[10000];
+  ssize_t file_size;
   int ret;
-  OK(read_file_contents(SRCDIR "/src/time_series_summary_test.json", buf,
-                        sizeof(buf)) >= 0);
+  file_size = read_file_contents(SRCDIR "/src/time_series_summary_test.json", buf,
+                                 sizeof(buf));
+  OK(file_size >= 0);
+  buf[file_size] = 0;
   time_series_summary_t summary = {0};
   CHECK_ZERO(parse_time_series_summary(buf, &summary));
   ret = run_summary_test(summary);
@@ -83,9 +86,12 @@ DEF_TEST(time_series_summary) {
 
 DEF_TEST(collectd_time_series_response) {
   char buf[10000];
+  ssize_t file_size;
   int ret;
-  OK(read_file_contents(SRCDIR "/src/collectd_time_series_response_test.json", buf,
-                        sizeof(buf)) >= 0);
+  file_size = read_file_contents(SRCDIR "/src/collectd_time_series_response_test.json", buf,
+                                 sizeof(buf));
+  OK(file_size >= 0);
+  buf[file_size] = 0;
   time_series_summary_t summary = {0};
   CHECK_ZERO(parse_time_series_summary(buf, &summary));
   ret = run_summary_test(summary);
