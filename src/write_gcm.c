@@ -157,7 +157,69 @@ void EVP_MD_CTX_free(EVP_MD_CTX *ctx) {
   EVP_MD_CTX_cleanup(ctx);
   OPENSSL_free(ctx);
 }
-#endif 
+
+// Multi-threading support for curl and TLS. This is needed because wg_write
+// creates one thread for each queue (ATS and GSD).
+// See https://curl.haxx.se/libcurl/c/threadsafe.html
+#include <openssl/crypto.h>
+
+static pthread_mutex_t *crypto_locks;
+
+static void crypto_lock_callback(int mode, int index, const char *file, int line) {
+  if (mode & CRYPTO_LOCK) {
+    pthread_mutex_lock(&(crypto_locks[index]));
+  } else {
+    pthread_mutex_unlock(&(crypto_locks[index]));
+  }
+}
+
+static unsigned long crypto_thread_id(void) {
+  return (unsigned long)pthread_self();
+}
+
+static void crypto_init_locks(void) {
+  if (CRYPTO_get_id_callback() != NULL && CRYPTO_get_locking_callback() != NULL) {
+    // crypto_locks will remain NULL, bypassing destruction inside crypto_cleanup_locks().
+    WARNING("write_gcm: CRYPTO callbacks already set. Skipping initialization.");
+    return;
+  }
+
+  crypto_locks = (pthread_mutex_t *)OPENSSL_malloc(CRYPTO_num_locks() *
+                                                   sizeof(pthread_mutex_t));
+  for (int i = 0; i < CRYPTO_num_locks(); i++) {
+    pthread_mutex_init(&(crypto_locks[i]), NULL);
+  }
+
+  CRYPTO_set_id_callback(crypto_thread_id);
+  CRYPTO_set_locking_callback(crypto_lock_callback);
+}
+
+static void crypto_cleanup_locks(void) {
+  if (crypto_locks == NULL) {
+    return;
+  }
+
+  CRYPTO_set_id_callback(NULL);
+  CRYPTO_set_locking_callback(NULL);
+  for (int i = 0; i < CRYPTO_num_locks(); i++) {
+    pthread_mutex_destroy(&(crypto_locks[i]));
+  }
+
+  OPENSSL_free(crypto_locks);
+  crypto_locks = NULL;
+}
+
+#elif defined(OPENSSL_VERSION_NUMBER)
+
+// OpenSSL>=1.1.0 takes care of this.
+static void crypto_init_locks(void) {
+}
+static void crypto_cleanup_locks(void) {
+}
+
+#else
+# error "Implement crypto_init_locks and crypto_cleanup_locks for your SSL library."
+#endif  // OPENSSL_VERSION_NUMBER
 
 //==============================================================================
 //==============================================================================
@@ -4313,6 +4375,7 @@ static int wg_init(void) {
   wg_context_t *ctx = NULL;
   int result = -1;  // Pessimistically assume failure.
 
+  crypto_init_locks();
   curl_global_init(CURL_GLOBAL_SSL);
 
   if (wg_configbuilder_g == NULL) {
@@ -4356,6 +4419,7 @@ static int wg_init(void) {
 // this plugin has seen any errors during its operation (e.g. PERMISSION DENIED
 // from the server).
 static int wg_shutdown(void) {
+  crypto_cleanup_locks();
   if (!wg_end_to_end_test_mode()) {
     return 0;
   }
