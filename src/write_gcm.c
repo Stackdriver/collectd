@@ -190,6 +190,12 @@ static void init_locks(void)
 {
   int i;
 
+  if (CRYPTO_get_id_callback() != NULL && CRYPTO_get_locking_callback() != NULL) {
+    // lockarray will remain NULL, bypassing destruction inside kill_locks().
+    WARNING("write_gcm: CRYPTO callbacks already set. Skipping initialization.");
+    return;
+  }
+
   lockarray = (pthread_mutex_t *)OPENSSL_malloc(CRYPTO_num_locks() *
                                                 sizeof(pthread_mutex_t));
   for (i = 0; i < CRYPTO_num_locks(); i++) {
@@ -204,12 +210,17 @@ static void kill_locks(void)
 {
   int i;
 
+  if (lockarray == NULL) {
+    return;
+  }
+
   CRYPTO_set_locking_callback(NULL);
   for (i = 0; i < CRYPTO_num_locks(); i++) {
     pthread_mutex_destroy(&(lockarray[i]));
   }
 
   OPENSSL_free(lockarray);
+  lockarray = NULL;
 }
 #else  // OPENSSL_VERSION_NUMBER
 # error "Implement init_locks and kill_locks for your SSL library."
