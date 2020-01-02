@@ -160,6 +160,61 @@ static void EVP_MD_CTX_free(EVP_MD_CTX *ctx) {
 }
 #endif
 
+// Multi-threading support for Curl and TLS. This is needed because wg_write
+// creates one thread for each queue (ATS and GSD).
+// See https://curl.haxx.se/libcurl/c/threadsafe.html
+
+#if OPENSSL_VERSION_NUMBER < 0x10003000L
+
+#include <openssl/crypto.h>
+
+static pthread_mutex_t *lockarray;
+
+static void lock_callback(int mode, int type, char *file, int line)
+{
+  if (mode & CRYPTO_LOCK) {
+    pthread_mutex_lock(&(lockarray[type]));
+  } else {
+    pthread_mutex_unlock(&(lockarray[type]));
+  }
+}
+
+static unsigned long thread_id(void)
+{
+  unsigned long ret;
+  ret = (unsigned long)pthread_self();
+  return ret;
+}
+
+static void init_locks(void)
+{
+  int i;
+
+  lockarray = (pthread_mutex_t *)OPENSSL_malloc(CRYPTO_num_locks() *
+                                                sizeof(pthread_mutex_t));
+  for (i = 0; i < CRYPTO_num_locks(); i++) {
+    pthread_mutex_init(&(lockarray[i]), NULL);
+  }
+
+  CRYPTO_set_id_callback((unsigned long (*)())thread_id);
+  CRYPTO_set_locking_callback((void (*)())lock_callback);
+}
+
+static void kill_locks(void)
+{
+  int i;
+
+  CRYPTO_set_locking_callback(NULL);
+  for (i = 0; i < CRYPTO_num_locks(); i++) {
+    pthread_mutex_destroy(&(lockarray[i]));
+  }
+
+  OPENSSL_free(lockarray);
+}
+#else  // OPENSSL_VERSION_NUMBER
+# error "Implement init_locks and kill_locks for your SSL library."
+#endif  // OPENSSL_VERSION_NUMBER
+
 //==============================================================================
 //==============================================================================
 //==============================================================================
@@ -4406,6 +4461,7 @@ static int wg_init(void)
   wg_context_t *ctx = NULL;
   int result = -1;  // Pessimistically assume failure.
 
+  init_locks();
   curl_global_init(CURL_GLOBAL_SSL);
 
   if (wg_configbuilder_g == NULL) {
@@ -4450,6 +4506,7 @@ static int wg_init(void)
 // from the server).
 static int wg_shutdown(void)
 {
+  kill_locks();
   if (!wg_end_to_end_test_mode()) {
     return 0;
   }
