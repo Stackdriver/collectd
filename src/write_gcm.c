@@ -158,72 +158,68 @@ static void EVP_MD_CTX_free(EVP_MD_CTX *ctx) {
   EVP_MD_CTX_cleanup(ctx);
   OPENSSL_free(ctx);
 }
-#endif
 
-// Multi-threading support for Curl and TLS. This is needed because wg_write
+// Multi-threading support for curl and TLS. This is needed because wg_write
 // creates one thread for each queue (ATS and GSD).
 // See https://curl.haxx.se/libcurl/c/threadsafe.html
-
-#if OPENSSL_VERSION_NUMBER < 0x10003000L
-
 #include <openssl/crypto.h>
 
 static pthread_mutex_t *lockarray;
 
-static void lock_callback(int mode, int type, char *file, int line)
-{
+static void crypto_lock_callback(int mode, int index, const char *file, int line) {
   if (mode & CRYPTO_LOCK) {
-    pthread_mutex_lock(&(lockarray[type]));
+    pthread_mutex_lock(&(lockarray[index]));
   } else {
-    pthread_mutex_unlock(&(lockarray[type]));
+    pthread_mutex_unlock(&(lockarray[index]));
   }
 }
 
-static unsigned long thread_id(void)
-{
-  unsigned long ret;
-  ret = (unsigned long)pthread_self();
-  return ret;
+static unsigned long crypto_thread_id(void) {
+  return (unsigned long)pthread_self();
 }
 
-static void init_locks(void)
-{
-  int i;
-
+static void crypto_init_locks(void) {
   if (CRYPTO_get_id_callback() != NULL && CRYPTO_get_locking_callback() != NULL) {
-    // lockarray will remain NULL, bypassing destruction inside kill_locks().
+    // lockarray will remain NULL, bypassing destruction inside crypto_cleanup_locks().
     WARNING("write_gcm: CRYPTO callbacks already set. Skipping initialization.");
     return;
   }
 
   lockarray = (pthread_mutex_t *)OPENSSL_malloc(CRYPTO_num_locks() *
                                                 sizeof(pthread_mutex_t));
-  for (i = 0; i < CRYPTO_num_locks(); i++) {
+  for (int i = 0; i < CRYPTO_num_locks(); i++) {
     pthread_mutex_init(&(lockarray[i]), NULL);
   }
 
-  CRYPTO_set_id_callback((unsigned long (*)())thread_id);
-  CRYPTO_set_locking_callback((void (*)())lock_callback);
+  CRYPTO_set_id_callback(crypto_thread_id);
+  CRYPTO_set_locking_callback(crypto_lock_callback);
 }
 
-static void kill_locks(void)
-{
-  int i;
-
+static void crypto_cleanup_locks(void) {
   if (lockarray == NULL) {
     return;
   }
 
+  CRYPTO_set_id_callback(NULL);
   CRYPTO_set_locking_callback(NULL);
-  for (i = 0; i < CRYPTO_num_locks(); i++) {
+  for (int i = 0; i < CRYPTO_num_locks(); i++) {
     pthread_mutex_destroy(&(lockarray[i]));
   }
 
   OPENSSL_free(lockarray);
   lockarray = NULL;
 }
-#else  // OPENSSL_VERSION_NUMBER
-# error "Implement init_locks and kill_locks for your SSL library."
+
+#elif defined(OPENSSL_VERSION_NUMBER)
+
+// OpenSSL>=1.1.0 takes care of this.
+static void crypto_init_locks(void) {
+}
+static void crypto_cleanup_locks(void) {
+}
+
+#else
+# error "Implement crypto_init_locks and crypto_cleanup_locks for your SSL library."
 #endif  // OPENSSL_VERSION_NUMBER
 
 //==============================================================================
@@ -4472,7 +4468,7 @@ static int wg_init(void)
   wg_context_t *ctx = NULL;
   int result = -1;  // Pessimistically assume failure.
 
-  init_locks();
+  crypto_init_locks();
   curl_global_init(CURL_GLOBAL_SSL);
 
   if (wg_configbuilder_g == NULL) {
@@ -4517,7 +4513,7 @@ static int wg_init(void)
 // from the server).
 static int wg_shutdown(void)
 {
-  kill_locks();
+  crypto_cleanup_locks();
   if (!wg_end_to_end_test_mode()) {
     return 0;
   }
