@@ -164,13 +164,13 @@ static void EVP_MD_CTX_free(EVP_MD_CTX *ctx) {
 // See https://curl.haxx.se/libcurl/c/threadsafe.html
 #include <openssl/crypto.h>
 
-static pthread_mutex_t *lockarray;
+static pthread_mutex_t *crypto_locks;
 
 static void crypto_lock_callback(int mode, int index, const char *file, int line) {
   if (mode & CRYPTO_LOCK) {
-    pthread_mutex_lock(&(lockarray[index]));
+    pthread_mutex_lock(&(crypto_locks[index]));
   } else {
-    pthread_mutex_unlock(&(lockarray[index]));
+    pthread_mutex_unlock(&(crypto_locks[index]));
   }
 }
 
@@ -180,15 +180,15 @@ static unsigned long crypto_thread_id(void) {
 
 static void crypto_init_locks(void) {
   if (CRYPTO_get_id_callback() != NULL && CRYPTO_get_locking_callback() != NULL) {
-    // lockarray will remain NULL, bypassing destruction inside crypto_cleanup_locks().
+    // crypto_locks will remain NULL, bypassing destruction inside crypto_cleanup_locks().
     WARNING("write_gcm: CRYPTO callbacks already set. Skipping initialization.");
     return;
   }
 
-  lockarray = (pthread_mutex_t *)OPENSSL_malloc(CRYPTO_num_locks() *
-                                                sizeof(pthread_mutex_t));
+  crypto_locks = (pthread_mutex_t *)OPENSSL_malloc(CRYPTO_num_locks() *
+                                                   sizeof(pthread_mutex_t));
   for (int i = 0; i < CRYPTO_num_locks(); i++) {
-    pthread_mutex_init(&(lockarray[i]), NULL);
+    pthread_mutex_init(&(crypto_locks[i]), NULL);
   }
 
   CRYPTO_set_id_callback(crypto_thread_id);
@@ -196,18 +196,18 @@ static void crypto_init_locks(void) {
 }
 
 static void crypto_cleanup_locks(void) {
-  if (lockarray == NULL) {
+  if (crypto_locks == NULL) {
     return;
   }
 
   CRYPTO_set_id_callback(NULL);
   CRYPTO_set_locking_callback(NULL);
   for (int i = 0; i < CRYPTO_num_locks(); i++) {
-    pthread_mutex_destroy(&(lockarray[i]));
+    pthread_mutex_destroy(&(crypto_locks[i]));
   }
 
-  OPENSSL_free(lockarray);
-  lockarray = NULL;
+  OPENSSL_free(crypto_locks);
+  crypto_locks = NULL;
 }
 
 #elif defined(OPENSSL_VERSION_NUMBER)
