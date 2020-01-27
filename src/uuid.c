@@ -29,7 +29,9 @@
 #include "common.h"
 #include "plugin.h"
 
-#if HAVE_SYS_SYSCTL_H
+#if defined(HAVE_SYS_SYSCTL_H) && defined(HAVE_SYSCTLBYNAME) ||                \
+    defined(__OpenBSD__)
+/* Implies BSD variant */
 #include <sys/sysctl.h>
 #endif
 
