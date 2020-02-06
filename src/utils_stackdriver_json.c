@@ -37,9 +37,11 @@
 
 #if HAVE_YAJL_V2
 typedef long long wg_yajl_integer_t;
+#define PRIyi "%lld"
 typedef size_t wg_yajl_size_t;
 #else
 typedef long wg_yajl_integer_t;
+#define PRIyi "%ld"
 typedef unsigned int wg_yajl_size_t;
 #endif
 
@@ -193,7 +195,7 @@ static int summary_parse_string(void *c, const unsigned char *val,
 static int summary_parse_integer(void *c, wg_yajl_integer_t val) {
   parse_summary_t *ctx = (parse_summary_t *)c;
   log_context(ctx);
-  DEBUG("integer: %lld", val);
+  DEBUG("integer: " PRIyi, val);
   if (ctx->state.current_field == FIELD_TOTAL_POINT_COUNT) {
     if (ctx->response->total_point_count > 0) {
       DEBUG("totalPointCount was already set. Bug?");
