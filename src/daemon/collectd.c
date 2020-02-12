@@ -43,7 +43,7 @@
 # include <sys/stat.h>
 # include <unistd.h>
 # undef gethostname
-# include <Winsock2.h>
+# include <winsock2.h>
 #endif
 #include <netdb.h>
 

@@ -76,7 +76,7 @@
 
 #ifdef WIN32
 # undef gethostname
-# include <Winsock2.h>
+# include <winsock2.h>
 #endif
 
 extern char *optarg;
