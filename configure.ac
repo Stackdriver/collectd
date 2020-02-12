@@ -107,13 +107,13 @@ case $host_os in
 	AC_DEFINE([KERNEL_FREEBSD], 1, [True if program is to be compiled for a FreeBSD kernel])
 	ac_system="FreeBSD"
 	;;
+	*mingw32*)
+	AC_DEFINE([WIN32], 1, [True if program is to be compiled for Windows])
+	ac_system="Windows_NT"
+	;;
 	*)
 	ac_system="unknown"
 esac
-if test "x$OS" = "xWindows_NT"
-then
-	ac_system="Windows_NT"
-fi
 AC_MSG_RESULT([$ac_system])
 
 AM_CONDITIONAL([BUILD_LINUX],[test "x$ac_system" = "xLinux"])
