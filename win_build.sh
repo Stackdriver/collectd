@@ -1,5 +1,8 @@
 set -e
 
+HOST=x86_64-w64-mingw32
+CC=${HOST}-gcc
+
 TOP_SRCDIR=`pwd`
 
 mkdir -p _build_aux
@@ -33,7 +36,7 @@ else
       recv
 
   cd ${TOP_SRCDIR}/_build_aux/_gnulib
-  ./configure --host="mingw32" LIBS="-lws2_32 -lpthread"
+  ./configure --host="$HOST" LIBS="-lws2_32 -lpthread"
   make 
   cd gllib
 
@@ -54,7 +57,7 @@ else
   wget http://ftpmirror.gnu.org/libtool/libtool-2.4.6.tar.gz
   tar xf libtool-2.4.6.tar.gz
   cd libtool-2.4.6
-  ./configure --host="mingw32" --prefix="${TOP_SRCDIR}/_build_aux/_libtool"
+  ./configure --host="$HOST" --prefix="${TOP_SRCDIR}/_build_aux/_libtool"
   make
   make install
 fi
@@ -69,7 +72,7 @@ else
   wget http://curl.haxx.se/download/curl-7.44.0.tar.gz
   tar xf curl-7.44.0.tar.gz
   cd curl-7.44.0
-  ./configure --host="mingw32" --with-winssl --prefix="${TOP_SRCDIR}/_build_aux/_libcurl"
+  ./configure --host="$HOST" --with-winssl --prefix="${TOP_SRCDIR}/_build_aux/_libcurl"
   make
   make install
 fi
@@ -90,7 +93,8 @@ export LIBS="-lgnu"
 export CFLAGS="-Drestrict=__restrict -I${GNULIB_DIR}"
 
 ./configure --prefix="C:/opt" --disable-all-plugins \
-  --host="mingw32" \
+  --host="$HOST" \
+  --with-fp-layout="nothing" \
   --with-libcurl="${LIBCURL_DIR}" \
   --enable-logfile \
   --enable-target_replace \
