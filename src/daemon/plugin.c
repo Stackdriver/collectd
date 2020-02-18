@@ -51,7 +51,7 @@
 #include <pthread_np.h> /* for pthread_set_name_np(3) */
 #endif
 
-#include <dlfcn.h>
+#include <ltdl.h>
 
 /*
  * Private structures
@@ -397,20 +397,29 @@ static int plugin_unregister(llist_t *list, const char *name) /* {{{ */
 /* plugin_load_file loads the shared object "file" and calls its
  * "module_register" function. Returns zero on success, non-zero otherwise. */
 static int plugin_load_file(char const *file, _Bool global) {
-  int flags = RTLD_NOW;
-  if (global)
-    flags |= RTLD_GLOBAL;
+  lt_dlinit();
+  lt_dlerror(); /* clear errors */
 
-  void *dlh = dlopen(file, flags);
+  void *dlh;
+  if (global) {
+    lt_dladvise advise;
+    lt_dladvise_init(&advise);
+    lt_dladvise_global(&advise);
+    dlh = lt_dlopenadvise(file, advise);
+    lt_dladvise_destroy(&advise);
+  } else {
+    dlh = lt_dlopen(file);
+  }
+
   if (dlh == NULL) {
     char errbuf[1024] = "";
 
     snprintf(errbuf, sizeof(errbuf),
-             "dlopen(\"%s\") failed: %s. "
+             "lt_dlopen(\"%s\") failed: %s. "
              "The most common cause for this problem is missing dependencies. "
              "Use ldd(1) to check the dependencies of the plugin / shared "
              "object.",
-             file, dlerror());
+             file, lt_dlerror());
 
     /* This error is printed to STDERR unconditionally. If list_log is NULL,
      * plugin_log() will also print to STDERR. We avoid duplicate output by
@@ -423,11 +432,11 @@ static int plugin_load_file(char const *file, _Bool global) {
     return ENOENT;
   }
 
-  void (*reg_handle)(void) = dlsym(dlh, "module_register");
+  void (*reg_handle)(void) = lt_dlsym(dlh, "module_register");
   if (reg_handle == NULL) {
     ERROR("Couldn't find symbol \"module_register\" in \"%s\": %s\n", file,
-          dlerror());
-    dlclose(dlh);
+          lt_dlerror());
+    lt_dlclose(dlh);
     return ENOENT;
   }
 

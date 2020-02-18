@@ -1,6 +1,10 @@
-#! /bin/sh
+#! /bin/bash
 
 GLOBAL_ERROR_INDICATOR=0
+
+if test "${OSTYPE}" = "cygwin"; then
+	WINDOWS=yes
+fi
 
 check_for_application ()
 {
@@ -18,79 +22,73 @@ EOF
 	done
 }
 
-setup_libtool ()
-{
-	libtoolize=""
-	libtoolize --version >/dev/null 2>/dev/null
+check_for_application lex yacc autoheader aclocal automake autoconf
+
+# Actually we don't need the pkg-config executable, but we need the M4 macros.
+# We check for `pkg-config' here and hope that M4 macros will then be
+# available, too.
+check_for_application pkg-config
+
+LIBTOOL_DIR=/usr
+
+if test "${WINDOWS}" = "yes"; then
+	HOST=x86_64-w64-mingw32
+	CC=${HOST}-gcc
+	check_for_application git make $CC
+
+	TOP_SRCDIR=$(pwd)
+	mkdir -p _build_aux
+
+	# Build libtool
+	LIBTOOL_DIR="${TOP_SRCDIR}/_build_aux/_libtool"
+	pushd _build_aux
+	if [ -d "_libtool" ]; then
+		echo "Assuming that libtool is already built, because _libtool exists."
+	else
+		wget http://ftpmirror.gnu.org/libtool/libtool-2.4.6.tar.gz
+		tar xf libtool-2.4.6.tar.gz
+		cd libtool-2.4.6
+		./configure --host="$HOST" --prefix="${LIBTOOL_DIR}"
+		make
+		make install
+	fi
+	PATH="${LIBTOOL_DIR}/bin:${PATH}"
+	export LDFLAGS="-L${LIBTOOL_DIR}/bin -L${LIBTOOL_DIR}/lib ${LDFLAGS}"
+	popd
+fi
+
+libtoolize=""
+libtoolize --version >/dev/null 2>/dev/null
+if test $? -eq 0
+then
+	libtoolize=libtoolize
+else
+	glibtoolize --version >/dev/null 2>/dev/null
 	if test $? -eq 0
 	then
-		libtoolize=libtoolize
+		libtoolize=glibtoolize
 	else
-		glibtoolize --version >/dev/null 2>/dev/null
-		if test $? -eq 0
-		then
-			libtoolize=glibtoolize
-		else
-			cat >&2 <<EOF
-	WARNING: Neither \`libtoolize' nor \`glibtoolize' have been found!
-	    Please make sure that one of them is installed and is in one of the
-	    directories listed in the PATH environment variable.
+		cat >&2 <<EOF
+WARNING: Neither \`libtoolize' nor \`glibtoolize' have been found!
+    Please make sure that one of them is installed and is in one of the
+    directories listed in the PATH environment variable.
 EOF
-			GLOBAL_ERROR_INDICATOR=1
-		fi
-	 fi
-
-	if test "$GLOBAL_ERROR_INDICATOR" != "0"
-	then
-		exit 1
+		GLOBAL_ERROR_INDICATOR=1
 	fi
-}
+ fi
 
-build ()
-{
-	set -x
-	autoheader \
-	&& aclocal -I /usr/share/aclocal \
-	&& $libtoolize --copy --force \
-	&& automake --add-missing --copy \
-	&& autoconf
-}
+if test "$GLOBAL_ERROR_INDICATOR" != "0"
+then
+	exit 1
+fi
 
-build_linux ()
-{
-	echo "Building for Linux..."
-	check_for_application lex bison autoheader aclocal automake autoconf pkg-config
-	setup_libtool
-	build
-}
-
-build_windows ()
-{
+if test "${WINDOWS}" = "yes"; then
 	echo "Building for Windows..."
-	check_for_application aclocal autoconf autoheader automake bison flex git make pkg-config x86_64-w64-mingw32-gcc
-	setup_libtool
 
 	set -e
 
-	: ${INSTALL_DIR:="C:/PROGRA~1/collectd"}
-	: ${LIBDIR:="${INSTALL_DIR}"}
-	: ${BINDIR:="${INSTALL_DIR}"}
-	: ${SBINDIR:="${INSTALL_DIR}"}
-	: ${SYSCONFDIR:="${INSTALL_DIR}"}
-	: ${LOCALSTATEDIR:="${INSTALL_DIR}"}
-	: ${DATAROOTDIR:="${INSTALL_DIR}"}
-	: ${DATADIR:="${INSTALL_DIR}"}
-	
-	echo "Installing collectd to ${INSTALL_DIR}."
-	TOP_SRCDIR=$(pwd)
-	MINGW_ROOT="/usr/x86_64-w64-mingw32/sys-root/mingw"
-	GNULIB_DIR="${TOP_SRCDIR}/_build_aux/_gnulib/gllib"
-
-	export CC="x86_64-w64-mingw32-gcc"
-
-	mkdir -p _build_aux
-
 	pushd _build_aux
+	GNULIB_DIR="${TOP_SRCDIR}/_build_aux/_gnulib/gllib"
 	if [ -d "_gnulib" ]; then
 	  echo "Assuming that gnulib is already built, because _gnulib exists."
 	else
@@ -119,10 +117,10 @@ build_windows ()
 	      poll \
 	      recv \
 	      net_if \
-          fnmatch
+	      fnmatch
 
 	  cd ${TOP_SRCDIR}/_build_aux/_gnulib
-	  ./configure --host="mingw32" LIBS="-lws2_32 -lpthread"
+	  ./configure --host="$HOST" LIBS="-lws2_32 -lpthread"
 	  make 
 	  cd gllib
 
@@ -132,13 +130,35 @@ build_windows ()
 	  $CC -shared -o libgnu.dll $OBJECT_LIST -lws2_32 -lpthread
 	  rm libgnu.a # get rid of it, to use libgnu.dll
 	fi
-	popd
-
-	build
-
-	export LDFLAGS="-L${GNULIB_DIR}"
-	export LIBS="-lgnu"
 	export CFLAGS="-Drestrict=__restrict -I${GNULIB_DIR}"
+	export LDFLAGS="-L${GNULIB_DIR} ${LDFLAGS}"
+	export LIBS="-lgnu"
+	popd
+else
+	echo "Building for Linux..."
+fi
+
+set -x
+
+autoheader \
+&& aclocal -I ${LIBTOOL_DIR}/share/aclocal \
+&& $libtoolize --ltdl --copy --force \
+&& automake --add-missing --copy \
+&& autoconf
+
+if test "${WINDOWS}" = "yes"; then
+	MINGW_ROOT="/usr/x86_64-w64-mingw32/sys-root/mingw"
+
+	: ${INSTALL_DIR:="C:/PROGRA~1/collectd"}
+	: ${LIBDIR:="${INSTALL_DIR}"}
+	: ${BINDIR:="${INSTALL_DIR}"}
+	: ${SBINDIR:="${INSTALL_DIR}"}
+	: ${SYSCONFDIR:="${INSTALL_DIR}"}
+	: ${LOCALSTATEDIR:="${INSTALL_DIR}"}
+	: ${DATAROOTDIR:="${INSTALL_DIR}"}
+	: ${DATADIR:="${INSTALL_DIR}"}
+
+	echo "Installing collectd to ${INSTALL_DIR}."
 
 	./configure \
 	  --prefix="${INSTALL_DIR}" \
@@ -150,7 +170,8 @@ build_windows ()
 	  --datarootdir="${DATAROOTDIR}" \
 	  --datarootdir="${DATADIR}" \
 	  --disable-all-plugins \
-	  --host="mingw32" \
+	  --host="$HOST" \
+	  --with-fp-layout="nothing" \
 	  --enable-logfile \
 	  --enable-disk \
 	  --enable-eventlog \
@@ -161,12 +182,12 @@ build_windows ()
 	  --enable-target_set \
 	  --enable-wmi
 
-	cp ${GNULIB_DIR}/../config.h src/gnulib_config.h
-	echo "#include <config.h.in>" >> src/gnulib_config.h
-
 	# TODO: find a sane way to set LTCFLAGS for libtool
 	cp libtool libtool_bak
 	sed -i "s%\$LTCC \$LTCFLAGS\(.*cwrapper.*\)%\$LTCC \1%" libtool
+
+	cp ${GNULIB_DIR}/../config.h src/gnulib_config.h
+	echo "#include <config.h.in>" >> src/gnulib_config.h
 
 	make
 	make install
@@ -178,11 +199,5 @@ build_windows ()
 	cp "${MINGW_ROOT}/bin/libdl.dll" "${INSTALL_DIR}"
 
 	echo "Done"
-}
-
-if test "${OSTYPE}" = "cygwin"; then
-	build_windows
-else
-	build_linux
 fi
 

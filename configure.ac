@@ -3,7 +3,7 @@ AC_PREREQ([2.60])
 AC_INIT([collectd],[m4_esyscmd(./version-gen.sh)])
 AC_CONFIG_SRCDIR(src/target_set.c)
 AC_CONFIG_HEADERS(src/config.h)
-AC_CONFIG_AUX_DIR([build-aux])
+AC_CONFIG_AUX_DIR([libltdl/config])
 AC_CONFIG_MACRO_DIR([m4])
 
 dnl older automake's default of ARFLAGS=cru is noisy on newer binutils;
@@ -11,7 +11,9 @@ dnl we don't really need the 'u' even in older toolchains.  Then there is
 dnl older libtool, which spelled it AR_FLAGS
 m4_divert_text([DEFAULTS], [: "${ARFLAGS=cr} ${AR_FLAGS=cr}"])
 
+LT_CONFIG_LTDL_DIR([libltdl])
 LT_INIT([dlopen disable-static])
+LTDL_INIT([convenience])
 
 AM_INIT_AUTOMAKE([subdir-objects tar-pax dist-bzip2 no-dist-gzip foreign])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
@@ -35,6 +37,7 @@ AC_PROG_CXX
 AC_PROG_CPP
 AC_PROG_EGREP
 AC_PROG_INSTALL
+AC_PROG_LIBTOOL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
 AM_PROG_CC_C_O
@@ -62,12 +65,6 @@ AC_CACHE_CHECK([if Bison is the parser generator],
 if test "x$collectd_cv_prog_bison" = "xno" && test ! -f "${srcdir}/src/liboconfig/parser.c"; then
   AC_MSG_ERROR([bison is missing and you do not have ${srcdir}/src/liboconfig/parser.c. Please install bison])
 fi
-
-if test "x$lt_cv_dlopen" = "xno"; then
-  AC_MSG_ERROR([Your system does not support dlopen])
-fi
-
-AC_SUBST([DLOPEN_LIBS], [$lt_cv_dlopen_libs])
 
 AC_MSG_CHECKING([for kernel type ($host_os)])
 case $host_os in
@@ -143,6 +140,10 @@ fi
 
 if test "x$ac_system" = "xAIX"; then
   AC_DEFINE([_THREAD_SAFE_ERRNO], [1], [Define to use the thread-safe version of errno under AIX.])
+fi
+
+if test "x$ac_system" = "xWindows"; then
+  AC_CHECK_TOOL(WINDMC, [windmc])
 fi
 
 # Where to install .pc files.
@@ -6889,6 +6890,12 @@ AC_MSG_RESULT([    LDFLAGS . . . . . . . $LDFLAGS])
 AC_MSG_RESULT([    PROTOC  . . . . . . . $PROTOC])
 AC_MSG_RESULT([    YACC  . . . . . . . . $YACC])
 AC_MSG_RESULT([    YFLAGS  . . . . . . . $YFLAGS])
+
+if test "x$ac_system" = "xWindows"; then
+AC_MSG_RESULT([    RC  . . . . . . . . . $RC])
+AC_MSG_RESULT([    WINDMC  . . . . . . . $WINDMC])
+fi
+
 AC_MSG_RESULT()
 AC_MSG_RESULT([  Libraries:])
 AC_MSG_RESULT([    intel mic . . . . . . $with_mic])
