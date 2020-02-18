@@ -51,7 +51,7 @@
 #include <pthread_np.h> /* for pthread_set_name_np(3) */
 #endif
 
-#include <dlfcn.h>
+#include <ltdl.h>
 
 /*
  * Private structures
@@ -399,25 +399,31 @@ static int plugin_unregister(llist_t *list, const char *name) /* {{{ */
  * object, but it will bitch about a shared object not having a
  * ``module_register'' symbol..
  */
-static int plugin_load_file(const char *file, _Bool global) {
-  void (*reg_handle)(void);
+static int plugin_load_file(char const *file, _Bool global) {
+  lt_dlinit();
+  lt_dlerror(); /* clear errors */
 
-  int flags = RTLD_NOW;
-  if (global)
-    flags |= RTLD_GLOBAL;
-
-  void *dlh = dlopen(file, flags);
+  void *dlh;
+  if (global) {
+    lt_dladvise advise;
+    lt_dladvise_init(&advise);
+    lt_dladvise_global(&advise);
+    dlh = lt_dlopenadvise(file, advise);
+    lt_dladvise_destroy(&advise);
+  } else {
+    dlh = lt_dlopen(file);
+  }
 
   if (dlh == NULL) {
     char errbuf[1024] = "";
 
     snprintf(errbuf, sizeof(errbuf),
-             "dlopen (\"%s\") failed: %s. "
+             "lt_dlopen (\"%s\") failed: %s. "
              "The most common cause for this problem is "
              "missing dependencies. Use ldd(1) to check "
              "the dependencies of the plugin "
              "/ shared object.",
-             file, dlerror());
+             file, lt_dlerror());
 
     ERROR("%s", errbuf);
     /* Make sure this is printed to STDERR in any case, but also
@@ -428,11 +434,11 @@ static int plugin_load_file(const char *file, _Bool global) {
     return 1;
   }
 
-  reg_handle = (void (*)(void))dlsym(dlh, "module_register");
+  void (*reg_handle)(void) = lt_dlsym(dlh, "module_register");
   if (reg_handle == NULL) {
     WARNING("Couldn't find symbol \"module_register\" in \"%s\": %s\n", file,
-            dlerror());
-    dlclose(dlh);
+            lt_dlerror());
+    lt_dlclose(dlh);
     return -1;
   }
 

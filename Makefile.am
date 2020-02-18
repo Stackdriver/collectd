@@ -266,9 +266,8 @@ libcollectd_la_LIBADD = \
 	libllist.la \
 	liboconfig.la \
 	-lm \
-	-ldl \
-	$(COMMON_LIBS) \
-	$(DLOPEN_LIBS)
+	-lltdl \
+	$(COMMON_LIBS)
 
 collectd_SOURCES = \
 	src/daemon/collectd.c \
@@ -1749,7 +1748,7 @@ if BUILD_PLUGIN_EVENTLOG
 RCFLAGS = --preprocessor="${CC} -E -xc-header -DRC_INVOKED"
 
 %.lo: %.mc
-	windmc $*.mc --headerdir=src --rcdir=src
+	$(WINDMC) $*.mc --headerdir=src --rcdir=src
 	$(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --tag=RC --mode=compile $(RC) $(RCFLAGS) $*.rc -o $*.lo
 
 pkglib_LTLIBRARIES += eventlogres.la

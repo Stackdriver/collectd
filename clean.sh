@@ -16,6 +16,7 @@ true \
 && rm -f depcomp \
 && rm -f install-sh \
 && rm -f libtool \
+&& rm -f -r libltdl \
 && rm -f ltmain.sh \
 && rm -f Makefile \
 && rm -f Makefile.in \
