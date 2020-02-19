@@ -196,6 +196,7 @@ if test "${WINDOWS}" = "yes"; then
 
 		cp ".libs/libcollectd-0.dll" "${INSTALL_DIR}"
 		cp "${GNULIB_DIR}/libgnu.dll" "${INSTALL_DIR}"
+		cp "${LIBTOOL_DIR}/bin/libltdl-7.dll" "${INSTALL_DIR}"
 		cp "${MINGW_ROOT}/bin/zlib1.dll" "${INSTALL_DIR}"
 		cp "${MINGW_ROOT}/bin/libwinpthread-1.dll" "${INSTALL_DIR}"
 		cp "${MINGW_ROOT}/bin/libdl.dll" "${INSTALL_DIR}"
