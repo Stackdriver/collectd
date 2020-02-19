@@ -190,13 +190,16 @@ if test "${WINDOWS}" = "yes"; then
 	echo "#include <config.h.in>" >> src/gnulib_config.h
 
 	make
-	make install
 
-	cp ".libs/libcollectd-0.dll" "${INSTALL_DIR}"
-	cp "${GNULIB_DIR}/libgnu.dll" "${INSTALL_DIR}"
-	cp "${MINGW_ROOT}/bin/zlib1.dll" "${INSTALL_DIR}"
-	cp "${MINGW_ROOT}/bin/libwinpthread-1.dll" "${INSTALL_DIR}"
-	cp "${MINGW_ROOT}/bin/libdl.dll" "${INSTALL_DIR}"
+	if test "${NOINSTALL:-no}" != yes; then
+		make install
+
+		cp ".libs/libcollectd-0.dll" "${INSTALL_DIR}"
+		cp "${GNULIB_DIR}/libgnu.dll" "${INSTALL_DIR}"
+		cp "${MINGW_ROOT}/bin/zlib1.dll" "${INSTALL_DIR}"
+		cp "${MINGW_ROOT}/bin/libwinpthread-1.dll" "${INSTALL_DIR}"
+		cp "${MINGW_ROOT}/bin/libdl.dll" "${INSTALL_DIR}"
+	fi
 
 	echo "Done"
 fi
