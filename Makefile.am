@@ -6,7 +6,7 @@ pkgdatadir=$(datadir)
 pkglibdir=$(libdir)/plugins
 pkglocalstatedir=${localstatedir}
 else
-pkglocalstatedir="${localstatedir}/lib/${PACKAGE_NAME}"
+pkglocalstatedir=${localstatedir}/lib/${PACKAGE_NAME}
 endif
 
 
