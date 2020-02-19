@@ -1960,7 +1960,7 @@ static int sockent_client_connect(sockent_t *se) /* {{{ */
                               .ai_protocol = IPPROTO_UDP,
                               .ai_socktype = SOCK_DGRAM};
 #ifndef WIN32
-  ai_hints.ai_flags = AI_ADDDRCONFIG;
+  ai_hints.ai_flags = AI_ADDRCONFIG;
 #endif
 
   status = getaddrinfo(se->node,
@@ -2047,7 +2047,7 @@ static int sockent_server_listen(sockent_t *se) /* {{{ */
                               .ai_protocol = IPPROTO_UDP,
                               .ai_socktype = SOCK_DGRAM};
 #ifndef WIN32
-  ai_hints |= AI_ADDRCONFIG;
+  ai_hints.ai_flags |= AI_ADDRCONFIG;
 #endif
 
   status = getaddrinfo(node, service, &ai_hints, &ai_list);
