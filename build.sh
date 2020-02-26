@@ -48,7 +48,7 @@ fi
 set -x
 
 autoheader \
-&& aclocal \
 && $libtoolize --copy --force \
+&& aclocal -Im4 \
 && automake --add-missing --copy \
 && autoconf
