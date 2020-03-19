@@ -1752,7 +1752,8 @@ RCFLAGS = --preprocessor="${CC} -E -xc-header -DRC_INVOKED"
 	$(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --tag=RC --mode=compile $(RC) $(RCFLAGS) $*.rc -o $*.lo
 
 pkglib_LTLIBRARIES += eventlogres.la
-eventlogres_la_SOURCES = src/eventlogres.mc src/eventlogres.c
+eventlogres_la_SOURCES = src/eventlogres.mc
+nodist_eventlogres_la_SOURCES = src/eventlogres.c
 eventlogres_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 
 pkglib_LTLIBRARIES += eventlog.la
