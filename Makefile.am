@@ -137,7 +137,7 @@ bin_PROGRAMS = \
 	collectdctl
 endif # BUILD_WIN32
 
-EXTRA_LTLIBRARIES = \
+noinst_LTLIBRARIES = \
 	libavltree.la \
 	libcmds.la \
 	libcommon.la \
@@ -535,7 +535,7 @@ test_utils_vl_lookup_LDADD += -lkstat
 endif
 
 if BUILD_WITH_LIBMOUNT
-EXTRA_LTLIBRARIES += libmount.la
+noinst_LTLIBRARIES += libmount.la
 check_PROGRAMS += test_utils_mount
 libmount_la_SOURCES = \
 	src/utils_mount.c \
@@ -1985,7 +1985,7 @@ libstackdriver_json_la_CPPFLAGS  = $(AM_CPPFLAGS) $(BUILD_WITH_LIBYAJL_CPPFLAGS)
 libstackdriver_json_la_LDFLAGS   = $(AM_LDFLAGS) $(BUILD_WITH_LIBYAJL_LDFLAGS)
 libstackdriver_json_la_LIBADD    = $(BUILD_WITH_LIBYAJL_LIBS) libcommon.la libllist.la
 
-EXTRA_LTLIBRARIES += libstackdriver_json.la
+noinst_LTLIBRARIES += libstackdriver_json.la
 check_PROGRAMS += test_stackdriver_json
 
 EXTRA_DIST += \
