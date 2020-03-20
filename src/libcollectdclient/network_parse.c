@@ -23,6 +23,10 @@
  *   Florian octo Forster <octo at collectd.org>
  **/
 
+#ifdef WIN32
+#include "gnulib_config.h"
+#endif
+
 #include "config.h"
 
 #if !defined(__GNUC__) || !__GNUC__

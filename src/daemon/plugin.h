@@ -387,7 +387,7 @@ int plugin_dispatch_missing(const value_list_t *vl);
 int plugin_dispatch_notification(const notification_t *notif);
 
 void plugin_log(int level, const char *format, ...)
-    __attribute__((format(printf, 2, 3)));
+    _ATTRIBUTE_FORMAT_PRINTF(2, 3);
 
 /* These functions return the parsed severity or less than zero on failure. */
 int parse_log_severity(const char *severity);

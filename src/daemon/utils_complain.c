@@ -32,7 +32,7 @@
 #include "utils_complain.h"
 
 /* vcomplain returns 0 if it did not report, 1 else */
-__attribute__((format(printf, 3, 0))) static int
+_ATTRIBUTE_FORMAT_PRINTF(3, 0) static int
 vcomplain(int level, c_complain_t *c, const char *format, va_list ap) {
   cdtime_t now;
   char message[512];
