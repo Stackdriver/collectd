@@ -1039,7 +1039,7 @@ static int __attribute__((warn_unused_result)) probe_cpu(void) {
 /*
  * Read a single int from a file.
  */
-static int __attribute__((format(printf, 1, 2)))
+static int _ATTRIBUTE_FORMAT_PRINTF(1, 2)
 parse_int_file(const char *fmt, ...) {
   va_list args;
   char path[PATH_MAX];

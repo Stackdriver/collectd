@@ -30,12 +30,19 @@
 #define DATA_MAX_NAME_LEN 128
 #endif
 
+#ifndef _ATTRIBUTE_FORMAT_PRINTF
+/* If gnulib is present, use its definition. */
+#ifdef _GL_ATTRIBUTE_FORMAT_PRINTF
+#define _ATTRIBUTE_FORMAT_PRINTF(formatstring_parameter, first_argument) \
+    _GL_ATTRIBUTE_FORMAT_PRINTF(formatstring_parameter, first_argument)
+#else /* !_GL_ATTRIBUTE_FORMAT_PRINTF */
+#define _ATTRIBUTE_FORMAT_PRINTF(formatstring_parameter, first_argument) \
+    __attribute__((format(printf, formatstring_parameter, first_argument)))
+#endif /* !_GL_ATTRIBUTE_FORMAT_PRINTF */
+#endif /* _ATTRIBUTE_FORMAT_PRINTF */
+
 #ifndef PRIsz
-#ifdef WIN32
-#define PRIsz "Iu"
-#else
 #define PRIsz "zu"
-#endif /* WIN32 */
 #endif /* !PRIsz */
 
 /* Type for time as used by "utils_time.h" */
