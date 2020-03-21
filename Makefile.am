@@ -129,7 +129,7 @@ bin_PROGRAMS = \
 	collectdctl
 endif # BUILD_WIN32
 
-EXTRA_LTLIBRARIES = \
+noinst_LTLIBRARIES = \
 	libavltree.la \
 	libcmds.la \
 	libcommon.la \
@@ -512,7 +512,7 @@ test_utils_vl_lookup_LDADD += -lkstat
 endif
 
 if BUILD_WITH_LIBMOUNT
-EXTRA_LTLIBRARIES += libmount.la
+noinst_LTLIBRARIES += libmount.la
 check_PROGRAMS += test_utils_mount
 libmount_la_SOURCES = \
 	src/utils_mount.c \
@@ -1533,7 +1533,7 @@ python_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(LIBPYTHON_LDFLAGS)
 endif
 
 if HAVE_LIBMNL
-EXTRA_LTLIBRARIES += libtaskstats.la
+noinst_LTLIBRARIES += libtaskstats.la
 libtaskstats_la_SOURCES = \
 	src/utils_taskstats.c \
 	src/utils_taskstats.h
