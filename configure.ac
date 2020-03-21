@@ -1648,6 +1648,10 @@ if test "x$have_getmntent" = "xgen"; then
   )
 fi
 
+AM_CONDITIONAL([BUILD_WITH_LIBMOUNT],
+  [test "x$have_listmntent" = "xyes" || test "x$have_getvfsstat" = "xyes" || \
+   test "x$have_getfsstat" = "xyes" || test "x$have_getmntent" != "xno"])
+
 # Check for htonll
 AC_CACHE_CHECK([whether htonll is defined],
   [c_cv_have_htonll],

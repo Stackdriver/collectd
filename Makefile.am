@@ -149,7 +149,6 @@ EXTRA_LTLIBRARIES = \
 	libllist.la \
 	liblookup.la \
 	libmetadata.la \
-	libmount.la \
 	liboconfig.la
 
 check_LTLIBRARIES = \
@@ -164,7 +163,6 @@ check_PROGRAMS = \
 	test_utils_cmds \
 	test_utils_heap \
 	test_utils_latency \
-	test_utils_mount \
 	test_utils_subst \
 	test_utils_time \
 	test_utils_vl_lookup \
@@ -536,6 +534,9 @@ if BUILD_WITH_LIBKSTAT
 test_utils_vl_lookup_LDADD += -lkstat
 endif
 
+if BUILD_WITH_LIBMOUNT
+EXTRA_LTLIBRARIES += libmount.la
+check_PROGRAMS += test_utils_mount
 libmount_la_SOURCES = \
 	src/utils_mount.c \
 	src/utils_mount.h
@@ -548,6 +549,7 @@ test_utils_mount_LDADD = \
 	libplugin_mock.la
 if BUILD_WITH_LIBKSTAT
 test_utils_mount_LDADD += -lkstat
+endif
 endif
 
 
