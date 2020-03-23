@@ -30,7 +30,10 @@
 #include "utils_curl_stats.h"
 
 #include <sys/types.h>
+#ifdef HAVE_SYS_UN_H
 #include <sys/un.h>
+#define HAVE_UNIXSOCK 1
+#endif
 
 #include <curl/curl.h>
 
@@ -822,6 +825,7 @@ static void cj_submit_impl(cj_t *db, cj_key_t *key, value_t *value) /* {{{ */
   plugin_dispatch_values(&vl);
 } /* }}} int cj_submit_impl */
 
+#ifdef HAVE_UNIXSOCK
 static int cj_sock_perform(cj_t *db) /* {{{ */
 {
   struct sockaddr_un sa_unix = {
@@ -855,6 +859,7 @@ static int cj_sock_perform(cj_t *db) /* {{{ */
   close(fd);
   return 0;
 } /* }}} int cj_sock_perform */
+#endif
 
 static int cj_curl_perform(cj_t *db) /* {{{ */
 {
@@ -905,10 +910,15 @@ static int cj_perform(cj_t *db) /* {{{ */
     return -1;
   }
 
-  if (db->url)
+  if (db->url) {
     status = cj_curl_perform(db);
-  else
+  } else {
+#ifdef HAVE_UNIXSOCK
     status = cj_sock_perform(db);
+#else
+    status = -1;
+#endif /* !HAVE_UNIXSOCK */
+  }
   if (status < 0) {
     yajl_free(db->yajl);
     db->yajl = yprev;
