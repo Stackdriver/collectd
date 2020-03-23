@@ -267,6 +267,8 @@ libcollectd_la_LIBADD = \
 	-lltdl \
 	$(COMMON_LIBS)
 
+PLUGIN_LIBADD = libcollectd.la
+
 collectd_SOURCES = \
 	src/daemon/collectd.c \
 	src/daemon/collectd.h
@@ -609,7 +611,7 @@ aggregation_la_SOURCES = \
 	src/utils_vl_lookup.c \
 	src/utils_vl_lookup.h
 aggregation_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-aggregation_la_LIBADD = -lm
+aggregation_la_LIBADD = $(PLUGIN_LIBADD) -lm
 endif
 
 if BUILD_PLUGIN_AMQP
@@ -618,6 +620,7 @@ amqp_la_SOURCES = src/amqp.c
 amqp_la_CPPFLAGS = $(AM_CPPFLAGS) $(BUILD_WITH_LIBRABBITMQ_CPPFLAGS)
 amqp_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBRABBITMQ_LDFLAGS)
 amqp_la_LIBADD = \
+	$(PLUGIN_LIBADD) \
 	$(BUILD_WITH_LIBRABBITMQ_LIBS) \
 	libcmds.la \
 	libformat_graphite.la \
@@ -629,7 +632,7 @@ pkglib_LTLIBRARIES += apache.la
 apache_la_SOURCES = src/apache.c
 apache_la_CFLAGS = $(AM_CFLAGS) $(BUILD_WITH_LIBCURL_CFLAGS)
 apache_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-apache_la_LIBADD = $(BUILD_WITH_LIBCURL_LIBS)
+apache_la_LIBADD = $(PLUGIN_LIBADD) $(BUILD_WITH_LIBCURL_LIBS)
 endif
 
 
@@ -637,7 +640,7 @@ if BUILD_PLUGIN_APCUPS
 pkglib_LTLIBRARIES += apcups.la
 apcups_la_SOURCES = src/apcups.c
 apcups_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-apcups_la_LIBADD =
+apcups_la_LIBADD = $(PLUGIN_LIBADD)
 if BUILD_WITH_LIBSOCKET
 apcups_la_LIBADD += -lsocket
 endif
@@ -677,7 +680,7 @@ if BUILD_PLUGIN_BAROMETER
 pkglib_LTLIBRARIES += barometer.la
 barometer_la_SOURCES = src/barometer.c
 barometer_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-barometer_la_LIBADD = -lm
+barometer_la_LIBADD = $(PLUGIN_LIBADD) -lm
 endif
 
 if BUILD_PLUGIN_BATTERY
@@ -697,7 +700,7 @@ bind_la_SOURCES = src/bind.c
 bind_la_CFLAGS = $(AM_CFLAGS) \
 	$(BUILD_WITH_LIBCURL_CFLAGS) $(BUILD_WITH_LIBXML2_CFLAGS)
 bind_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-bind_la_LIBADD = $(BUILD_WITH_LIBCURL_LIBS) $(BUILD_WITH_LIBXML2_LIBS)
+bind_la_LIBADD = $(PLUGIN_LIBADD) $(BUILD_WITH_LIBCURL_LIBS) $(BUILD_WITH_LIBXML2_LIBS)
 endif
 
 if BUILD_PLUGIN_CEPH
@@ -719,7 +722,7 @@ if BUILD_PLUGIN_CHRONY
 pkglib_LTLIBRARIES += chrony.la
 chrony_la_SOURCES = src/chrony.c
 chrony_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-chrony_la_LIBADD = -lm
+chrony_la_LIBADD = $(PLUGIN_LIBADD) -lm
 endif
 
 if BUILD_PLUGIN_CONNTRACK
@@ -775,6 +778,7 @@ if BUILD_PLUGIN_CSV
 pkglib_LTLIBRARIES += csv.la
 csv_la_SOURCES = src/csv.c
 csv_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+csv_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_CURL
@@ -787,7 +791,7 @@ curl_la_SOURCES = \
 	src/utils_match.h
 curl_la_CFLAGS = $(AM_CFLAGS) $(BUILD_WITH_LIBCURL_CFLAGS)
 curl_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-curl_la_LIBADD = liblatency.la $(BUILD_WITH_LIBCURL_LIBS)
+curl_la_LIBADD = $(PLUGIN_LIBADD) liblatency.la $(BUILD_WITH_LIBCURL_LIBS)
 endif
 
 if BUILD_PLUGIN_CURL_JSON
@@ -799,7 +803,7 @@ curl_json_la_SOURCES = \
 curl_json_la_CFLAGS = $(AM_CFLAGS) $(BUILD_WITH_LIBCURL_CFLAGS)
 curl_json_la_CPPFLAGS = $(AM_CPPFLAGS) $(BUILD_WITH_LIBYAJL_CPPFLAGS)
 curl_json_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBYAJL_LDFLAGS)
-curl_json_la_LIBADD = $(BUILD_WITH_LIBCURL_LIBS) $(BUILD_WITH_LIBYAJL_LIBS)
+curl_json_la_LIBADD = $(PLUGIN_LIBADD) $(BUILD_WITH_LIBCURL_LIBS) $(BUILD_WITH_LIBYAJL_LIBS)
 
 test_plugin_curl_json_SOURCES = src/curl_json_test.c \
 				src/utils_curl_stats.c \
@@ -820,7 +824,7 @@ curl_xml_la_SOURCES = \
 curl_xml_la_CFLAGS = $(AM_CFLAGS) \
 		$(BUILD_WITH_LIBCURL_CFLAGS) $(BUILD_WITH_LIBXML2_CFLAGS)
 curl_xml_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-curl_xml_la_LIBADD = $(BUILD_WITH_LIBCURL_LIBS) $(BUILD_WITH_LIBXML2_LIBS)
+curl_xml_la_LIBADD = $(PLUGIN_LIBADD) $(BUILD_WITH_LIBCURL_LIBS) $(BUILD_WITH_LIBXML2_LIBS)
 endif
 
 if BUILD_PLUGIN_DBI
@@ -847,7 +851,7 @@ disk_la_SOURCES = src/disk.c
 disk_la_CFLAGS = $(AM_CFLAGS)
 disk_la_CPPFLAGS = $(AM_CPPFLAGS)
 disk_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-disk_la_LIBADD = libignorelist.la
+disk_la_LIBADD = $(PLUGIN_LIBADD) libignorelist.la
 disk_la_DEPENDENCIES = libignorelist.la
 if BUILD_WITH_LIBKSTAT
 disk_la_LIBADD += -lkstat
@@ -876,7 +880,7 @@ endif
 if BUILD_WIN32
 disk_la_SOURCES += src/utils_wmi.c src/utils_wmi.h
 disk_la_LDFLAGS += -L.
-disk_la_LIBADD += -loleaut32 -lole32 -luuid libcollectd.la
+disk_la_LIBADD += -loleaut32 -lole32 -luuid
 disk_la_DEPENDENCIES += libuuid.dll
 endif
 endif
@@ -889,8 +893,8 @@ wmi_la_SOURCES = \
 	src/utils_wmi.h
 wmi_la_CFLAGS = $(AM_CFLAGS)
 wmi_la_LDFLAGS = $(PLUGIN_LDFLAGS) -L.
+wmi_la_LIBADD = $(PLUGIN_LIBADD) -loleaut32 -lole32 -luuid
 wmi_la_DEPENDENCIES = libuuid.dll
-wmi_la_LIBADD = -loleaut32 -lole32 -luuid libcollectd.la
 endif
 
 if BUILD_PLUGIN_DNS
@@ -944,7 +948,7 @@ if BUILD_PLUGIN_EXEC
 pkglib_LTLIBRARIES += exec.la
 exec_la_SOURCES = src/exec.c
 exec_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-exec_la_LIBADD = libcmds.la
+exec_la_LIBADD = $(PLUGIN_LIBADD) libcmds.la
 endif
 
 if BUILD_PLUGIN_ETHSTAT
@@ -963,6 +967,7 @@ if BUILD_PLUGIN_FILECOUNT
 pkglib_LTLIBRARIES += filecount.la
 filecount_la_SOURCES = src/filecount.c
 filecount_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+filecount_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_FSCACHE
@@ -1045,7 +1050,7 @@ pkglib_LTLIBRARIES += interface.la
 interface_la_SOURCES = src/interface.c
 interface_la_CFLAGS = $(AM_CFLAGS)
 interface_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-interface_la_LIBADD = libignorelist.la
+interface_la_LIBADD = $(PLUGIN_LIBADD) libignorelist.la
 interface_la_DEPENDENCIES = libignorelist.la
 if BUILD_WITH_LIBSTATGRAB
 interface_la_CFLAGS += $(BUILD_WITH_LIBSTATGRAB_CFLAGS)
@@ -1064,7 +1069,7 @@ endif
 if BUILD_WIN32
 interface_la_SOURCES += src/utils_wmi.c src/utils_wmi.h
 interface_la_LDFLAGS += -L.
-interface_la_LIBADD += -loleaut32 -lole32 -luuid libcollectd.la
+interface_la_LIBADD += -loleaut32 -lole32 -luuid
 interface_la_DEPENDENCIES += libuuid.dll
 endif
 endif # BUILD_PLUGIN_INTERFACE
@@ -1110,7 +1115,7 @@ java_la_SOURCES = src/java.c
 java_la_CPPFLAGS = $(AM_CPPFLAGS) $(JAVA_CPPFLAGS)
 java_la_CFLAGS = $(AM_CFLAGS) $(JAVA_CFLAGS)
 java_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(JAVA_LDFLAGS)
-java_la_LIBADD = $(JAVA_LIBS)
+java_la_LIBADD = $(PLUGIN_LIBADD) $(JAVA_LIBS)
 endif
 
 if BUILD_PLUGIN_LOAD
@@ -1131,8 +1136,8 @@ endif # BUILD_PLUGIN_LOAD
 if BUILD_PLUGIN_LOGFILE
 pkglib_LTLIBRARIES += logfile.la
 logfile_la_SOURCES = src/logfile.c
-logfile_la_LIBADD = libcollectd.la
 logfile_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+logfile_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_LOG_LOGSTASH
@@ -1140,7 +1145,7 @@ pkglib_LTLIBRARIES += log_logstash.la
 log_logstash_la_SOURCES = src/log_logstash.c
 log_logstash_la_CPPFLAGS = $(AM_CPPFLAGS) $(BUILD_WITH_LIBYAJL_CPPFLAGS)
 log_logstash_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBYAJL_LDFLAGS)
-log_logstash_la_LIBADD = $(BUILD_WITH_LIBYAJL_LIBS)
+log_logstash_la_LIBADD = $(PLUGIN_LIBADD) $(BUILD_WITH_LIBYAJL_LIBS)
 endif
 
 if BUILD_PLUGIN_LPAR
@@ -1182,37 +1187,42 @@ if BUILD_PLUGIN_MATCH_EMPTY_COUNTER
 pkglib_LTLIBRARIES += match_empty_counter.la
 match_empty_counter_la_SOURCES = src/match_empty_counter.c
 match_empty_counter_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+match_empty_counter_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_MATCH_HASHED
 pkglib_LTLIBRARIES += match_hashed.la
 match_hashed_la_SOURCES = src/match_hashed.c
 match_hashed_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+match_hashed_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_MATCH_REGEX
 pkglib_LTLIBRARIES += match_regex.la
 match_regex_la_SOURCES = src/match_regex.c
 match_regex_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-match_regex_la_LIBADD = libcollectd.la
+match_regex_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_MATCH_THROTTLE_METADATA_KEYS
 pkglib_LTLIBRARIES += match_throttle_metadata_keys.la
 match_throttle_metadata_keys_la_SOURCES = src/match_throttle_metadata_keys.c src/stackdriver-agent-keys.h
 match_throttle_metadata_keys_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+match_throttle_metadata_keys_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_MATCH_TIMEDIFF
 pkglib_LTLIBRARIES += match_timediff.la
 match_timediff_la_SOURCES = src/match_timediff.c
 match_timediff_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+match_timediff_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_MATCH_VALUE
 pkglib_LTLIBRARIES += match_value.la
 match_value_la_SOURCES = src/match_value.c
 match_value_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+match_value_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_MBMON
@@ -1306,8 +1316,8 @@ if BUILD_PLUGIN_MONGODB
 pkglib_LTLIBRARIES += mongodb.la
 mongodb_la_SOURCES = src/mongodb.c
 mongodb_la_CFLAGS = $(AM_CFLAGS) $(BUILD_WITH_LIBMONGOC_CFLAGS)
-mongodb_la_LDFLAGS = -module -avoid-version $(BUILD_WITH_LIBMONGOC_LDFLAGS)
-mongodb_la_LIBADD =
+mongodb_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBMONGOC_LDFLAGS)
+mongodb_la_LIBADD = $(PLUGIN_LIBADD)
 if BUILD_WITH_OWN_LIBMONGOC
 
 # add libmongoc source files
@@ -1366,7 +1376,7 @@ network_la_SOURCES = \
 	src/utils_fbhash.h
 network_la_CPPFLAGS = $(AM_CPPFLAGS)
 network_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-network_la_LIBADD = libcollectd.la
+network_la_LIBADD = $(PLUGIN_LIBADD)
 if BUILD_WITH_LIBSOCKET
 network_la_LIBADD += -lsocket
 endif
@@ -1394,7 +1404,7 @@ pkglib_LTLIBRARIES += nginx.la
 nginx_la_SOURCES = src/nginx.c
 nginx_la_CFLAGS = $(AM_CFLAGS) $(BUILD_WITH_LIBCURL_CFLAGS)
 nginx_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-nginx_la_LIBADD = $(BUILD_WITH_LIBCURL_LIBS)
+nginx_la_LIBADD = $(PLUGIN_LIBADD) $(BUILD_WITH_LIBCURL_LIBS)
 endif
 
 if BUILD_PLUGIN_NOTIFY_DESKTOP
@@ -1423,7 +1433,7 @@ if BUILD_PLUGIN_NTPD
 pkglib_LTLIBRARIES += ntpd.la
 ntpd_la_SOURCES = src/ntpd.c
 ntpd_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-ntpd_la_LIBADD =
+ntpd_la_LIBADD = $(PLUGIN_LIBADD)
 if BUILD_WITH_LIBSOCKET
 ntpd_la_LIBADD += -lsocket
 endif
@@ -1479,6 +1489,7 @@ if BUILD_PLUGIN_OPENVPN
 pkglib_LTLIBRARIES += openvpn.la
 openvpn_la_SOURCES = src/openvpn.c
 openvpn_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+openvpn_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_ORACLE
@@ -1560,7 +1571,8 @@ if BUILD_PLUGIN_PLUGIN_MEM
 pkglib_LTLIBRARIES += plugin_mem.la
 plugin_mem_la_SOURCES = src/plugin_mem.c
 plugin_mem_la_CPPFLAGS = $(AM_CPPFLAGS)
-plugin_mem_la_LDFLAGS = -module -avoid-version
+plugin_mem_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+plugin_mem_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_POSTGRESQL
@@ -1590,13 +1602,14 @@ python_la_SOURCES = \
 	src/cpython.h
 python_la_CPPFLAGS = $(AM_CPPFLAGS) $(LIBPYTHON_CPPFLAGS)
 python_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(LIBPYTHON_LDFLAGS)
+python_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_PROCESSES
 pkglib_LTLIBRARIES += processes.la
 processes_la_SOURCES = src/processes.c
 processes_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-processes_la_LIBADD =
+processes_la_LIBADD = $(PLUGIN_LIBADD)
 if BUILD_WITH_LIBKVM_GETPROCS
 processes_la_LIBADD += -lkvm
 endif
@@ -1606,7 +1619,7 @@ if BUILD_PLUGIN_PROTOCOLS
 pkglib_LTLIBRARIES += protocols.la
 protocols_la_SOURCES = src/protocols.c
 protocols_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-protocols_la_LIBADD = libignorelist.la
+protocols_la_LIBADD = $(PLUGIN_LIBADD) libignorelist.la
 endif
 
 if BUILD_PLUGIN_REDIS
@@ -1698,14 +1711,15 @@ endif
 if BUILD_PLUGIN_STACKDRIVER_AGENT
 pkglib_LTLIBRARIES += stackdriver_agent.la
 stackdriver_agent_la_SOURCES = src/stackdriver_agent.c
-stackdriver_agent_la_LDFLAGS = -module -avoid-version
+stackdriver_agent_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+stackdriver_agent_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_STATSD
 pkglib_LTLIBRARIES += statsd.la
 statsd_la_SOURCES = src/statsd.c
 statsd_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-statsd_la_LIBADD = liblatency.la
+statsd_la_LIBADD = $(PLUGIN_LIBADD) liblatency.la
 endif
 
 if BUILD_PLUGIN_SWAP
@@ -1743,7 +1757,7 @@ if BUILD_PLUGIN_SYSLOG
 pkglib_LTLIBRARIES += syslog.la
 syslog_la_SOURCES = src/syslog.c
 syslog_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-syslog_la_LIBADD = libcollectd.la
+syslog_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_EVENTLOG
@@ -1761,7 +1775,7 @@ eventlogres_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 pkglib_LTLIBRARIES += eventlog.la
 eventlog_la_SOURCES = src/eventlog.c
 eventlog_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-eventlog_la_LIBADD = libcollectd.la
+eventlog_la_LIBADD = $(PLUGIN_LIBADD)
 eventlog_la_DEPENDENCIES = eventlogres.la
 endif
 
@@ -1769,6 +1783,7 @@ if BUILD_PLUGIN_TABLE
 pkglib_LTLIBRARIES += table.la
 table_la_SOURCES = src/table.c
 table_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+table_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_TAIL
@@ -1782,7 +1797,7 @@ tail_la_SOURCES = \
 	src/utils_tail_match.c \
 	src/utils_tail_match.h
 tail_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-tail_la_LIBADD = liblatency.la
+tail_la_LIBADD = $(PLUGIN_LIBADD) liblatency.la
 endif
 
 if BUILD_PLUGIN_TAIL_CSV
@@ -1792,6 +1807,7 @@ tail_csv_la_SOURCES = \
 	src/utils_tail.c \
 	src/utils_tail.h
 tail_csv_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+tail_csv_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_TAPE
@@ -1805,26 +1821,28 @@ if BUILD_PLUGIN_TARGET_NOTIFICATION
 pkglib_LTLIBRARIES += target_notification.la
 target_notification_la_SOURCES = src/target_notification.c
 target_notification_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+target_notification_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_TARGET_REPLACE
 pkglib_LTLIBRARIES += target_replace.la
 target_replace_la_SOURCES = src/target_replace.c
 target_replace_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-target_replace_la_LIBADD = libcollectd.la
+target_replace_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_TARGET_SCALE
 pkglib_LTLIBRARIES += target_scale.la
 target_scale_la_SOURCES = src/target_scale.c
 target_scale_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+target_scale_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_TARGET_SET
 pkglib_LTLIBRARIES += target_set.la
 target_set_la_SOURCES = src/target_set.c
 target_set_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-target_set_la_LIBADD = libcollectd.la
+target_set_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_TARGET_V5UPGRADE
@@ -1866,6 +1884,7 @@ if BUILD_PLUGIN_THRESHOLD
 pkglib_LTLIBRARIES += threshold.la
 threshold_la_SOURCES = src/threshold.c
 threshold_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+threshold_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_TOKYOTYRANT
@@ -2005,9 +2024,10 @@ test_stackdriver_json_LDADD = \
 
 pkglib_LTLIBRARIES += write_gcm.la
 write_gcm_la_SOURCES = src/write_gcm.c
-write_gcm_la_LDFLAGS = -module -avoid-version $(BUILD_WITH_LIBYAJL_LDFLAGS)
+write_gcm_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBYAJL_LDFLAGS)
 write_gcm_la_CFLAGS = $(AM_CFLAGS) $(BUILD_WITH_LIBYAJL_CPPFLAGS) $(BUILD_WITH_LIBCURL_CFLAGS)
 write_gcm_la_LIBADD = \
+	$(PLUGIN_LIBADD) \
 	$(BUILD_WITH_LIBYAJL_LIBS) \
 	$(BUILD_WITH_LIBCURL_LIBS) \
 	libstackdriver_json.la
@@ -2021,7 +2041,7 @@ if BUILD_PLUGIN_WRITE_GRAPHITE
 pkglib_LTLIBRARIES += write_graphite.la
 write_graphite_la_SOURCES = src/write_graphite.c
 write_graphite_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-write_graphite_la_LIBADD = libformat_graphite.la
+write_graphite_la_LIBADD = $(PLUGIN_LIBADD) libformat_graphite.la
 endif
 
 if BUILD_PLUGIN_WRITE_HTTP
@@ -2032,7 +2052,7 @@ write_http_la_SOURCES = \
 	src/utils_format_kairosdb.h
 write_http_la_CFLAGS = $(AM_CFLAGS) $(BUILD_WITH_LIBCURL_CFLAGS)
 write_http_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-write_http_la_LIBADD = libformat_json.la $(BUILD_WITH_LIBCURL_LIBS) libcollectd.la
+write_http_la_LIBADD = $(PLUGIN_LIBADD) libformat_json.la $(BUILD_WITH_LIBCURL_LIBS)
 if BUILD_WITH_GNULIB
 write_http_la_LIBADD += -lgnu
 endif
@@ -2054,7 +2074,7 @@ if BUILD_PLUGIN_WRITE_LOG
 pkglib_LTLIBRARIES += write_log.la
 write_log_la_SOURCES = src/write_log.c
 write_log_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-write_log_la_LIBADD = libformat_graphite.la libformat_json.la libcollectd.la
+write_log_la_LIBADD = $(PLUGIN_LIBADD) libformat_graphite.la libformat_json.la
 if BUILD_WITH_GNULIB
 write_log_la_LIBADD += -lgnu
 endif
@@ -2100,12 +2120,14 @@ if BUILD_PLUGIN_WRITE_SENSU
 pkglib_LTLIBRARIES += write_sensu.la
 write_sensu_la_SOURCES = src/write_sensu.c
 write_sensu_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+write_sensu_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_WRITE_TSDB
 pkglib_LTLIBRARIES += write_tsdb.la
 write_tsdb_la_SOURCES = src/write_tsdb.c
 write_tsdb_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+write_tsdb_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_XENCPU
@@ -2140,6 +2162,7 @@ if BUILD_PLUGIN_ZOOKEEPER
 pkglib_LTLIBRARIES += zookeeper.la
 zookeeper_la_SOURCES = src/zookeeper.c
 zookeeper_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+zookeeper_la_LIBADD = $(PLUGIN_LIBADD)
 endif
 
 if BUILD_PLUGIN_ZONE
