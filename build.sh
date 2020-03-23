@@ -87,6 +87,22 @@ if test "${WINDOWS}" = "yes"; then
 
 	set -e
 
+	# Build libcurl
+	pushd _build_aux
+	LIBCURL_DIR="${TOP_SRCDIR}/_build_aux/_libcurl"
+	if [ -d "_libcurl" ]; then
+	  echo "Assuming that libcurl is already built, because _libcurl exists."
+	else
+	  wget http://curl.haxx.se/download/curl-7.44.0.tar.gz
+	  tar xf curl-7.44.0.tar.gz
+	  cd curl-7.44.0
+	  ./configure --host="$HOST" --with-winssl --prefix="${LIBCURL_DIR}"
+	  make
+	  make install
+	fi
+	popd
+
+	# Build gnulib
 	pushd _build_aux
 	GNULIB_DIR="${TOP_SRCDIR}/_build_aux/_gnulib/gllib"
 	if [ -d "_gnulib" ]; then
@@ -172,6 +188,7 @@ if test "${WINDOWS}" = "yes"; then
 	  --disable-all-plugins \
 	  --host="$HOST" \
 	  --with-fp-layout="nothing" \
+	  --with-libcurl="${LIBCURL_DIR}" \
 	  --enable-logfile \
 	  --enable-disk \
 	  --enable-eventlog \
