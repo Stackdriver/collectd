@@ -28,7 +28,7 @@
 
 #include <string.h>
 #include <stdlib.h>
-#include <linux/limits.h>
+#include <limits.h>
 
 static const char *config_keys[] = {
   "PluginDir",
