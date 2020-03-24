@@ -1713,6 +1713,13 @@ pkglib_LTLIBRARIES += stackdriver_agent.la
 stackdriver_agent_la_SOURCES = src/stackdriver_agent.c
 stackdriver_agent_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 stackdriver_agent_la_LIBADD = $(PLUGIN_LIBADD)
+stackdriver_agent_la_DEPENDENCIES =
+if BUILD_WIN32
+stackdriver_agent_la_SOURCES += src/utils_wmi.c src/utils_wmi.h
+stackdriver_agent_la_LDFLAGS += -L.
+stackdriver_agent_la_LIBADD += -loleaut32 -lole32 -luuid
+stackdriver_agent_la_DEPENDENCIES += libuuid.dll
+endif
 endif
 
 if BUILD_PLUGIN_STATSD

@@ -29,6 +29,11 @@
 #include "liboconfig/oconfig.h"
 #include "stackdriver-agent-keys.h"
 
+#if KERNEL_WIN32
+#include "utils_wmi.h"
+static wmi_connection_t *wmi;
+#endif /* KERNEL_WIN32 */
+
 #define AGENT_PREFIX "agent.googleapis.com/agent"
 
 static const char this_plugin_name[] = "stackdriver_agent";
@@ -45,8 +50,7 @@ typedef struct {
   cdtime_t start_time;
 } context_t;
 
-static context_t *context_create()
-{
+static context_t *context_create() {
   context_t *result = calloc(1, sizeof(*result));
   if (result == NULL) {
     ERROR("%s: calloc failed.", this_plugin_name);
@@ -56,8 +60,7 @@ static context_t *context_create()
   return result;
 }
 
-static void context_destroy(context_t *ctx)
-{
+static void context_destroy(context_t *ctx) {
   if (ctx == NULL) {
     return;
   }
@@ -109,10 +112,65 @@ static int sagt_submit_derive(
 
 
 /**
+ * Retrieve process memory used.
+ */
+static size_t sagt_process_memory_used() {
+#if KERNEL_LINUX
+  FILE *f = fopen("/proc/self/statm", "r");
+  if (!f)
+    return 0;
+
+  size_t vm = 0;
+  int status = fscanf(f, "%zu", &vm);
+  fclose(f);
+  if (!status) {
+    return 0;
+  }
+
+  long page_size = sysconf(_SC_PAGESIZE);
+  return vm * page_size;
+#elif KERNEL_WIN32
+  wmi_result_list_t *results;
+  char statement[128];
+  snprintf(statement, sizeof(statement),
+           "select * from Win32_Process where ProcessID = %d", getpid());
+  results = wmi_query(wmi, statement);
+
+  if (results->count == 0) {
+    ERROR("%s: no results for query %s.", this_plugin_name, statement);
+    wmi_result_list_release(results);
+    return 0;
+  }
+
+  if (results->count > 1) {
+    WARNING("%s: multiple results for query %s.", this_plugin_name, statement);
+  }
+
+  wmi_result_t *result = wmi_get_next_result(results);
+  VARIANT vm_value_v;
+
+  if (wmi_result_get_value(result, "VirtualSize", &vm_value_v) != 0) {
+    VariantClear(&vm_value_v);
+    ERROR("%s: failed to read field 'VirtualSize'", this_plugin_name);
+    wmi_result_release(result);
+    return 0;
+  }
+
+  size_t mused = variant_get_int64(&vm_value_v);
+
+  VariantClear(&vm_value_v);
+  wmi_result_release(result);
+  wmi_result_list_release(results);
+
+  return mused;
+#endif /* KERNEL_WIN32 */
+}
+
+
+/**
  * Send a variety of agent status/health-related metrics.
  */
-static int sagt_read(user_data_t *user_data)
-{
+static int sagt_read(user_data_t *user_data) {
   context_t *ctx = user_data->data;
   cdtime_t now = cdtime();
   cdtime_t interval = plugin_get_interval();
@@ -141,21 +199,15 @@ static int sagt_read(user_data_t *user_data)
 
   // memory used
   {
-    FILE *f = fopen("/proc/self/statm", "r");
-    if (f) {
-      size_t vm = 0;
-      if (fscanf(f, "%zu", &vm)) {
-        meta_data_t *md = meta_data_create();
-        long page_size = sysconf(_SC_PAGESIZE);
-        size_t mused = vm * page_size;
-        if (meta_data_add_string(
-                md, "stackdriver_metric_type",
-                AGENT_PREFIX "/memory_usage") == 0) {
-          sagt_submit_gauge("memory_usage", NULL, now, interval, mused, md);
-        }
-        meta_data_destroy(md);
+    size_t mused = sagt_process_memory_used();
+    if (mused != 0) {
+      meta_data_t *md = meta_data_create();
+      if (meta_data_add_string(
+              md, "stackdriver_metric_type",
+              AGENT_PREFIX "/memory_usage") == 0) {
+        sagt_submit_gauge("memory_usage", NULL, now, interval, mused, md);
       }
-      fclose(f);
+      meta_data_destroy(md);
     }
   }
 
@@ -252,8 +304,7 @@ static int sagt_read(user_data_t *user_data)
 /*
  * The init routine. Creates a context and registers a read callback.
  */
-static int sagt_init()
-{
+static int sagt_init() {
   int result = -1;  // Pessimistically assume failure.
 
   context_t *ctx = context_create();
@@ -272,6 +323,10 @@ static int sagt_init()
     goto leave;
   }
 
+#if KERNEL_WIN32
+  wmi = wmi_connect();
+#endif /* KERNEL_WIN32 */
+
   ctx = NULL;  // Owned by plugin system now.
   result = 0;  // Success!
 
@@ -280,8 +335,17 @@ leave:
   return result;
 }
 
-static int sagt_config(const char *key, const char *value)
-{
+/*
+ * The shutdown routine.
+ */
+static int sagt_shutdown() {
+#if KERNEL_WIN32
+  wmi_release(wmi);
+#endif /* KERNEL_WIN32 */
+  return 0;
+}
+
+static int sagt_config(const char *key, const char *value) {
   if (strcmp(key, "Hostname") == 0) {
     hostname = (const char *)sstrdup(value);
     if (hostname == NULL) {
@@ -296,12 +360,9 @@ static int sagt_config(const char *key, const char *value)
 }
 
 /* Register this module with collectd */
-void module_register(void)
-{
+void module_register(void) {
   plugin_register_config(this_plugin_name, sagt_config, config_keys,
                          config_keys_num);
-  if (plugin_register_init(this_plugin_name, &sagt_init) != 0) {
-    ERROR("%s: plugin_register_init failed.", this_plugin_name);
-    return;
-  }
+  plugin_register_init(this_plugin_name, sagt_init);
+  plugin_register_shutdown(this_plugin_name, sagt_shutdown);
 }
