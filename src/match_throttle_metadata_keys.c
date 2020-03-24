@@ -33,13 +33,14 @@
  * in the plugin configuration).
  */
 
+#include "collectd.h"
+
 #include <pthread.h>
 #include <sys/types.h>
 #include <stdlib.h>
 #include <strings.h>
 #include <memory.h>
 
-#include "collectd.h"
 #include "common.h"
 #include "daemon/utils_cache.h"
 #include "filter_chain.h"

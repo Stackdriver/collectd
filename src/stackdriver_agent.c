@@ -19,10 +19,11 @@
  *   Corey Kosak <kosak at google.com>
  **/
 
+#include "collectd.h"
+
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "collectd.h"
 #include "common.h"
 #include "daemon/utils_cache.h"
 #include "liboconfig/oconfig.h"
