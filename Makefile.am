@@ -2040,6 +2040,7 @@ write_gcm_la_LIBADD = \
 	libstackdriver_json.la
 if BUILD_WITH_LIBSSL
 write_gcm_la_CFLAGS += $(BUILD_WITH_LIBSSL_CFLAGS)
+write_gcm_la_LDFLAGS += $(BUILD_WITH_LIBSSL_LDFLAGS)
 write_gcm_la_LIBADD += $(BUILD_WITH_LIBSSL_LIBS)
 endif
 endif

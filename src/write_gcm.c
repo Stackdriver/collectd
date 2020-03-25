@@ -343,6 +343,7 @@ static _Bool wg_value_less(int ds_type, const value_t *a, const value_t *b) {
     }
     default: {
       assert(0);
+      return 0;
     }
   }
 }
