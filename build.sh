@@ -126,6 +126,23 @@ if test "${WINDOWS}" = "yes"; then
 	fi
 	popd
 
+	# Install OpenJDK 11
+	pushd _build_aux
+	JAVA_DIR="${TOP_SRCDIR}/_build_aux/_openjdk11"
+	if [ -d "_openjdk11" ]; then
+	  echo "Assuming that openssl is already built, because _openjdk11 exists."
+	else
+	  wget https://download.java.net/openjdk/jdk11/ri/openjdk-11+28_windows-x64_bin.zip
+	  unzip openjdk-11+28_windows-x64_bin.zip && mv jdk-11 _openjdk11
+	  cd _openjdk11/lib
+	  gendef ../bin/server/jvm.dll
+	  x86_64-w64-mingw32-dlltool --as-flags=--64 -m i386:x86-64 -k --output-lib libjvm.a --input-def jvm.def
+	fi
+	export JAVAC=/usr/bin/javac  # Need to use the system javac.
+	export JAR=/usr/bin/jar  # Need to use the system jar.
+	export JAVA_LDFLAGS="-L${JAVA_DIR}/lib ${JAVA_LDFLAGS}"
+	popd
+
 	# Build gnulib
 	pushd _build_aux
 	GNULIB_DIR="${TOP_SRCDIR}/_build_aux/_gnulib/gllib"
@@ -249,7 +266,7 @@ if test "${WINDOWS}" = "yes"; then
 	  --enable-write_log \
 	  --enable-wmi \
 	  --with-useragent="stackdriver_agent/$(debian_version)" \
-	  IGNORE="--enable-java --with-java=/usr/lib/jvm/default-java" \
+	  --enable-java --with-java="${JAVA_DIR}" \
 	  IGNORE="--enable-redis --with-libhiredis" \
 	  --enable-curl \
 	  --enable-curl_json \
