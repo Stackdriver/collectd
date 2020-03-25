@@ -150,6 +150,7 @@ if test "${WINDOWS}" = "yes"; then
 	      time_r \
 	      sys_stat \
 	      fcntl-h \
+	      flock \
 	      sys_resource \
 	      sys_wait \
 	      setlocale \
@@ -226,7 +227,7 @@ if test "${WINDOWS}" = "yes"; then
 	  IGNORE="--enable-tcpconns" \
 	  --enable-write_http \
 	  --enable-aggregation \
-	  IGNORE="--enable-csv" \
+	  --enable-csv \
 	  --enable-nginx \
 	  --enable-apache \
 	  IGNORE="--enable-memcached" \

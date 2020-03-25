@@ -23,6 +23,8 @@
 
 #include "collectd.h"
 
+#include <sys/file.h>
+
 #include "common.h"
 #include "plugin.h"
 #include "utils_cache.h"
@@ -218,7 +220,6 @@ static int csv_write(const data_set_t *ds, const value_list_t *vl,
   char values[4096];
   FILE *csv;
   int csv_fd;
-  struct flock fl = {0};
   int status;
 
   if (0 != strcmp(ds->type, vl->type)) {
@@ -271,11 +272,7 @@ static int csv_write(const data_set_t *ds, const value_list_t *vl,
   }
   csv_fd = fileno(csv);
 
-  fl.l_pid = getpid();
-  fl.l_type = F_WRLCK;
-  fl.l_whence = SEEK_SET;
-
-  status = fcntl(csv_fd, F_SETLK, &fl);
+  status = flock(csv_fd, LOCK_EX | LOCK_NB);
   if (status != 0) {
     ERROR("csv plugin: flock (%s) failed: %s", filename, STRERRNO);
     fclose(csv);
