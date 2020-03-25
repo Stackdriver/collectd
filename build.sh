@@ -102,6 +102,30 @@ if test "${WINDOWS}" = "yes"; then
 	fi
 	popd
 
+	# Install libyajl
+	pushd _build_aux
+	LIBYAJL_DIR="${TOP_SRCDIR}/_build_aux/_libyajl"
+	if [ -d "_libyajl" ]; then
+	  echo "Assuming that libyajl is already built, because _libyajl exists."
+	else
+	  wget http://repo.msys2.org/mingw/x86_64/mingw-w64-x86_64-yajl-2.1.0-1-any.pkg.tar.xz
+	  mkdir _libyajl
+	  tar xf mingw-w64-x86_64-yajl-2.1.0-1-any.pkg.tar.xz --strip-components=1 -C _libyajl
+	fi
+	popd
+
+	# Install openssl
+	pushd _build_aux
+	OPENSSL_DIR="${TOP_SRCDIR}/_build_aux/_openssl"
+	if [ -d "_openssl" ]; then
+	  echo "Assuming that openssl is already built, because _openssl exists."
+	else
+	  wget http://repo.msys2.org/mingw/x86_64/mingw-w64-x86_64-openssl-1.0.2.p-1-any.pkg.tar.xz
+	  mkdir _openssl
+	  tar xf mingw-w64-x86_64-openssl-1.0.2.p-1-any.pkg.tar.xz --strip-components=1 -C _openssl
+	fi
+	popd
+
 	# Build gnulib
 	pushd _build_aux
 	GNULIB_DIR="${TOP_SRCDIR}/_build_aux/_gnulib/gllib"
@@ -130,6 +154,7 @@ if test "${WINDOWS}" = "yes"; then
 	      sys_wait \
 	      setlocale \
 	      strtok_r \
+	      strndup \
 	      poll \
 	      recv \
 	      net_if \
@@ -146,9 +171,9 @@ if test "${WINDOWS}" = "yes"; then
 	  $CC -shared -o libgnu.dll $OBJECT_LIST -lws2_32 -lpthread
 	  rm libgnu.a # get rid of it, to use libgnu.dll
 	fi
-	export CFLAGS="-Drestrict=__restrict -I${GNULIB_DIR}"
+	export CFLAGS="-Drestrict=__restrict -I${GNULIB_DIR} ${CFLAGS}"
 	export LDFLAGS="-L${GNULIB_DIR} ${LDFLAGS}"
-	export LIBS="-lgnu"
+	export LIBS="-lgnu ${LIBS}"
 	popd
 else
 	echo "Building for Linux..."
@@ -177,6 +202,8 @@ if test "${WINDOWS}" = "yes"; then
 	echo "Installing collectd to ${INSTALL_DIR}."
 
 	./configure \
+	  --host="$HOST" \
+	  --with-fp-layout="nothing" \
 	  --prefix="${INSTALL_DIR}" \
 	  --libdir="${LIBDIR}" \
 	  --bindir="${BINDIR}" \
@@ -185,19 +212,48 @@ if test "${WINDOWS}" = "yes"; then
 	  --localstatedir="${LOCALSTATEDIR}" \
 	  --datarootdir="${DATAROOTDIR}" \
 	  --datarootdir="${DATADIR}" \
+	  --program-prefix=stackdriver- \
 	  --disable-all-plugins \
-	  --host="$HOST" \
-	  --with-fp-layout="nothing" \
+	  --disable-static \
+	  --disable-perl --without-libperl  --without-perl-bindings \
 	  --with-libcurl="${LIBCURL_DIR}" \
-	  --enable-logfile \
+	  --with-libyajl="${LIBYAJL_DIR}" \
+	  --with-libssl="${OPENSSL_DIR}" \
 	  --enable-disk \
+	  --enable-logfile \
 	  --enable-eventlog \
 	  --enable-interface \
-	  --enable-match_regex \
+	  IGNORE="--enable-tcpconns" \
+	  --enable-write_http \
+	  --enable-aggregation \
+	  IGNORE="--enable-csv" \
+	  --enable-nginx \
+	  --enable-apache \
+	  IGNORE="--enable-memcached" \
+	  IGNORE="--enable-mysql" \
+	  IGNORE="--enable-protocols" \
+	  --enable-plugin_mem \
+	  IGNORE="--enable-processes" \
+	  IGNORE="--enable-python" \
+	  IGNORE="--enable-ntpd" \
+	  IGNORE="--enable-nfs" \
+	  --enable-stackdriver_agent \
+	  IGNORE="--enable-exec" \
+	  --enable-tail \
+	  IGNORE="--enable-statsd" \
 	  --enable-network \
-	  --enable-target_replace \
-	  --enable-target_set \
-	  --enable-wmi
+	  --enable-match_regex --enable-target_set \
+	  --enable-target_replace --enable-target_scale \
+	  --enable-match_throttle_metadata_keys \
+	  --enable-write_log \
+	  --enable-wmi \
+	  --with-useragent="stackdriver_agent/$(debian_version)" \
+	  IGNORE="--enable-java --with-java=/usr/lib/jvm/default-java" \
+	  IGNORE="--enable-redis --with-libhiredis" \
+	  --enable-curl \
+	  --enable-curl_json \
+	  --enable-write_gcm \
+	  --enable-debug
 
 	# TODO: find a sane way to set LTCFLAGS for libtool
 	cp libtool libtool_bak
