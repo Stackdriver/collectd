@@ -77,19 +77,19 @@ typedef struct {
 
   // When 'server_memory_in_use' is less than this value, throttling is turned
   // off.
-  int low_water_mark_bytes;
+  size_t low_water_mark_bytes;
 
   // When 'server_memory_in_use' is greater than this value, throttling is
   // turned on.
-  int high_water_mark_bytes;
+  size_t high_water_mark_bytes;
 
   // How long to keep adding hashes to the same chunk before making a new chunk
   // (typically 1/2 hour).
-  int chunk_interval_secs;
+  cdtime_t chunk_interval_secs;
 
   // How long to keep wg_key_history_s chunks before purging them (typically
   // 24 hours).
-  int purge_interval_secs;
+  cdtime_t purge_interval_secs;
 } mtg_key_tracker_t;
 
 typedef struct {
@@ -242,30 +242,52 @@ static int mtg_create(const oconfig_item_t *ci, void **user_data)
     } else {
       int k;
       mtg_key_tracker_t *kt = ctx->key_tracker;  // Alias
-      static const char *int_keys[4] = {
+      static const char *size_t_keys[4] = {
         "LowWaterMark",
         "HighWaterMark",
+      };
+      size_t *size_t_locations[] = {
+        &kt->low_water_mark_bytes,
+        &kt->high_water_mark_bytes,
+      };
+      static const char *cdtime_keys[4] = {
         "ChunkInterval",
         "PurgeInterval",
       };
-      int *int_locations[] = {
-        &kt->low_water_mark_bytes,
-        &kt->high_water_mark_bytes,
+      cdtime_t *cdtime_locations[] = {
         &kt->chunk_interval_secs,
         &kt->purge_interval_secs,
       };
-      assert(STATIC_ARRAY_SIZE(int_keys) == STATIC_ARRAY_SIZE(int_locations));
-      for (k = 0; k < STATIC_ARRAY_SIZE(int_keys); ++k) {
-        if (strcasecmp(int_keys[k], child->key) == 0) {
-          if (cf_util_get_int(child, int_locations[k]) != 0) {
-            ERROR("%s: cf_util_get_int failed for key %s",
+      assert(STATIC_ARRAY_SIZE(size_t_keys)
+             == STATIC_ARRAY_SIZE(size_t_locations));
+      for (k = 0; k < STATIC_ARRAY_SIZE(size_t_keys); ++k) {
+        if (strcasecmp(size_t_keys[k], child->key) == 0) {
+          double result;
+          if (cf_util_get_double(child, &result) != 0) {
+            ERROR("%s: cf_util_get_double failed for key %s",
+                  this_plugin_name, child->key);
+            ++parse_errors;
+          }
+          *size_t_locations[k] = (size_t)result;
+          break;
+        }
+      }
+      if (k < STATIC_ARRAY_SIZE(size_t_keys)) {
+        continue;
+      }
+      assert(STATIC_ARRAY_SIZE(cdtime_keys)
+             == STATIC_ARRAY_SIZE(cdtime_locations));
+      for (k = 0; k < STATIC_ARRAY_SIZE(cdtime_keys); ++k) {
+        if (strcasecmp(cdtime_keys[k], child->key) == 0) {
+          if (cf_util_get_cdtime(child, cdtime_locations[k]) != 0) {
+            ERROR("%s: cf_util_get_cdtime failed for key %s",
                   this_plugin_name, child->key);
             ++parse_errors;
           }
           break;
         }
       }
-      if (k < STATIC_ARRAY_SIZE(int_keys)) {
+      if (k < STATIC_ARRAY_SIZE(cdtime_keys)) {
         continue;
       }
       ERROR("%s: Unknown configuration option %s",
@@ -483,7 +505,7 @@ static int mtg_update_stats(size_t server_memory_in_use, _Bool is_throttling)
 static int mtg_retire_old_entries(mtg_key_tracker_t *tracker, cdtime_t now)
 {
   // Trim the key history (removing entries older than 'purge_time')
-  cdtime_t purge_time = now - TIME_T_TO_CDTIME_T(tracker->purge_interval_secs);
+  cdtime_t purge_time = now - tracker->purge_interval_secs;
 
   while (tracker->key_history_head != NULL &&
          tracker->key_history_head->last_append_time < purge_time) {
@@ -567,8 +589,7 @@ static int mtg_add_new_entries(const mtg_context_t *ctx, cdtime_t now,
   // 1. There is no current history node.
   // 2. The current history node is full.
   // 3. The current history node was created prior to 'chunk_time'.
-  cdtime_t chunk_time = now -
-      TIME_T_TO_CDTIME_T(tracker->chunk_interval_secs);
+  cdtime_t chunk_time = now - tracker->chunk_interval_secs;
   mtg_key_history_t *tail = tracker->key_history_tail;  // alias
   if (tail == NULL ||
       tail->num_hashes == STATIC_ARRAY_SIZE(tail->hashes) ||
