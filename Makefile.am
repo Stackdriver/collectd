@@ -266,6 +266,10 @@ libcollectd_la_LIBADD = \
 	-lm \
 	-lltdl \
 	$(COMMON_LIBS)
+if BUILD_WIN32
+# Ensure that DLLs are installed in the proper directory.
+libcollectd_la_LDFLAGS += -bindir $(bindir)
+endif
 
 PLUGIN_LIBADD = libcollectd.la
 
@@ -570,6 +574,8 @@ libcollectdclient_la_CPPFLAGS = \
 libcollectdclient_la_LDFLAGS = -version-info 2:0:1
 libcollectdclient_la_LIBADD = -lm
 if BUILD_WIN32
+# Ensure that DLLs are installed in the proper directory.
+libcollectdclient_la_LDFLAGS += -bindir $(bindir)
 libcollectdclient_la_LDFLAGS += -shared -no-undefined
 libcollectdclient_la_LIBADD += -lgnu -lws2_32 -liphlpapi
 endif
