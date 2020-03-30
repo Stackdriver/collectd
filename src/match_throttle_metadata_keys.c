@@ -242,7 +242,7 @@ static int mtg_create(const oconfig_item_t *ci, void **user_data)
     } else {
       int k;
       mtg_key_tracker_t *kt = ctx->key_tracker;  // Alias
-      static const char *size_t_keys[4] = {
+      static const char *size_t_keys[] = {
         "LowWaterMark",
         "HighWaterMark",
       };
@@ -250,7 +250,7 @@ static int mtg_create(const oconfig_item_t *ci, void **user_data)
         &kt->low_water_mark_bytes,
         &kt->high_water_mark_bytes,
       };
-      static const char *cdtime_keys[4] = {
+      static const char *cdtime_keys[] = {
         "ChunkInterval",
         "PurgeInterval",
       };
