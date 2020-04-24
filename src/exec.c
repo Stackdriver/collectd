@@ -33,11 +33,20 @@
 
 #include "utils_cmd_putnotif.h"
 #include "utils_cmd_putval.h"
-
+#ifdef WIN32
+#include <windows.h>
+#include <stdio.h>
+#include <tchar.h>
+#include <processthreadsapi.h>
+#include <synchapi.h>
+#else
 #include <grp.h>
 #include <pwd.h>
+#endif
 #include <signal.h>
 #include <sys/types.h>
+#include <unistd.h>
+#include <sys/wait.h>
 
 #ifdef HAVE_SYS_CAPABILITY_H
 #include <sys/capability.h>
@@ -59,19 +68,26 @@
  * is set.
  * The `PL_RUNNING' flag is set in `exec_read' and unset in `exec_read_one'.
  */
+
 struct program_list_s;
 typedef struct program_list_s program_list_t;
 struct program_list_s {
+#ifdef WIN32
+  DWORD pid;
+  HANDLE hProcess;
+  HANDLE hThread;
+#else
   char *user;
   char *group;
-  char *exec;
-  char **argv;
   int pid;
+#endif
   int status;
   int flags;
   program_list_t *next;
-};
+  char *exec;
+  char **argv;
 
+};
 typedef struct program_list_and_notification_s {
   program_list_t *pl;
   notification_t n;
@@ -81,11 +97,55 @@ typedef struct program_list_and_notification_s {
  * Private variables
  */
 static program_list_t *pl_head = NULL;
+#ifndef WIN32
 static pthread_mutex_t pl_lock = PTHREAD_MUTEX_INITIALIZER;
+#endif
 
 /*
  * Functions
  */
+#ifdef WIN32
+static void process_status( HANDLE hProcess, DWORD pid)
+{
+  program_list_t *pl;
+  pl = calloc(1, sizeof(*pl));
+  HANDLE hThread = pl->hThread;
+  DWORD status;
+  INFO("Waiting for %ld", pid);
+  status = WaitForSingleObject(hProcess, INFINITE);
+  switch (status)
+  {
+    case WAIT_ABANDONED:
+      INFO("Owning process %ld terminated without releasing mutex object", pid);
+      break;
+    case WAIT_OBJECT_0:
+      INFO("Execution of process %ld finished.", pid);
+      break;
+    case WAIT_TIMEOUT:
+      INFO("Wait timeout reached for pid: %ld", pid);
+      break;
+    case WAIT_FAILED:
+      INFO("Execution has failed %lu for pid: %ld", GetLastError(), pid);
+      break;
+  }
+  CloseHandle(hProcess);
+  CloseHandle(hThread);
+}
+#endif /* process_status */
+#ifdef WIN32
+static void kill_process(HANDLE hProcess)
+{
+	int exit;
+	exit = TerminateProcess(hProcess, 1);
+	if (exit != 0) {
+		CloseHandle(hProcess);
+	} else {
+		INFO("Process failed to terminate");
+	}
+
+}
+#endif /*kill_process */
+#ifndef WIN32
 static void sigchld_handler(int __attribute__((unused)) signal) /* {{{ */
 {
   pid_t pid;
@@ -99,7 +159,7 @@ static void sigchld_handler(int __attribute__((unused)) signal) /* {{{ */
       pl->status = status;
   } /* while (waitpid) */
 } /* void sigchld_handler }}} */
-
+#endif /*sigchld_handler */
 static int exec_config_exec(oconfig_item_t *ci) /* {{{ */
 {
   program_list_t *pl;
@@ -110,6 +170,7 @@ static int exec_config_exec(oconfig_item_t *ci) /* {{{ */
     WARNING("exec plugin: The config option `%s' may not be a block.", ci->key);
     return -1;
   }
+#ifndef WIN32
   if (ci->values_num < 2) {
     WARNING("exec plugin: The config option `%s' needs at least two "
             "arguments.",
@@ -123,6 +184,20 @@ static int exec_config_exec(oconfig_item_t *ci) /* {{{ */
             ci->key);
     return -1;
   }
+#else
+	if (ci->values_num < 1) {
+		WARNING("exec plugin: The config option '%s' needs at least one "
+				"argument.",
+				ci->key);
+		return -1;
+	}
+	if ((ci->values[0].type != OCONFIG_TYPE_STRING)) {
+		WARNING("exec plugin: The first argument to the '%s' option must "
+				"be string arguments.",
+				ci->key);
+		return -1;
+	}
+#endif
 
   pl = calloc(1, sizeof(*pl));
   if (pl == NULL) {
@@ -135,6 +210,7 @@ static int exec_config_exec(oconfig_item_t *ci) /* {{{ */
   else
     pl->flags |= PL_NORMAL;
 
+#ifndef WIN32
   pl->user = strdup(ci->values[0].value.string);
   if (pl->user == NULL) {
     ERROR("exec plugin: strdup failed.");
@@ -147,7 +223,19 @@ static int exec_config_exec(oconfig_item_t *ci) /* {{{ */
     *pl->group = '\0';
     pl->group++;
   }
-
+#else
+	pl->hProcess = strdup(buffer);
+	if (pl->hProcess == NULL) {
+		sfree(pl->hProcess);
+		sfree(pl);
+	}
+	pl->hThread = strdup(buffer);
+	if (pl->hThread == NULL) {
+		sfree(pl->hThread);
+		sfree(pl);
+	}
+#endif
+#ifndef WIN32
   pl->exec = strdup(ci->values[1].value.string);
   if (pl->exec == NULL) {
     ERROR("exec plugin: strdup failed.");
@@ -155,29 +243,44 @@ static int exec_config_exec(oconfig_item_t *ci) /* {{{ */
     sfree(pl);
     return -1;
   }
+#endif
 
   pl->argv = calloc(ci->values_num, sizeof(*pl->argv));
   if (pl->argv == NULL) {
     ERROR("exec plugin: calloc failed.");
+#ifndef WIN32
     sfree(pl->exec);
     sfree(pl->user);
+#endif
     sfree(pl);
     return -1;
   }
 
+#ifndef WIN32
   {
-    char *tmp = strrchr(ci->values[1].value.string, '/');
+    char *tmp = strrchr(ci->values[0].value.string, '/');
     if (tmp == NULL)
-      sstrncpy(buffer, ci->values[1].value.string, sizeof(buffer));
+      sstrncpy(buffer, ci->values[0].value.string, sizeof(buffer));
     else
       sstrncpy(buffer, tmp + 1, sizeof(buffer));
   }
+#else
+  {
+    char *tmp = strrchr(ci->values[0].value.string, '/');
+    if (tmp == NULL)
+      sstrncpy(buffer, ci->values[0].value.string, sizeof(buffer));
+    else
+      sstrncpy(buffer, tmp + 1, sizeof(buffer));
+  }
+#endif
   pl->argv[0] = strdup(buffer);
   if (pl->argv[0] == NULL) {
     ERROR("exec plugin: strdup failed.");
     sfree(pl->argv);
+ #ifndef WIN32
     sfree(pl->exec);
     sfree(pl->user);
+ #endif
     sfree(pl);
     return -1;
   }
@@ -210,7 +313,9 @@ static int exec_config_exec(oconfig_item_t *ci) /* {{{ */
     }
     sfree(pl->argv);
     sfree(pl->exec);
+#ifndef WIN32
     sfree(pl->user);
+#endif
     sfree(pl);
     return -1;
   }
@@ -261,11 +366,44 @@ static void set_environment(void) /* {{{ */
 #endif
 } /* }}} void set_environment */
 
+#ifdef WIN32
+DWORD win_exec(TCHAR *argv[])
+{
+  DEBUG("Attempting to execute %s", argv[0]);
+  STARTUPINFO si;
+  PROCESS_INFORMATION pi;
+  DWORD pid;
+  ZeroMemory(&si, sizeof(si));
+  si.cb = sizeof(si);
+  program_list_t *pl;
+  if (!CreateProcess(NULL,
+                     argv[0],
+                     NULL,
+                     NULL,
+                     FALSE,
+                     0,
+                     NULL,
+                     NULL,
+                     &si,
+                     &pi)
+      )
+  {
+    ERROR("CreateProcess failed %ld.\n", GetLastError());
+  }
+  pl = calloc(1, sizeof(*pl));
+  pl->hProcess = pi.hProcess;
+  pl->hThread = pi.hThread;
+  pid = GetProcessId(pi.hProcess);
+  INFO("Process id is %ld.\n", pid);
+  process_status(pi.hProcess, pid);
+  return pid;
+}
+#endif
+#ifndef WIN32
 __attribute__((noreturn)) static void exec_child(program_list_t *pl, int uid,
                                                  int gid, int egid) /* {{{ */
 {
   int status;
-
 #if HAVE_SETGROUPS
   if (getuid() == 0) {
     gid_t glist[2];
@@ -304,11 +442,14 @@ __attribute__((noreturn)) static void exec_child(program_list_t *pl, int uid,
   }
 
   execvp(pl->exec, pl->argv);
+  program_list_t *pl;
 
   ERROR("exec plugin: Failed to execute ``%s'': %s", pl->exec, STRERRNO);
   exit(-1);
 } /* void exec_child }}} */
 
+#endif /* exec_child */
+#ifndef WIN32
 static void reset_signal_mask(void) /* {{{ */
 {
   sigset_t ss;
@@ -316,6 +457,7 @@ static void reset_signal_mask(void) /* {{{ */
   sigemptyset(&ss);
   sigprocmask(SIG_SETMASK, &ss, /* old mask = */ NULL);
 } /* }}} void reset_signal_mask */
+#endif /* reset_signal_mask */
 
 static int create_pipe(int fd_pipe[2]) /* {{{ */
 {
@@ -345,12 +487,14 @@ static void close_pipe(int fd_pipe[2]) /* {{{ */
  * the child and fd_out is connected to STDOUT and fd_err is connected to STDERR
  * of the child. Then is calls `exec_child'.
  */
+
 static int fork_child(program_list_t *pl, int *fd_in, int *fd_out,
-                      int *fd_err) /* {{{ */
+                      int *fd_err)  /* {{{ */
 {
   int fd_pipe_in[2] = {-1, -1};
   int fd_pipe_out[2] = {-1, -1};
   int fd_pipe_err[2] = {-1, -1};
+#ifndef WIN32
   int status;
   int pid;
 
@@ -360,21 +504,23 @@ static int fork_child(program_list_t *pl, int *fd_in, int *fd_out,
 
   struct passwd *sp_ptr;
   struct passwd sp;
-
+#else
+	DWORD pid;
+#endif
   if (pl->pid != 0)
     return -1;
-
+#ifndef WIN32
   long int nambuf_size = sysconf(_SC_GETPW_R_SIZE_MAX);
   if (nambuf_size <= 0)
     nambuf_size = sysconf(_SC_PAGESIZE);
   if (nambuf_size <= 0)
     nambuf_size = 4096;
   char nambuf[nambuf_size];
-
+#endif
   if ((create_pipe(fd_pipe_in) == -1) || (create_pipe(fd_pipe_out) == -1) ||
       (create_pipe(fd_pipe_err) == -1))
     goto failed;
-
+#ifndef WIN32
   sp_ptr = NULL;
   status = getpwnam_r(pl->user, &sp, nambuf, sizeof(nambuf), &sp_ptr);
   if (status != 0) {
@@ -443,33 +589,32 @@ static int fork_child(program_list_t *pl, int *fd_in, int *fd_out,
         continue;
       close(fd);
     }
-
+#endif
     /* Connect the `in' pipe to STDIN */
     if (fd_pipe_in[0] != STDIN_FILENO) {
       dup2(fd_pipe_in[0], STDIN_FILENO);
       close(fd_pipe_in[0]);
     }
-
     /* Now connect the `out' pipe to STDOUT */
     if (fd_pipe_out[1] != STDOUT_FILENO) {
       dup2(fd_pipe_out[1], STDOUT_FILENO);
       close(fd_pipe_out[1]);
     }
-
     /* Now connect the `err' pipe to STDERR */
     if (fd_pipe_err[1] != STDERR_FILENO) {
       dup2(fd_pipe_err[1], STDERR_FILENO);
       close(fd_pipe_err[1]);
     }
-
     set_environment();
-
+#ifndef WIN32
     /* Unblock all signals */
     reset_signal_mask();
 
     exec_child(pl, uid, gid, egid);
     /* does not return */
-  }
+#else
+	pid = win_exec(pl->argv);
+#endif
 
   close(fd_pipe_in[0]);
   close(fd_pipe_out[1]);
@@ -512,7 +657,7 @@ static int parse_line(char *buffer) /* {{{ */
     return -1;
   }
 } /* int parse_line }}} */
-
+#ifndef WIN32
 static void *exec_read_one(void *arg) /* {{{ */
 {
   program_list_t *pl = (program_list_t *)arg;
@@ -643,7 +788,6 @@ static void *exec_read_one(void *arg) /* {{{ */
   DEBUG("exec plugin: exec_read_one: Waiting for `%s' to exit.", pl->exec);
   if (waitpid(pl->pid, &status, 0) > 0)
     pl->status = status;
-
   DEBUG("exec plugin: Child %i exited with status %i.", (int)pl->pid,
         pl->status);
 
@@ -652,7 +796,6 @@ static void *exec_read_one(void *arg) /* {{{ */
   pthread_mutex_lock(&pl_lock);
   pl->flags &= ~PL_RUNNING;
   pthread_mutex_unlock(&pl_lock);
-
   close(fd);
   if (fd_err >= 0)
     close(fd_err);
@@ -660,6 +803,151 @@ static void *exec_read_one(void *arg) /* {{{ */
   pthread_exit((void *)0);
   return NULL;
 } /* void *exec_read_one }}} */
+#else
+static void *exec_read_one(void *arg) /* {{{ */
+{
+  program_list_t *pl = (program_list_t *)arg;
+  int fd, fd_err, highest_fd;
+  fd_set fdset, copy;
+  int status;
+  char buffer[1200]; /* if not completely read */
+  char buffer_err[1024];
+  char *pbuffer = buffer;
+  char *pbuffer_err = buffer_err;
+// TODO: remove this
+  printf("I made it to exec_read_one before fork_child/r/n");
+  status = fork_child(pl, NULL, &fd, &fd_err);
+// TODO: Remove this as well
+  printf("status is %d/n", status);
+  if (status < 0) {
+    /* Reset the "running" flag */
+	pl->flags &= ~PL_RUNNING;
+  }
+  pl->pid = status;
+// TODO: Remove this
+  printf("pl->pid is %ld/r/n", pl->pid);
+
+
+  FD_ZERO(&fdset);
+  FD_SET(fd, &fdset);
+  FD_SET(fd_err, &fdset);
+
+  /* Determine the highest file descriptor */
+
+  highest_fd = (fd > fd_err) ? fd : fd_err;
+
+
+  /* We use a copy of fdset, as select modifies it */
+  copy = fdset;
+
+  while (1) {
+    int len;
+
+    status = select(highest_fd + 1, &copy, NULL, NULL, NULL);
+    if (status < 0) {
+      if (errno == EINTR)
+        continue;
+      break;
+    }
+
+    if (FD_ISSET(fd, &copy)) {
+      char *pnl;
+
+      len = read(fd, pbuffer, sizeof(buffer) - 1 - (pbuffer - buffer));
+
+      if (len < 0) {
+        if (errno == EAGAIN || errno == EINTR)
+          continue;
+        break;
+      } else if (len == 0)
+        break; /* We've reached EOF */
+
+      pbuffer[len] = '\0';
+
+      len += pbuffer - buffer;
+      pbuffer = buffer;
+
+      while ((pnl = strchr(pbuffer, '\n'))) {
+        *pnl = '\0';
+        if (*(pnl - 1) == '\r')
+          *(pnl - 1) = '\0';
+
+        parse_line(pbuffer);
+
+        pbuffer = ++pnl;
+      }
+      /* not completely read ? */
+      if (pbuffer - buffer < len) {
+        len -= pbuffer - buffer;
+        memmove(buffer, pbuffer, len);
+        pbuffer = buffer + len;
+      } else
+        pbuffer = buffer;
+    } else if (FD_ISSET(fd_err, &copy)) {
+      char *pnl;
+
+      len = read(fd_err, pbuffer_err,
+                 sizeof(buffer_err) - 1 - (pbuffer_err - buffer_err));
+
+      if (len < 0) {
+        if (errno == EAGAIN || errno == EINTR)
+          continue;
+        break;
+      } else if (len == 0) {
+        /* We've reached EOF */
+        NOTICE("exec plugin: Program `%s' has closed STDERR.", pl->exec);
+
+        /* Remove file descriptor form select() set. */
+        FD_CLR(fd_err, &fdset);
+        copy = fdset;
+        highest_fd = fd;
+
+        /* Clean up file descriptor */
+        close(fd_err);
+        fd_err = -1;
+        continue;
+      }
+
+      pbuffer_err[len] = '\0';
+
+      len += pbuffer_err - buffer_err;
+      pbuffer_err = buffer_err;
+
+      while ((pnl = strchr(pbuffer_err, '\n'))) {
+        *pnl = '\0';
+        if (*(pnl - 1) == '\r')
+          *(pnl - 1) = '\0';
+
+        ERROR("exec plugin: exec_read_one: error = %s", pbuffer_err);
+
+        pbuffer_err = ++pnl;
+      }
+      /* not completely read ? */
+      if (pbuffer_err - buffer_err < len) {
+        len -= pbuffer_err - buffer_err;
+        memmove(buffer_err, pbuffer_err, len);
+        pbuffer_err = buffer_err + len;
+      } else
+        pbuffer_err = buffer_err;
+    }
+    /* reset copy */
+    copy = fdset;
+  }
+
+  DEBUG("exec plugin: exec_read_one: Waiting for `%s' to exit.", pl->exec);
+
+
+  pl->pid = 0;
+
+  pl->flags &= ~PL_RUNNING;
+  close(fd);
+  if (fd_err >= 0)
+    close(fd_err);
+
+  pthread_exit((void *)0);
+return NULL;
+} /* void *exec_read_one }}} */
+#endif /*exec_read_one */
 
 static void *exec_notification_one(void *arg) /* {{{ */
 {
@@ -668,7 +956,9 @@ static void *exec_notification_one(void *arg) /* {{{ */
   int fd;
   FILE *fh;
   int pid;
+#ifndef WIN32
   int status;
+#endif
   const char *severity;
 
   pid = fork_child(pl, &fd, NULL, NULL);
@@ -680,7 +970,11 @@ static void *exec_notification_one(void *arg) /* {{{ */
   fh = fdopen(fd, "w");
   if (fh == NULL) {
     ERROR("exec plugin: fdopen (%i) failed: %s", fd, STRERRNO);
+#ifndef WIN32
     kill(pid, SIGTERM);
+#else
+	kill_process(pl->hProcess);
+#endif
     close(fd);
     sfree(arg);
     pthread_exit((void *)1);
@@ -729,7 +1023,9 @@ static void *exec_notification_one(void *arg) /* {{{ */
   fflush(fh);
   fclose(fh);
 
+#ifndef WIN32
   waitpid(pid, &status, 0);
+#endif
 
   DEBUG("exec plugin: Child %i exited with status %i.", pid, status);
 
@@ -743,10 +1039,12 @@ static void *exec_notification_one(void *arg) /* {{{ */
 
 static int exec_init(void) /* {{{ */
 {
+#ifndef WIN32
   struct sigaction sa = {.sa_handler = sigchld_handler};
 
   sigaction(SIGCHLD, &sa, NULL);
 
+#endif
 #if defined(HAVE_SYS_CAPABILITY_H) && defined(CAP_SETUID) && defined(CAP_SETGID)
   if ((check_capability(CAP_SETUID) != 0) ||
       (check_capability(CAP_SETGID) != 0)) {
@@ -769,31 +1067,47 @@ static int exec_init(void) /* {{{ */
 
 static int exec_read(void) /* {{{ */
 {
-  for (program_list_t *pl = pl_head; pl != NULL; pl = pl->next) {
-    pthread_t t;
+  for (program_list_t *pl = pl_head; pl != NULL; pl = pl->next)	  {
+#ifndef WIN32
+	pthread_t t;
     pthread_attr_t attr;
+#else
+	long long unsigned int thread = *(int*)pl->hThread;
+
+#endif
 
     /* Only execute `normal' style executables here. */
     if ((pl->flags & PL_NORMAL) == 0)
       continue;
-
+#ifndef WIN32
     pthread_mutex_lock(&pl_lock);
+#endif
     /* Skip if a child is already running. */
     if ((pl->flags & PL_RUNNING) != 0) {
+#ifndef WIN32
       pthread_mutex_unlock(&pl_lock);
+#endif
       continue;
     }
     pl->flags |= PL_RUNNING;
+#ifndef WIN32
     pthread_mutex_unlock(&pl_lock);
 
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
     int status =
         plugin_thread_create(&t, &attr, exec_read_one, (void *)pl, "exec read");
+#else
+  int status = plugin_thread_create(&thread, NULL, exec_read_one, (void *)pl, "exec read");
+	printf("status is %d/n in exec_read", status);
+#endif
     if (status != 0) {
       ERROR("exec plugin: plugin_thread_create failed.");
     }
+#ifndef WIN32
     pthread_attr_destroy(&attr);
+#endif
+
   } /* for (pl) */
 
   return 0;
@@ -844,19 +1158,24 @@ static int exec_notification(const notification_t *n, /* {{{ */
 
 static int exec_shutdown(void) /* {{{ */
 {
+
   program_list_t *pl;
   program_list_t *next;
-
   pl = pl_head;
   while (pl != NULL) {
     next = pl->next;
-
+#ifndef WIN32
     if (pl->pid > 0) {
       kill(pl->pid, SIGTERM);
       INFO("exec plugin: Sent SIGTERM to %hu", (unsigned short int)pl->pid);
     }
-
-    sfree(pl->user);
+	sfree(pl->user);
+#else
+	if (pl->pid > 0) {
+		kill_process(pl->hProcess);
+		INFO("exec plugin: Terminating process.");
+	}
+#endif
     sfree(pl);
 
     pl = next;

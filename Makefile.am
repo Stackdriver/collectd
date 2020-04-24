@@ -920,6 +920,11 @@ pkglib_LTLIBRARIES += exec.la
 exec_la_SOURCES = src/exec.c
 exec_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 exec_la_LIBADD = libcmds.la
+if BUILD_WIN32
+exec_la_LDFLAGS += -L.
+exec_la_LIBADD += -loleaut32 -lole32 -luuid libcollectd.la
+exec_la_DEPENDENCES = libuuid.dll
+endif
 endif
 
 if BUILD_PLUGIN_ETHSTAT

@@ -80,7 +80,7 @@ build_windows ()
 	: ${LOCALSTATEDIR:="${INSTALL_DIR}"}
 	: ${DATAROOTDIR:="${INSTALL_DIR}"}
 	: ${DATADIR:="${INSTALL_DIR}"}
-	
+
 	echo "Installing collectd to ${INSTALL_DIR}."
 	TOP_SRCDIR=$(pwd)
 	MINGW_ROOT="/usr/x86_64-w64-mingw32/sys-root/mingw"
@@ -123,7 +123,7 @@ build_windows ()
 
 	  cd ${TOP_SRCDIR}/_build_aux/_gnulib
 	  ./configure --host="mingw32" LIBS="-lws2_32 -lpthread"
-	  make 
+	  make
 	  cd gllib
 
 	  # We have to rebuild libgnu.a to get the list of *.o files to build a dll later
@@ -154,6 +154,7 @@ build_windows ()
 	  --enable-logfile \
 	  --enable-disk \
 	  --enable-eventlog \
+	  --enable-exec \
 	  --enable-interface \
 	  --enable-match_regex \
 	  --enable-network \
@@ -185,4 +186,3 @@ if test "${OSTYPE}" = "cygwin"; then
 else
 	build_linux
 fi
-

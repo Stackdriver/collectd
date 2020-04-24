@@ -6249,6 +6249,7 @@ fi
 if test "x$ac_system" = "xWindows"; then
   plugin_disk="yes"
   plugin_eventlog="yes"
+  plugin_exec="yes"
   plugin_interface="yes"
   plugin_wmi="yes"
 fi
@@ -7131,4 +7132,3 @@ if test "x$dependency_warning" = "xyes"; then
 fi
 
 # vim: set fdm=marker sw=2 sts=2 ts=2 et :
-
