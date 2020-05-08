@@ -3897,7 +3897,7 @@ static int wg_transmit_unique_segments(
     DEBUG("write_gcm: next distinct segment has size %d", distinct_size);
     int result = wg_transmit_unique_segment(ctx, queue, distinct_list);
     if (result != 0) {
-      ERROR("write_gcm: wg_transmit_unique_segment failed.");
+      WARNING("write_gcm: wg_transmit_unique_segment failed.");
       wg_payload_destroy(distinct_list);
       wg_payload_destroy(residual_list);
       return -1;
