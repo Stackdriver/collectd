@@ -2159,6 +2159,9 @@ dist_noinst_JAVA = \
 	bindings/java/org/collectd/java/GenericJMXConfValue.java \
 	bindings/java/org/collectd/java/JMXMemory.java
 
+# Support the oldest version of Java we can.
+AM_JAVACFLAGS=-source 6 -target 6
+
 collectd-api.jar: $(JAVA_TIMESTAMP_FILE)
 	$(JAR) cf $(JARFLAGS) $@ org/collectd/api/*.class
 
