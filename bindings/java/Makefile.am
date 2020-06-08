@@ -25,8 +25,8 @@ EXTRA_DIST = org/collectd/api/CollectdConfigInterface.java \
 	     org/collectd/java/JMXMemory.java
 
 java-build-stamp: $(srcdir)/org/collectd/api/*.java $(srcdir)/org/collectd/java/*.java
-	$(JAVAC) -d "." "$(srcdir)/org/collectd/api"/*.java
-	$(JAVAC) -d "." "$(srcdir)/org/collectd/java"/*.java
+	$(JAVAC) -d "." -source 6 -target 6 "$(srcdir)/org/collectd/api"/*.java
+	$(JAVAC) -d "." -source 6 -target 6 "$(srcdir)/org/collectd/java"/*.java
 	mkdir -p .libs
 	$(JAR) cf .libs/collectd-api.jar "org/collectd/api"/*.class
 	$(JAR) cf .libs/generic-jmx.jar "org/collectd/java"/*.class
