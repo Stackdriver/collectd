@@ -27,7 +27,7 @@
 #include <inttypes.h>
 
 #ifndef DATA_MAX_NAME_LEN
-#define DATA_MAX_NAME_LEN 128
+#define DATA_MAX_NAME_LEN 256
 #endif
 
 /* Type for time as used by "utils_time.h" */
