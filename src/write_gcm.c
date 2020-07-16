@@ -976,7 +976,7 @@ int wg_extract_toplevel_json_long_long(const char *json, const char *key,
 //
 // There is more detail in the documentation, but what it boils down to is this:
 //
-// Make a POST request to https://www.googleapis.com/oauth2/v3/token
+// Make a POST request to https://oauth2.googleapis.com/token
 // with the body
 // grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=$JWT_HEADER.$CLAIM_SET.$SIGNATURE
 //
@@ -996,7 +996,7 @@ int wg_extract_toplevel_json_long_long(const char *json, const char *key,
 //   our purposes, this is the constant string
 //   "https://www.googleapis.com/auth/monitoring".
 // aud: Assertion target. Since we are asking for an access token, this is the
-//   constant string "https://www.googleapis.com/oauth2/v3/token". This is the
+//   constant string "https://oauth2.googleapis.com/token". This is the
 //   same as the URL we are posting to.
 // iat: Time of the assertion (i.e. now) in units of "seconds from Unix epoch".
 // exp: Expiration of assertion. For us this is 'iat' + 3600 seconds.
@@ -1113,7 +1113,7 @@ static int wg_oauth2_get_auth_header_nolock(oauth2_ctx_t *ctx,
   // for this submodule. This involves posting a body to a URL. The URL is
   // constant. The body needs to be constructed as described
   // in the comments for this submodule.
-  const char *url = "https://www.googleapis.com/oauth2/v3/token";
+  const char *url = "https://oauth2.googleapis.com/token";
 
   char body[2048];  // Should be big enough.
   char *bptr = body;
