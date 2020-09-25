@@ -535,7 +535,7 @@ static int network_parse(void *data, size_t data_size, lcc_security_level_t sl,
 
     if ((sz < 5) || (((size_t)sz - 4) > b->len)) {
       DEBUG("lcc_network_parse(): invalid 'sz' field: sz = %" PRIu16
-            ", b->len = %" PRIsz "\n",
+            ", b->len = %" PRIu64 "\n",
             sz, b->len);
       return EINVAL;
     }
