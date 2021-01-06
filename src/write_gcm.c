@@ -3861,7 +3861,11 @@ static int wg_rebase_item(
 
   // If any counter wrapped, everybody resets.
   if (some_counter_wrapped) {
-    tracker->start_time = payload->start_time;
+    // Set the reset timestamp to be one millisecond before the timestamp of the
+    // current point. We don't know the true reset time but this ensures the
+    // range is non-zero while unlikely to conflict with any previous point.
+    tracker->start_time =
+        NS_TO_CDTIME_T(CDTIME_T_TO_NS(payload->start_time) - 1000000);
     for (i = 0; i < payload->num_values; ++i) {
       wg_value_set_zero(ds_type, &tracker->baselines[i]);
     }
