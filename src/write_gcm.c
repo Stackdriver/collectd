@@ -1015,7 +1015,7 @@ int wg_extract_toplevel_json_long_long(const char *json, const char *key,
 //
 // EXAMPLE USAGE
 //
-// char auth_header[1024];
+// char auth_header[65536];
 // if (wg_oauth2_get_auth_header(auth_header, sizeof(auth_header),
 //                               oauth2_ctx, credential_ctx) != 0) {
 //   return -1; // error
@@ -1046,7 +1046,7 @@ static void wg_oauth2_ctx_destroy(oauth2_ctx_t *);
 struct oauth2_ctx_s {
   pthread_mutex_t mutex;
   cdtime_t token_expire_time;
-  char auth_header[1024];
+  char auth_header[65536];
 };
 
 static int wg_oauth2_get_auth_header_nolock(oauth2_ctx_t *ctx,
@@ -3936,7 +3936,7 @@ static int wg_transmit_unique_segment(
   char *response = NULL;
   int result = -1;  // Pessimistically assume failure.
 
-  char auth_header[1024];
+  char auth_header[65536];
   if (wg_oauth2_get_auth_header(auth_header, sizeof(auth_header),
       ctx->oauth2_ctx, ctx->cred_ctx) != 0) {
     ERROR("write_gcm: wg_oauth2_get_auth_header failed.");
