@@ -3979,9 +3979,9 @@ static int wg_transmit_unique_segment(
           &response, ctx->agent_translation_service_url, json, headers,
           STATIC_ARRAY_SIZE(headers), 0);
       if (wg_result != 0) {
-        wg_log_json_message(ctx, "Error %d from wg_curl_get_or_post\n",
-                            wg_result);
-        ERROR("%s: Error %d from wg_curl_get_or_post",
+        wg_log_json_message(ctx, "Error %d from wg_curl_get_or_post "
+                            "(CollectdTimeseries)\n", wg_result);
+        ERROR("%s: Error %d from wg_curl_get_or_post (CollectdTimeseries)",
               this_plugin_name, wg_result);
         if (wg_result == -1) {
           ++ctx->ats_stats->api_connectivity_failures;
@@ -4026,12 +4026,19 @@ static int wg_transmit_unique_segment(
             ctx, "Sending JSON (TimeseriesRequest) to %s:\n%s\n",
             ctx->custom_metrics_url, json);
 
-        if (wg_curl_get_or_post(
-                &response, ctx->custom_metrics_url, json, headers,
-                STATIC_ARRAY_SIZE(headers), 0) != 0) {
-          wg_log_json_message(ctx, "Error contacting server.\n");
-          ERROR("write_gcm: Error talking to the endpoint.");
-          ++ctx->gsd_stats->api_connectivity_failures;
+        int wg_result = wg_curl_get_or_post(
+            &response, ctx->custom_metrics_url, json, headers,
+            STATIC_ARRAY_SIZE(headers), 0);
+        if (wg_result != 0) {
+          wg_log_json_message(ctx, "Error %d from wg_curl_get_or_post "
+                              "(Timeseries)\n", wg_result);
+          ERROR("%s: Error %d from wg_curl_get_or_post (Timeseries)",
+                this_plugin_name, wg_result);
+          if (wg_result == -1) {
+            ++ctx->gsd_stats->api_connectivity_failures;
+          } else {
+            ++ctx->gsd_stats->api_errors;
+          }
           goto leave;
         }
 
