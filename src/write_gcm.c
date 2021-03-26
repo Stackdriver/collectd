@@ -1528,8 +1528,9 @@ static int wg_typed_value_create_from_value_t_inline(wg_typed_value_t *result,
   switch (ds_type) {
     case DS_TYPE_GAUGE: {
       if (!isfinite(value.gauge)) {
-        ERROR("write_gcm: can not take infinite value");
-        return -1;
+        DEBUG("write_gcm: ignoring a NaN or infinite value");
+        result->field_name_static = NULL;
+        return 0;
       }
       *dataSourceType_static = "gauge";
       result->field_name_static = "doubleValue";
@@ -3048,8 +3049,14 @@ static void wg_json_Points(json_ctx_t *jc, const wg_payload_t *element)
           &typed_value, value->ds_type, value->val, &data_source_type_static)
       != 0) {
     ERROR("write_gcm: wg_typed_value_create_from_value_t_inline failed for "
-      "%s/%s/%s!.",
-      element->key.plugin, element->key.type, value->name);
+          "%s/%s/%s!.",
+          element->key.plugin, element->key.type, value->name);
+    goto leave;
+  }
+  if (!typed_value.field_name_static) {
+    DEBUG("write_gcm: wg_typed_value_create_from_value_t_inline ignored "
+          "%s/%s/%s.",
+          element->key.plugin, element->key.type, value->name);
     goto leave;
   }
   wg_json_map_open(jc);
@@ -3377,6 +3384,12 @@ static void wg_json_CollectdValues(
       WARNING("write_gcm: wg_typed_value_create_from_value_t_inline failed "
               "for %s/%s/%s! Continuing.",
               element->key.plugin, element->key.type, value->name);
+      continue;
+    }
+    if (!typed_value.field_name_static) {
+      DEBUG("write_gcm: wg_typed_value_create_from_value_t_inline ignored "
+            "%s/%s/%s. Continuing.",
+            element->key.plugin, element->key.type, value->name);
       continue;
     }
     wg_json_map_open(jc);
