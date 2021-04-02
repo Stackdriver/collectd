@@ -1419,7 +1419,7 @@ static void wg_payload_destroy(wg_payload_t *list);
 static int wg_payload_num_values(const wg_payload_t *list);
 
 static int wg_typed_value_create_from_value_t_inline(wg_typed_value_t *result,
-    int ds_type, value_t value, const char **dataSourceType_static);
+    int ds_type, value_t value);
 static int wg_typed_value_create_from_meta_data_inline(wg_typed_value_t *item,
     meta_data_t *md, const char *key);
 static void wg_typed_value_destroy_inline(wg_typed_value_t *item);
@@ -1515,17 +1515,12 @@ static int wg_payload_num_values(const wg_payload_t *list) {
   return num_values;
 }
 
-// Based on 'ds_type', determine the appropriate value for the corresponding
-// CollectdValue.DataSourceType enum (stored here and transmitted in JSON as the
-// string 'dataSourceType_static') and also populate the wg_typed_value_t
-// structure (which itself corresponds to the proto
-// google.monitoring.v3.TypedValue). The
+// Based on 'ds_type', populate the wg_typed_value_t structure (which
+// corresponds to the proto google.monitoring.v3.TypedValue). The
 // 'field_name_static' field of the wg_typed_value_t structure may be set to
-// NULL to indicate that the value should be ignored. 'dataSourceType_static' is
-// so named to help us remember that it is a compile-time string constant which
-// does not need to be copied/deallocated.
+// NULL to indicate that the value should be ignored.
 static int wg_typed_value_create_from_value_t_inline(wg_typed_value_t *result,
-    int ds_type, value_t value, const char **dataSourceType_static) {
+    int ds_type, value_t value) {
   char buffer[128];
   switch (ds_type) {
     case DS_TYPE_GAUGE: {
@@ -1534,7 +1529,6 @@ static int wg_typed_value_create_from_value_t_inline(wg_typed_value_t *result,
         result->field_name_static = NULL;
         return 0;
       }
-      *dataSourceType_static = "gauge";
       result->field_name_static = "doubleValue";
       snprintf(buffer, sizeof(buffer), "%f", value.gauge);
       break;
@@ -1544,13 +1538,11 @@ static int wg_typed_value_create_from_value_t_inline(wg_typed_value_t *result,
         ERROR("write_gcm: Counter is too large for an int64.");
         return -1;
       }
-      *dataSourceType_static = "counter";
       result->field_name_static = "int64Value";
       snprintf(buffer, sizeof(buffer), "%" PRIi64, (int64_t)value.counter);
       break;
     }
     case DS_TYPE_DERIVE: {
-      *dataSourceType_static = "derive";
       result->field_name_static = "int64Value";
       snprintf(buffer, sizeof(buffer), "%" PRIi64, value.derive);
       break;
@@ -1561,7 +1553,6 @@ static int wg_typed_value_create_from_value_t_inline(wg_typed_value_t *result,
         ERROR("write_gcm: Absolute is too large for an int64.");
         return -1;
       }
-      *dataSourceType_static = "absolute";
       result->field_name_static = "int64Value";
       snprintf(buffer, sizeof(buffer), "%" PRIi64, (int64_t)value.absolute);
       break;
@@ -3045,11 +3036,8 @@ static void wg_json_Points(json_ctx_t *jc, const wg_payload_t *element)
   assert(!strcmp(value->name, "value"));
 
   wg_typed_value_t typed_value;
-  // We don't care what the name of the type is.
-  const char *data_source_type_static;
   if (wg_typed_value_create_from_value_t_inline(
-          &typed_value, value->ds_type, value->val, &data_source_type_static)
-      != 0) {
+          &typed_value, value->ds_type, value->val) != 0) {
     ERROR("write_gcm: wg_typed_value_create_from_value_t_inline failed for "
           "%s/%s/%s!.",
           element->key.plugin, element->key.type, value->name);
@@ -3380,9 +3368,8 @@ static void wg_json_CollectdValues(
     const wg_payload_value_t *value = &element->values[i];
 
     wg_typed_value_t typed_value;
-    const char *data_source_type_static;
     if (wg_typed_value_create_from_value_t_inline(&typed_value,
-        value->ds_type, value->val, &data_source_type_static) != 0) {
+        value->ds_type, value->val) != 0) {
       WARNING("write_gcm: wg_typed_value_create_from_value_t_inline failed "
               "for %s/%s/%s! Continuing.",
               element->key.plugin, element->key.type, value->name);
@@ -3396,7 +3383,7 @@ static void wg_json_CollectdValues(
     }
     wg_json_map_open(jc);
     wg_json_string(jc, "dataSourceType");
-    wg_json_string(jc, data_source_type_static);
+    wg_json_string(jc, DS_TYPE_TO_STRING(value->ds_type));
 
     wg_json_string(jc, "dataSourceName");
     wg_json_string(jc, value->name);
