@@ -1519,9 +1519,11 @@ static int wg_payload_num_values(const wg_payload_t *list) {
 // CollectdValue.DataSourceType enum (stored here and transmitted in JSON as the
 // string 'dataSourceType_static') and also populate the wg_typed_value_t
 // structure (which itself corresponds to the proto
-// google.monitoring.v3.TypedValue). 'dataSourceType_static' is so named to help
-// us remember that it is a compile-time string constant which does not need to
-// be copied/deallocated.
+// google.monitoring.v3.TypedValue). The
+// 'field_name_static' field of the wg_typed_value_t structure may be set to
+// NULL to indicate that the value should be ignored. 'dataSourceType_static' is
+// so named to help us remember that it is a compile-time string constant which
+// does not need to be copied/deallocated.
 static int wg_typed_value_create_from_value_t_inline(wg_typed_value_t *result,
     int ds_type, value_t value, const char **dataSourceType_static) {
   char buffer[128];
