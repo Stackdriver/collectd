@@ -2161,6 +2161,28 @@ static wg_configbuilder_t *wg_configbuilder_create(int children_num,
     goto error;
   }
 
+  // Warn of deprecated config options.
+  if (cb->cloud_provider != NULL) {
+    WARNING("write_gcm: deprecated field CloudProvider used in the config. "
+        "Use 'Resource' instead.");
+  }
+  if (cb->instance_id != NULL) {
+    WARNING("write_gcm: deprecated field Instance used in the config. "
+        "Use 'Resource' instead.");
+  }
+  if (cb->zone) {
+    WARNING("write_gcm: deprecated field Zone used in the config. "
+        "Use 'Resource' instead.");
+  }
+  if (cb->region) {
+    WARNING("write_gcm: deprecated field Region used in the config. "
+        "Use 'Resource' instead.");
+  }
+  if (cb->account_id) {
+    WARNING("write_gcm: deprecated field Account used in the config. "
+        "Use 'Resource' instead.");
+  }
+
   // Either all or none of 'email', 'key_file', and 'passphrase' must be set.
   int num_set = 0;
   if (cb->email != NULL) {
