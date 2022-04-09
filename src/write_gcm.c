@@ -1934,13 +1934,18 @@ static int wg_payload_key_compare(const wg_payload_key_t *l,
 //==============================================================================
 //==============================================================================
 typedef struct {
+  char *project_id;
+  // Data to construct the monitored resource from.
+  char *monitored_resource_type;
+  char **monitored_resource_label_keys;
+  char **monitored_resource_label_values;
+  int monitored_resource_num_labels;
   // "gcp" or "aws".
   // "gcp" expects project_id, instance_id, and zone (or will fetch them from
   // the metadata server.
   // "aws" expects project_id, instance_id, region, and account_id (or will
   // fetch them from the metadata server).
   char *cloud_provider;
-  char *project_id;
   char *instance_id;
   char *zone;
   char *region;
@@ -2057,6 +2062,46 @@ static wg_configbuilder_t *wg_configbuilder_create(int children_num,
   int c, k;
   for (c = 0; c < children_num; ++c) {
     const oconfig_item_t *child = &children[c];
+    if (strcasecmp(child->key, "Resource") == 0) {
+      if (cf_util_get_string(child, &cb->monitored_resource_type) != 0) {
+        ERROR("write_gcm: cf_util_get_string failed for key %s",
+              child->key);
+        ++parse_errors;
+      }
+      cb->monitored_resource_label_keys =
+          calloc(child->children_num, sizeof(char*));
+      if (cb->monitored_resource_label_keys == NULL) {
+        ERROR("write_gcm: could not allocate label keys of size %d",
+              child->children_num);
+        ++parse_errors;
+      }
+      cb->monitored_resource_label_values =
+          calloc(child->children_num, sizeof(char*));
+      if (cb->monitored_resource_label_values == NULL) {
+        ERROR("write_gcm: could not allocate label values of size %d",
+              child->children_num);
+        ++parse_errors;
+      }
+      if (cb->monitored_resource_label_keys != NULL &&
+          cb->monitored_resource_label_values != NULL) {
+        cb->monitored_resource_num_labels = child->children_num;
+        for (int i = 0; i < child->children_num; ++i) {
+          const oconfig_item_t *label = &child->children[i];
+          cb->monitored_resource_label_keys[i] = sstrdup(label->key);
+          if (cb->monitored_resource_label_keys[i] == NULL) {
+            ERROR("write_gcm: sstrdup failed for resource key %s", label->key);
+            ++parse_errors;
+          }
+          if (cf_util_get_string(
+                  label, &cb->monitored_resource_label_values[i]) != 0) {
+            ERROR("write_gcm: cf_util_get_string failed for resource key %s",
+                  label->key);
+            ++parse_errors;
+          }
+        }
+      }
+      continue;
+    }
     for (k = 0; k < STATIC_ARRAY_SIZE(string_keys); ++k) {
       if (strcasecmp(child->key, string_keys[k]) == 0) {
         if (cf_util_get_string(child, string_locations[k]) != 0) {
@@ -2163,8 +2208,18 @@ static void wg_configbuilder_destroy(wg_configbuilder_t *cb) {
   sfree(cb->region);
   sfree(cb->zone);
   sfree(cb->instance_id);
-  sfree(cb->project_id);
   sfree(cb->cloud_provider);
+  // cb->monitored_resource_num_labels is guaranteed to be positive only if both
+  // cb->monitored_resource_label_keys and cb->monitored_resource_label_values
+  // are present.
+  for (int i = 0; i < cb->monitored_resource_num_labels; ++i) {
+    sfree(cb->monitored_resource_label_values[i]);
+    sfree(cb->monitored_resource_label_keys[i]);
+  }
+  sfree(cb->monitored_resource_label_values);
+  sfree(cb->monitored_resource_label_keys);
+  sfree(cb->monitored_resource_type);
+  sfree(cb->project_id);
   sfree(cb);
 }
 
