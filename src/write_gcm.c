@@ -1939,7 +1939,7 @@ typedef struct {
   char *monitored_resource_type;
   char **monitored_resource_label_keys;
   char **monitored_resource_label_values;
-  int monitored_resource_num_labels;
+  size_t monitored_resource_num_labels;
   // "gcp" or "aws".
   // "gcp" expects project_id, instance_id, and zone (or will fetch them from
   // the metadata server.
@@ -2262,6 +2262,8 @@ static void wg_monitored_resource_destroy(monitored_resource_t *resource);
 //------------------------------------------------------------------------------
 // Private implementation starts here.
 //------------------------------------------------------------------------------
+static monitored_resource_t *wg_monitored_resource_create_explicit(
+    const wg_configbuilder_t *cb, const char *project_id);
 static monitored_resource_t *wg_monitored_resource_create_for_gcp(
     const wg_configbuilder_t *cb, const char *project_id);
 static monitored_resource_t *wg_monitored_resource_create_for_aws(
@@ -2299,6 +2301,9 @@ static char * detect_cloud_provider() {
 
 static monitored_resource_t *wg_monitored_resource_create(
     const wg_configbuilder_t *cb, const char *project_id) {
+  if (cb->monitored_resource_type != NULL) {
+    return wg_monitored_resource_create_explicit(cb, project_id);
+  }
   char *cloud_provider_to_use;
   if (cb->cloud_provider != NULL) {
     cloud_provider_to_use = cb->cloud_provider;
@@ -2408,8 +2413,44 @@ static void wg_monitored_resource_destroy(monitored_resource_t *resource) {
   sfree(resource);
 }
 
+static monitored_resource_t *wg_monitored_resource_create_explicit(
+    const wg_configbuilder_t *cb, const char *project_id) {
+  // Items to clean up upon leaving.
+  monitored_resource_t *result = NULL;
+  char *project_id_to_use = sstrdup(project_id);
+
+  // For items not specified in the config file, try to get them from the
+  // metadata server.
+  if (project_id_to_use == NULL) {
+    // This gets the string id of the project (not the numeric id).
+    project_id_to_use =
+        wg_get_from_gcp_metadata_server("project/project-id", 0);
+    if (project_id_to_use == NULL) {
+      ERROR("write_gcm: Can't get project ID from GCP metadata server "
+          " (and 'Project' not specified in the config file).");
+      goto leave;
+    }
+  }
+
+  {
+    size_t num_labels = cb->monitored_resource_num_labels;
+    // The scope of this array must end before the "leave:" label.
+    label_t labels[num_labels];
+    for (int i = 0; i < num_labels; i++) {
+      labels[i].key = cb->monitored_resource_label_keys[i];
+      labels[i].value = cb->monitored_resource_label_values[i];
+    }
+    result = monitored_resource_create_from_array(
+        cb->monitored_resource_type, project_id_to_use, labels, num_labels);
+  }
+
+ leave:
+  sfree(project_id_to_use);
+  return result;
+}
+
 static monitored_resource_t *wg_monitored_resource_create_for_gcp(
-    const wg_configbuilder_t *cb,  const char *project_id) {
+    const wg_configbuilder_t *cb, const char *project_id) {
   // Items to clean up upon leaving.
   monitored_resource_t *result = NULL;
   char *project_id_to_use = sstrdup(project_id);
