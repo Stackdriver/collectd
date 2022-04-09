@@ -2091,6 +2091,9 @@ static wg_configbuilder_t *wg_configbuilder_create(int children_num,
           if (cb->monitored_resource_label_keys[i] == NULL) {
             ERROR("write_gcm: sstrdup failed for resource key %s", label->key);
             ++parse_errors;
+          } else if (strcmp(label->key, "project_id") == 0) {
+            ERROR("write_gcm: key project_id is not allowed in resources");
+            ++parse_errors;
           }
           if (cf_util_get_string(
                   label, &cb->monitored_resource_label_values[i]) != 0) {
