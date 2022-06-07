@@ -2092,6 +2092,10 @@ static wg_configbuilder_t *wg_configbuilder_create(int children_num,
             ERROR("write_gcm: sstrdup failed for resource key %s", label->key);
             ++parse_errors;
           } else if (strcmp(label->key, "project_id") == 0) {
+            // It's not possible, in general, to validate the "project_id"
+            // resource label against the project extracted from the
+            // configuration, credentials, or the metadata server, so we
+            // disallow this label instead.
             ERROR("write_gcm: key project_id is not allowed in resources");
             ++parse_errors;
           }
