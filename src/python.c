@@ -35,6 +35,10 @@
 
 #include "cpython.h"
 
+#ifndef PLUGIN_NAME
+#define PLUGIN_NAME "python"
+#endif
+
 typedef struct cpy_callback_s {
   char *name;
   PyObject *callback;
@@ -816,7 +820,7 @@ static PyObject *cpy_register_read(PyObject *self, PyObject *args,
   c->next = NULL;
 
   plugin_register_complex_read(
-      /* group = */ "python", buf, cpy_read_callback,
+      /* group = */ PLUGIN_NAME, buf, cpy_read_callback,
       DOUBLE_TO_CDTIME_T(interval),
       &(user_data_t){
           .data = c,
@@ -1153,7 +1157,7 @@ static void *cpy_interactive(void *pipefd) {
   PyOS_setsig(SIGINT, cur_sig);
   PyErr_Print();
   state = PyEval_SaveThread();
-  NOTICE("python: Interactive interpreter exited, stopping collectd ...");
+  NOTICE(PLUGIN_NAME ": Interactive interpreter exited, stopping collectd ...");
   pthread_kill(main_thread, SIGINT);
   return NULL;
 }
@@ -1165,20 +1169,20 @@ static int cpy_init(void) {
   static pthread_t thread;
 
   if (!Py_IsInitialized()) {
-    WARNING("python: Plugin loaded but not configured.");
-    plugin_unregister_shutdown("python");
+    WARNING(PLUGIN_NAME ": Plugin loaded but not configured.");
+    plugin_unregister_shutdown(PLUGIN_NAME);
     Py_Finalize();
     return 0;
   }
   main_thread = pthread_self();
   if (do_interactive) {
     if (pipe(pipefd)) {
-      ERROR("python: Unable to create pipe.");
+      ERROR(PLUGIN_NAME ": Unable to create pipe.");
       return 1;
     }
     if (plugin_thread_create(&thread, NULL, cpy_interactive, pipefd + 1,
-                             "python interpreter")) {
-      ERROR("python: Error creating thread for interactive interpreter.");
+                             PLUGIN_NAME " interpreter")) {
+      ERROR(PLUGIN_NAME ": Error creating thread for interactive interpreter.");
     }
     if (read(pipefd[0], &buf, 1))
       ;
@@ -1290,13 +1294,13 @@ static int cpy_init_python(void) {
   CollectdError = PyErr_NewException("collectd.CollectdError", NULL, errordict);
   sys = PyImport_ImportModule("sys"); /* New reference. */
   if (sys == NULL) {
-    cpy_log_exception("python initialization");
+    cpy_log_exception(PLUGIN_NAME " initialization");
     return 1;
   }
   sys_path = PyObject_GetAttrString(sys, "path"); /* New reference. */
   Py_DECREF(sys);
   if (sys_path == NULL) {
-    cpy_log_exception("python initialization");
+    cpy_log_exception(PLUGIN_NAME " initialization");
     return 1;
   }
   PySys_SetArgv(1, &argv);
@@ -1368,8 +1372,8 @@ static int cpy_config(oconfig_item_t *ci) {
         continue;
       }
 #ifdef IS_PY3K
-      ERROR("python: \"Encoding\" was used in the config file but Python3 was "
-            "used, which does not support changing encodings");
+      ERROR(PLUGIN_NAME ": \"Encoding\" was used in the config file but "
+            "Python3 was used, which does not support changing encodings");
       status = 1;
       sfree(encoding);
       continue;
@@ -1396,7 +1400,7 @@ static int cpy_config(oconfig_item_t *ci) {
         continue;
       tb = PyImport_ImportModule("traceback"); /* New reference. */
       if (tb == NULL) {
-        cpy_log_exception("python initialization");
+        cpy_log_exception(PLUGIN_NAME " initialization");
         status = 1;
         continue;
       }
@@ -1404,7 +1408,7 @@ static int cpy_config(oconfig_item_t *ci) {
           PyObject_GetAttrString(tb, "format_exception"); /* New reference. */
       Py_DECREF(tb);
       if (cpy_format_exception == NULL) {
-        cpy_log_exception("python initialization");
+        cpy_log_exception(PLUGIN_NAME " initialization");
         status = 1;
       }
     } else if (strcasecmp(item->key, "ModulePath") == 0) {
@@ -1417,19 +1421,19 @@ static int cpy_config(oconfig_item_t *ci) {
       }
       dir_object = cpy_string_to_unicode_or_bytes(dir); /* New reference. */
       if (dir_object == NULL) {
-        ERROR("python plugin: Unable to convert \"%s\" to "
+        ERROR(PLUGIN_NAME " plugin: Unable to convert \"%s\" to "
               "a python object.",
               dir);
         free(dir);
-        cpy_log_exception("python initialization");
+        cpy_log_exception(PLUGIN_NAME " initialization");
         status = 1;
         continue;
       }
       if (PyList_Insert(sys_path, 0, dir_object) != 0) {
-        ERROR("python plugin: Unable to prepend \"%s\" to "
+        ERROR(PLUGIN_NAME " plugin: Unable to prepend \"%s\" to "
               "python module path.",
               dir);
-        cpy_log_exception("python initialization");
+        cpy_log_exception(PLUGIN_NAME " initialization");
         status = 1;
       }
       Py_DECREF(dir_object);
@@ -1444,7 +1448,8 @@ static int cpy_config(oconfig_item_t *ci) {
       }
       module = PyImport_ImportModule(module_name); /* New reference. */
       if (module == NULL) {
-        ERROR("python plugin: Error importing module \"%s\".", module_name);
+        ERROR(PLUGIN_NAME " plugin: Error importing module \"%s\".",
+              module_name);
         cpy_log_exception("importing module");
         status = 1;
       }
@@ -1464,8 +1469,8 @@ static int cpy_config(oconfig_item_t *ci) {
           break;
       }
       if (c == NULL) {
-        WARNING("python plugin: Found a configuration for the \"%s\" plugin, "
-                "but the plugin isn't loaded or didn't register "
+        WARNING(PLUGIN_NAME " plugin: Found a configuration for the \"%s\" "
+                "plugin, but the plugin isn't loaded or didn't register "
                 "a configuration callback.",
                 name);
         free(name);
@@ -1486,7 +1491,7 @@ static int cpy_config(oconfig_item_t *ci) {
       } else
         Py_DECREF(ret);
     } else {
-      ERROR("python plugin: Unknown config key \"%s\".", item->key);
+      ERROR(PLUGIN_NAME " plugin: Unknown config key \"%s\".", item->key);
       status = 1;
     }
   }
@@ -1494,7 +1499,7 @@ static int cpy_config(oconfig_item_t *ci) {
 }
 
 void module_register(void) {
-  plugin_register_complex_config("python", cpy_config);
-  plugin_register_init("python", cpy_init);
-  plugin_register_shutdown("python", cpy_shutdown);
+  plugin_register_complex_config(PLUGIN_NAME, cpy_config);
+  plugin_register_init(PLUGIN_NAME, cpy_init);
+  plugin_register_shutdown(PLUGIN_NAME, cpy_shutdown);
 }
