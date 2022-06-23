@@ -4627,7 +4627,7 @@ if test "$with_libpython" != "no"; then
   if test "$LIBPYTHON_CPPFLAGS" = "" && test "$LIBPYTHON_LDFLAGS" = ""; then
     AC_ARG_VAR([PYTHON_CONFIG], [path to python-config])
     AC_PATH_PROGS([PYTHON_CONFIG],
-      [python3-config python2-config python-config]
+      [python2-config python-config]
     )
     if test "$PYTHON_CONFIG" = ""; then
       if test "$with_libpython" = "yes"; then
@@ -4681,6 +4681,76 @@ if test "$with_libpython" != "xno"; then
   LIBS="$SAVE_LIBS"
 fi
 # }}} --with-libpython
+
+# --with-libpython3 {{{
+AC_ARG_VAR([LIBPYTHON3_CPPFLAGS], [Preprocessor flags for libpython3])
+AC_ARG_VAR([LIBPYTHON3_LDFLAGS], [Linker flags for libpython3])
+AC_ARG_VAR([LIBPYTHON3_LIBS], [Libraries for libpython3])
+
+AC_ARG_WITH([libpython3],
+  [AS_HELP_STRING([--with-libpython3], [if we should build with libpython3 @<:@default=yes@:>@])],
+  [with_libpython3="$withval"],
+  [with_libpython3="check"]
+)
+
+if test "$with_libpython3" != "no"; then
+  if test "$LIBPYTHON3_CPPFLAGS" = "" && test "$LIBPYTHON3_LDFLAGS" = ""; then
+    AC_ARG_VAR([PYTHON3_CONFIG], [path to python3-config])
+    AC_PATH_PROGS([PYTHON3_CONFIG],
+      [python3-config]
+    )
+    if test "$PYTHON3_CONFIG" = ""; then
+      if test "$with_libpython3" = "yes"; then
+        AC_MSG_ERROR([Unable to find python3-config])
+      fi
+      with_libpython3="no"
+    fi
+  fi
+fi
+
+if test "$PYTHON3_CONFIG" != ""; then
+  LIBPYTHON3_CPPFLAGS="`${PYTHON3_CONFIG} --includes`"
+  if test $? -ne 0; then
+    with_libpython3="no"
+  fi
+  LIBPYTHON3_LDFLAGS="`${PYTHON3_CONFIG} --ldflags`"
+  if test $? -ne 0; then
+    with_libpython3="no"
+  fi
+  LIBPYTHON3_LIBS="`${PYTHON3_CONFIG} --libs`"
+  if test $? -ne 0; then
+    with_libpython3="no"
+  fi
+fi
+
+if test "$with_libpython3" != "xno"; then
+  SAVE_CPPFLAGS="$CPPFLAGS"
+  SAVE_LDFLAGS="$LDFLAGS"
+  SAVE_LIBS="$LIBS"
+  CPPFLAGS="$LIBPYTHON3_CPPFLAGS $CPPFLAGS"
+  LDFLAGS="$LIBPYTHON3_LDFLAGS $LDFLAGS"
+  LIBS="$LIBPYTHON3_LIBS $LIBS"
+
+  AC_CHECK_HEADERS([Python.h],
+    [
+      AC_MSG_CHECKING([for libpython3])
+      AC_LINK_IFELSE([AC_LANG_PROGRAM(
+          [[#include <Python.h>]],
+          [[Py_Initialize();]])
+        ],
+        [with_libpython3="yes"],
+        [with_libpython3="no"]
+      )
+      AC_MSG_RESULT([$with_libpython3])
+    ],
+    [with_libpython3="no"]
+  )
+
+  CPPFLAGS="$SAVE_CPPFLAGS"
+  LDFLAGS="$SAVE_LDFLAGS"
+  LIBS="$SAVE_LIBS"
+fi
+# }}} --with-libpython3
 
 # --with-librabbitmq {{{
 AC_ARG_WITH([librabbitmq],
@@ -6206,6 +6276,7 @@ plugin_pinba="no"
 plugin_processes="no"
 plugin_protocols="no"
 plugin_python="no"
+plugin_python3="no"
 plugin_serial="no"
 plugin_smart="no"
 plugin_swap="no"
@@ -6494,6 +6565,10 @@ if test "x$with_libpython" != "xno"; then
   plugin_python="yes"
 fi
 
+if test "x$with_libpython3" != "xno"; then
+  plugin_python3="yes"
+fi
+
 if test "x$with_libatasmart" = "xyes" && test "x$with_libudev" = "xyes"; then
   plugin_smart="yes"
 fi
@@ -6664,7 +6739,8 @@ AC_PLUGIN([postgresql],          [$with_libpq],             [PostgreSQL database
 AC_PLUGIN([powerdns],            [yes],                     [PowerDNS statistics])
 AC_PLUGIN([processes],           [$plugin_processes],       [Process statistics])
 AC_PLUGIN([protocols],           [$plugin_protocols],       [Protocol (IP, TCP, ...) statistics])
-AC_PLUGIN([python],              [$plugin_python],          [Embed a Python interpreter])
+AC_PLUGIN([python],              [$plugin_python],          [Embed a Python 2 interpreter])
+AC_PLUGIN([python3],             [$plugin_python3],         [Embed a Python 3 interpreter])
 AC_PLUGIN([redis],               [$with_libhiredis],        [Redis plugin])
 AC_PLUGIN([routeros],            [$with_librouteros],       [RouterOS plugin])
 AC_PLUGIN([rrdcached],           [$librrd_rrdc_update],     [RRDTool output plugin])
@@ -6960,6 +7036,7 @@ AC_MSG_RESULT([    libprotobuf . . . . . $with_libprotobuf])
 AC_MSG_RESULT([    libprotobuf-c . . . . $with_libprotobuf_c])
 AC_MSG_RESULT([    libpthread  . . . . . $with_libpthread])
 AC_MSG_RESULT([    libpython . . . . . . $with_libpython])
+AC_MSG_RESULT([    libpython3  . . . . . $with_libpython3])
 AC_MSG_RESULT([    librabbitmq . . . . . $with_librabbitmq])
 AC_MSG_RESULT([    libriemann-client . . $with_libriemann_client])
 AC_MSG_RESULT([    librdkafka  . . . . . $with_librdkafka])
@@ -7094,6 +7171,7 @@ AC_MSG_RESULT([    powerdns  . . . . . . $enable_powerdns])
 AC_MSG_RESULT([    processes . . . . . . $enable_processes])
 AC_MSG_RESULT([    protocols . . . . . . $enable_protocols])
 AC_MSG_RESULT([    python  . . . . . . . $enable_python])
+AC_MSG_RESULT([    python3 . . . . . . . $enable_python3])
 AC_MSG_RESULT([    redis . . . . . . . . $enable_redis])
 AC_MSG_RESULT([    routeros  . . . . . . $enable_routeros])
 AC_MSG_RESULT([    rrdcached . . . . . . $enable_rrdcached])

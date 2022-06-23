@@ -1481,6 +1481,18 @@ python_la_CPPFLAGS = $(AM_CPPFLAGS) $(LIBPYTHON_CPPFLAGS)
 python_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(LIBPYTHON_LDFLAGS)
 endif
 
+if BUILD_PLUGIN_PYTHON3
+pkglib_LTLIBRARIES += python3.la
+python3_la_SOURCES = \
+	src/python.c \
+	src/pyconfig.c \
+	src/pyvalues.c \
+	src/cpython.h
+python3_la_CPPFLAGS = $(AM_CPPFLAGS) $(LIBPYTHON3_CPPFLAGS) \
+	-DPLUGIN_NAME='"python3"'
+python3_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(LIBPYTHON3_LDFLAGS)
+endif
+
 if BUILD_PLUGIN_PROCESSES
 pkglib_LTLIBRARIES += processes.la
 processes_la_SOURCES = src/processes.c
