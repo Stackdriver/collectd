@@ -397,7 +397,7 @@ static int plugin_unregister(llist_t *list, const char *name) /* {{{ */
 static int plugin_load_file(const char *file, _Bool global) {
   void (*reg_handle)(void);
 
-  int flags = RTLD_NOW;
+  int flags = RTLD_NOW | RTLD_DEEPBIND;
   if (global)
     flags |= RTLD_GLOBAL;
 
