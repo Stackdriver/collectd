@@ -4623,7 +4623,7 @@ AC_ARG_WITH([libpython],
   [with_libpython="check"]
 )
 
-if test "$with_libpython" != "no"; then
+if test "x$with_libpython" != "xno"; then
   if test "$LIBPYTHON_CPPFLAGS" = "" && test "$LIBPYTHON_LDFLAGS" = ""; then
     AC_ARG_VAR([PYTHON_CONFIG], [path to python-config])
     AC_PATH_PROGS([PYTHON_CONFIG],
@@ -4653,7 +4653,7 @@ if test "$PYTHON_CONFIG" != ""; then
   fi
 fi
 
-if test "$with_libpython" != "xno"; then
+if test "x$with_libpython" != "xno"; then
   SAVE_CPPFLAGS="$CPPFLAGS"
   SAVE_LDFLAGS="$LDFLAGS"
   SAVE_LIBS="$LIBS"
@@ -4693,7 +4693,7 @@ AC_ARG_WITH([libpython3],
   [with_libpython3="check"]
 )
 
-if test "$with_libpython3" != "no"; then
+if test "x$with_libpython3" != "xno"; then
   if test "$LIBPYTHON3_CPPFLAGS" = "" && test "$LIBPYTHON3_LDFLAGS" = ""; then
     AC_ARG_VAR([PYTHON3_CONFIG], [path to python3-config])
     AC_PATH_PROGS([PYTHON3_CONFIG],
@@ -4723,7 +4723,7 @@ if test "$PYTHON3_CONFIG" != ""; then
   fi
 fi
 
-if test "$with_libpython3" != "xno"; then
+if test "x$with_libpython3" != "xno"; then
   SAVE_CPPFLAGS="$CPPFLAGS"
   SAVE_LDFLAGS="$LDFLAGS"
   SAVE_LIBS="$LIBS"
