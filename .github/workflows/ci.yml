@@ -2,68 +2,36 @@ on: [push, pull_request]
 name: Test
 jobs:
   test:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     env:
       CC: gcc
     steps:
     - run: |
         sudo apt-get update && sudo apt-get install \
-          autotools-dev \
-          libatasmart-dev \
-          libcap-dev \
-          libcurl4-gnutls-dev \
-          libdbi0-dev \
-          libesmtp-dev \
-          libganglia1-dev \
-          libgcrypt20-dev \
-          libglib2.0-dev \
-          libgps-dev \
+          autoconf \
+          automake \
+          bison \
+          debhelper \
+          debian-keyring \
+          default-jdk \
+          devscripts \
+          flex \
+          gcc \
+          libcurl4-openssl-dev \
           libhiredis-dev \
-          libi2c-dev \
-          libiptc-dev \
-          libldap2-dev \
           libltdl-dev \
-          liblua50-dev \
-          liblua5.1-0-dev \
-          liblua5.2-dev \
-          libmemcached-dev \
-          libmicrohttpd-dev \
-          libmnl-dev \
-          libmodbus-dev \
           libmongoc-dev \
-          libmosquitto-dev \
           libmysqlclient-dev \
-          libnotify-dev \
-          libopenipmi-dev \
-          liboping-dev \
-          libow-dev \
-          libpcap-dev \
-          libperl-dev \
           libpq-dev \
-          libprotobuf-c-dev \
-          librabbitmq-dev \
-          librdkafka-dev \
-          libriemann-client-dev \
-          librrd-dev \
-          libsensors4-dev \
-          libsigrok-dev \
-          libsnmp-dev \
-          libtokyocabinet-dev \
-          libtokyotyrant-dev \
-          libudev-dev \
-          libupsclient-dev \
-          libvarnish-dev \
-          libvirt-dev \
-          libxen-dev \
-          libxml2-dev \
-          libxtables-dev \
+          libssl-dev \
+          libtool \
+          libvarnishapi-dev \
           libyajl-dev \
-          linux-libc-dev \
-          perl \
-          protobuf-c-compiler \
-          python3-dev \
-          python-dev \
-          xfslibs-dev
+          lsb-release \
+          make \
+          pkg-config \
+          python2-dev \
+          python3-dev
     - uses: actions/checkout@v2
       with:
         submodules: true
@@ -72,7 +40,57 @@ jobs:
         sh clean.sh
         sh build.sh
         autoreconf -vif
-    - run: ./configure --enable-debug
+    - run: | 
+        ./configure --disable-all-plugins \
+          --disable-static \
+          --disable-perl --without-libperl  --without-perl-bindings \
+          --enable-cpu \
+          --enable-df \
+          --enable-disk \
+          --enable-load \
+          --enable-logfile \
+          --enable-logging-metrics \
+          --enable-memory \
+          --enable-swap \
+          --enable-syslog \
+          --enable-interface \
+          --enable-tcpconns \
+          --enable-write_http \
+          --enable-aggregation \
+          --enable-conntrack \
+          --enable-csv \
+          --enable-nginx \
+          --enable-apache \
+          --enable-memcached \
+          --enable-mysql \
+          --enable-protocols \
+          --enable-postgresql \
+          --enable-plugin_mem \
+          --enable-processes \
+          --enable-python \
+          --enable-python3 \
+          --enable-ntpd \
+          --enable-nfs \
+          --enable-zookeeper \
+          --enable-stackdriver_agent \
+          --enable-exec \
+          --enable-tail \
+          --enable-statsd \
+          --enable-network \
+          --enable-match_regex --enable-target_set \
+          --enable-target_replace --enable-target_scale \
+          --enable-match_throttle_metadata_keys \
+          --enable-write_log \
+          --enable-unixsock \
+          --enable-java --with-java=/usr/lib/jvm/default-java \
+          --enable-redis --with-libhiredis \
+          --enable-curl \
+          --enable-curl_json \
+          --enable-mongodb \
+          --enable-varnish \
+          --enable-write_gcm \
+          --enable-debug
+
     # VERBOSE=1 dumps the contents of the test suites logs to standard output.
     # -fsanitize=address enables https://github.com/google/sanitizers/wiki/AddressSanitizer
     # -ldl works around a dlsym error when tsan is enabled in this environment.
